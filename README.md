@@ -4,11 +4,14 @@ ___
 
 A VS Code/PlatformIO project, Using ESPIDF's framework.
   
-This ham radio project uses a BLE Bluetooth Keyboard (such as Logitech K380s) to send Morse Code (cw), and using the audio from say your RX will decode CW too.
+This ham radio project uses a BLE Bluetooth Keyboard (such as Logitech's K380s) to send Morse Code (cw), and using the audio from say your RX will decode CW too.
 <p align="center">  
-<img src="https://github.com/jmharvey1/ESP32BtCWKeyBrd/blob/main/MiscFiles/IMG_5733.JPG"  width="40%" height="40%">
+<img src="https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/main/MiscFiles/Main.JPG"  width="40%" height="40%">
 </p>
-  
+
+<p align="center">  
+<img src="https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/main/MiscFiles/Settings.JPG"  width="40%" height="40%">
+</p>  
  
 <p dir="auto">For additional info, see YouTube video:
     <a href="https://youtu.be/Hb9m60LtSJw" rel="nofollow">https://youtu.be/Hb9m60LtSJw</a></p>
@@ -41,7 +44,6 @@ HYDZ PIEZO Buzzer (1)
 resistors 2.2K to 15K (4)
   
 ___
-The Following text/references are 'out of date' and needs work. So, for the moment, ignore.
 
 For those who want to bypass the source code, and just "flash" your ESP32, download the [ESPhomeFlasher](https://github.com/esphome/esphome-flasher/releases) and the [.bin file](https://github.com/jmharvey1/ESP32BtCWKeyBrd/blob/main/.pio/build/upesy_wroom/firmware.bin) found at these links.
   
@@ -50,6 +52,9 @@ in the 'Firmware' cell.
   
 A 2nd tip: Connect the ESP32 to your computer BEFORE launching the ESPhome-Flasher. 
 ___
+
+ The Following text/references are 'out of date' and needs work. So, for the moment, ignore.
+
 A PCB for this project can be ordered from a board manufacturer, like [JLCPCB](https://jlcpcb.com/), using the gerber files found [Here](https://github.com/jmharvey1/ESP32BtCWKeyBrd/blob/main/MiscFiles/ESP32-BT-CW-KeyBrd_2023-03-16.zip).
   
 A .PDF schematic for the PCB version of this project is [Here](https://github.com/jmharvey1/ESP32BtCWKeyBrd/blob/main/MiscFiles/ESP32-BT-CW-KeyBrd_Schematic.pdf)
