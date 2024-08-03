@@ -45,7 +45,7 @@ resistors 2.2K to 15K (4)
   
 ___
 
-For those who want to bypass the source code, and just "flash" your ESP32, download the [ESPhomeFlasher](https://github.com/esphome/esphome-flasher/releases) and the [.bin file](https://github.com/jmharvey1/ESP32BtCWKeyBrd/blob/main/.pio/build/upesy_wroom/firmware.bin) found at these links.
+For those who want to bypass the source code, and just "flash" your ESP32, download the [ESPhomeFlasher](https://github.com/esphome/esphome-flasher/releases) and the [.bin file](https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/firmware.bin) found at these links.
   
 Note: For me, using Linux Mint, the ESPhome-Flasher's 'Browse' button did NOT work. But placing the 'firmware.bin' file in the same folder as the flasher app, allowed me to just type the file name,"firmware.bin",
 in the 'Firmware' cell.
