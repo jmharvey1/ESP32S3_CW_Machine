@@ -6,11 +6,11 @@ A VS Code/PlatformIO project, Using ESPIDF's framework.
   
 This ham radio project uses a BLE Bluetooth Keyboard (such as Logitech's K380s) to send Morse Code (cw), and using the audio from say your RX will decode CW too.
 <p align="center">  
-<img src="https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/main/MiscFiles/Main.JPG"  width="40%" height="40%">
+<img src="https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/Main.jpg"  width="40%" height="40%">
 </p>
 
 <p align="center">  
-<img src="https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/main/MiscFiles/Settings.JPG"  width="40%" height="40%">
+<img src="https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/Settings.jpg"  width="40%" height="40%">
 </p>  
  
 <p dir="auto">For additional info, see YouTube video:
