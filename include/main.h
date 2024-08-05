@@ -34,6 +34,7 @@ struct DF_t
 	float Grtzl_Gain;
 	bool SlwFlg;
 	bool NoisFlg;
+	uint16_t Bias;
 };
 
 // typedef struct {

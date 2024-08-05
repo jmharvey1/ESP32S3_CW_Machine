@@ -73,9 +73,8 @@ volatile unsigned long wordBrk; //this is primarily used in the DcodeCW.cpp task
 float TARGET_FREQUENCYC = 750; //Hz// For ESP32 version moved declaration to DcodeCW.h
 float TARGET_FREQUENCYL;// = feqlratio*TARGET_FREQUENCYC;//734.0; //Hz
 float TARGET_FREQUENCYH;// = feqhratio*TARGET_FREQUENCYC;//766.0; //Hz
-//float SAMPLING_RATE = 98750;
-//float SAMPLING_RATE = 98000;//102000;// based on tests continuous tone tests made 20230714
-float SAMPLING_RATE =83333; //see 'main.cpp' #include "soc/soc_caps.h"
+float SAMPLING_RATE = 83333; //see 'main.cpp' #include "soc/soc_caps.h"
+//float SAMPLING_RATE =79600;
 float Q1;
 float Q2;
 float Q1H;
@@ -187,8 +186,7 @@ void InitGoertzel(void)
 	int CYCLE_CNT;//, k;// 6.0
 	float  omega;
 	float CyRadians;
-	//float floatnumSamples = (float) (Goertzel_SAMPLE_CNT);
-	//if(SlwFlg) floatnumSamples = 2*floatnumSamples;
+	//if(NuSmplRt !=0) SAMPLING_RATE = (float)NuSmplRt;
 	ResetGoertzel();// make sure you're working with the current set of frequeincies needed for this set of parameters
 	/* For the lowest frequency of interest, Find the Maximum Number of whole Cycles we can look at  */
 	if(SlwFlg) CYCLE_CNT = (int)((((float)(2*Goertzel_SAMPLE_CNT))*TARGET_FREQUENCYL)/SAMPLING_RATE);
@@ -199,8 +197,6 @@ void InitGoertzel(void)
 	//omega = (2.0 * PI * k) / floatnumSamples;
 	NL = (int)(0.5 +((SAMPLING_RATE / TARGET_FREQUENCYL) * (float)(CYCLE_CNT)));
 	omega = CyRadians / (float)NL;
-	//coeffL = 2*cos(2*PI*TARGET_FREQUENCYL/SAMPLING_RATE);
-	//coeffL = 2*cos(2*PI*(TARGET_FREQUENCYL*(1/SAMPLING_RATE))/NL);
 	coeffL = 2*cos(omega);
 
 	NC = (int)(0.5 +((SAMPLING_RATE / TARGET_FREQUENCYC) * (float)(CYCLE_CNT)));
@@ -208,8 +204,6 @@ void InitGoertzel(void)
 	//CyRadians = (2.0 * PI * CYCLE_CNT);
 	//omega = (2.0 * PI * k) / floatnumSamples;
 	omega = CyRadians / (float)NC;
-	//coeffC = 2*cos(2*PI*TARGET_FREQUENCYC/SAMPLING_RATE);
-	//coeffC = 2*cos(2*PI*(TARGET_FREQUENCYC*(1/SAMPLING_RATE))/NC);
 	coeffC = 2*cos(omega);
 
 	NH = (int)(0.5 +((SAMPLING_RATE / TARGET_FREQUENCYH) * (float)(CYCLE_CNT)));
@@ -217,8 +211,6 @@ void InitGoertzel(void)
 	//CyRadians = (2.0 * PI * CYCLE_CNT);
 	//omega = (2.0 * PI * k) / floatnumSamples;
 	omega = CyRadians / (float)NH;
-	//coeffH = 2*cos(2*PI*TARGET_FREQUENCYH/SAMPLING_RATE);
-	//coeffH = 2*cos(2*PI*(TARGET_FREQUENCYH*(1/SAMPLING_RATE))/NH);
 	coeffH = 2*cos(omega);
 	
 	/* uncomment for Debug/Diagnostic testing*/
@@ -620,6 +612,7 @@ void Chk4KeyDwn(float NowLvl)
 		if(CalGtxlParamFlg){
 			CalGtxlParamFlg = false;
           	CalcFrqParams((float)DemodFreq); // recalculate Goertzel parameters, for the newly selected target grequency
+			showSpeed();
 		}
 	}
 	else SetLtrBrk();//key is down; so reset/recalculate new letter-brake clock value

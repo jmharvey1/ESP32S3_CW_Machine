@@ -1,0 +1,3 @@
+in file i2c_master.c added a couple 'free()' statements to counteract the effects or repeated heap_caps_calloc() calls which over time were consuming free heap space
+i.e, @ line 983, added free(i2c_dev->master_bus->anyc_write_buffer[i2c_dev->master_bus->index]);//JMH ADD
+and at 1022, added free(i2c_dev->master_bus->anyc_write_buffer[i2c_dev->master_bus->index]);

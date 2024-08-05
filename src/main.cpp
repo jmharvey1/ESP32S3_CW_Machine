@@ -140,6 +140,8 @@ int MutexbsyCnt = 0;
 unsigned long SmpIntrl = 0;
 unsigned long LstNw = 0;
 unsigned long EvntStart = 0;
+unsigned long ToneStart = 0; // used to calc true adc samplerate
+int cur_smpl_rate = 0;
 float Grtzl_Gain = 1.0;
 /*the following 4 lines are needed when you want to synthesize an input tone of known freq & Magnitude*/
 // float LclToneAngle = 0;
@@ -207,7 +209,6 @@ bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t handle, const adc_continuo
   // Notify GoertzelTaskHandle that the buffer is full.
 
   /* At this point GoertzelTaskHandle should not be NULL as a ADC conversion completed. */
-  //configASSERT(GoertzelTaskHandle != NULL);
   EvntStart = pdTICKS_TO_MS(xTaskGetTickCount());
   vTaskNotifyGiveFromISR(GoertzelTaskHandle, &xHigherPriorityTaskWoken); // start Goertzel Task
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
@@ -220,7 +221,7 @@ bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t handle, const adc_continuo
   return (xHigherPriorityTaskWoken == pdTRUE);
 }
 /* Setup & initialize DMA ADC process */
-static void continuous_adc_init(adc_channel_t *channel, uint8_t channel_num, adc_continuous_handle_t *out_handle)
+static void Cw_Machine_ADC_init(adc_channel_t *channel, uint8_t channel_num, adc_continuous_handle_t *out_handle)
 {
   adc_continuous_handle_t handle = NULL;
 
@@ -331,17 +332,18 @@ void addSmpl(int k, int i, int *pCntrA)
       SmplCNt = 0;
     }
     else if (PeriodCntr == 40)
-    {                                                                    /*if here, we have a usable signal; calculate its frequency*/
-      DemodFreq = ((int)PeriodCntr * (int)SAMPLING_RATE) / (int)SmplCNt; // SAMPLING_RATE//100500
+    {
+      /*if here, we have a usable signal; calculate its frequency*/
+      DemodFreq = ((int)PeriodCntr * (int)SAMPLING_RATE) / (int)SmplCNt;
       if (DemodFreq > 450)
       {
-        // sprintf(Title, "Tone: %d\t%d\n", DemodFreq, (int)SmplCNt);
-        // printf(Title);
-        if (DemodFreq > DmodFrqOld - 50 && DemodFreq < DmodFrqOld + 50)
+        
+        if (DemodFreq > DmodFrqOld - 2 && DemodFreq < DmodFrqOld + 2)
         {
+          DemodFreq = (4*DmodFrqOld + DemodFreq)/5;
+          // sprintf(Title, "Tone: %d\t%d\n", DemodFreq, (int)SmplCNt);
+          // printf(Title);
           CalGtxlParamFlg = true;
-          // CalcFrqParams((float)DemodFreq); // recalculate Goertzel parameters, for the newly selected target grequency
-          // showSpeed();
         }
         DmodFrqOld = DemodFreq;
       }
@@ -384,24 +386,26 @@ void GoertzelHandler(void *param)
   static const char *TAG2 = "ADC_Read";
   // uint16_t curclr = 0;
   // uint16_t oldclr = 0;
-  int curclr = 0;//modified to support lvgl based display
-  int oldclr = 0;//modified to support lvgl based display
+  int curclr = 0; // modified to support lvgl based display
+  int oldclr = 0; // modified to support lvgl based display
   int pksig = 0;
   int k;
   int offset = 0;
   /*for Waveshare/ESP32s3 & based on 11 bit ADC output; Set bias to 1024*/
-  int BIAS = 2000 - 5;//1844+150; // based reading found when no signal applied to ESP32continuous_adc_init
+  int BIAS = 2000; // 1844+150; // based reading found when no signal applied to ESP32Cw_Machine_ADC_init
   int Smpl_CntrA = 0;
   bool FrstPass = true;
-  int pksigH = 0;  
-  int sigSmplCnt =0;
-  //bool updt = false;
+  int pksigH = 0;
+  int sigSmplCnt = 0;
+  // bool updt = false;
   InitGoertzel(); // make sure the Goertzel Params are setup & ready to go
   /*The following is just for time/clock testing/veification */
   // unsigned long GrtzlStart = pdTICKS_TO_MS(xTaskGetTickCount());
   // unsigned long GrtzlDone = pdTICKS_TO_MS(xTaskGetTickCount());
+  bool skip1;
   while (1)
   {
+    skip1 = false;
     /* Sleep until we are notified of a state change by an
      * interrupt handler. Note the first parameter is pdTRUE,
      * which has the effect of clearing the task's notification
@@ -417,6 +421,8 @@ void GoertzelHandler(void *param)
       // if(!SlwFlg){
       //   FrstPass = true;
       // }
+      unsigned long Now = EvntStart; //pdTICKS_TO_MS(xTaskGetTickCount());
+
       /*the following 2 flags were added for LVGL support to manage the use of
       the 'ADCread_disp_refr_timer_mutx' Semaphore*/
       bool rdy = false;
@@ -427,13 +433,17 @@ void GoertzelHandler(void *param)
         if (SlwFlg)
           FrstPass = false; // 20231231 added to support new 4ms sample interval, W/ 8ms dataset
         if (FrstPass)
+        {
+          // InitGoertzel(cur_smpl_rate);
           ResetGoertzel();
+        }
         if (SlwFlg && !FrstPass)
           offset = Goertzel_SAMPLE_CNT;
         else
           offset = 0;
+
         /*  ESP_LOGI("TASK_ADC", "ret is %x, ret_num is %"PRIu32" bytes", ret, ret_num);*/
-        if (CWsndengn.IsActv())
+        if (CWsndengn.IsActv() && CWsndengn.GetSOTflg())
         {
           if (xSemaphoreTake(ADCread_disp_refr_timer_mutx, pdMS_TO_TICKS(3)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
           {
@@ -465,45 +475,41 @@ void GoertzelHandler(void *param)
         if (relseSemphr)
           xSemaphoreGive(ADCread_disp_refr_timer_mutx);
 
-        /*logic to manage the number of data samples to take before going on to compute goertzel magnitudes*/
-        // if(SlwFlg && FrstPass){
-        //   FrstPass = false;
-        // } else if(SlwFlg){
-        //   FrstPass = true;
-        // }
-        if (SlwFlg && FrstPass)
-        {
-          FrstPass = false;
-        }
-        else
-        {
-          FrstPass = true;
-        }
+#ifdef POSTADC
+        skip1 = true;
 
-        if (!CWsndengn.IsActv())
+        if (!skip1)
         {
-          if (FrstPass)
-            ComputeMags(EvntStart); //"EvntStart" is the time stamp for this dataset
-          curclr = ToneClr();       // Returns Sig level as calculated by Goetzel.cpp
-          // printf("curclr: %d\n", curclr);
-        } // else printf("%d\n", CWsndengn.GetState());//just for diagnostic testing
-        // if (oldclr != curclr)
-        // {
-        //   oldclr = curclr;
-        //   pksigH = (int)(oldclr / 1000);
-        //   /*Push returned "state" values on the que */
-        //   if (xQueueSend(RxSig_que, &pksigH, pdMS_TO_TICKS(2)) == pdFALSE)
-        //   {
-        //     // printf("Failed to push 'pksigH' to 'RxSig_que' \n");
-        //   }
-          
-          
-        // }
-        /*The following is just for time/clock testing/veification */
-        // GrtzlDone = pdTICKS_TO_MS(xTaskGetTickCount());
-        // uint16_t GrtzlIntrv = (uint16_t)(GrtzlDone-GrtzlStart);
-        // GrtzlStart = GrtzlDone;
-        // if(GrtzlIntrv > 5) printf("GrtzlIntrv: %d\n", GrtzlIntrv);
+#endif          
+          /*logic to manage the number of data samples to take before going on to compute goertzel magnitudes*/
+          // if(SlwFlg && FrstPass){
+          //   FrstPass = false;
+          // } else if(SlwFlg){
+          //   FrstPass = true;
+          // }
+          if (SlwFlg && FrstPass)
+          {
+            FrstPass = false;
+          }
+          else
+          {
+            FrstPass = true;
+          }
+
+          if (!CWsndengn.IsActv() || !CWsndengn.GetSOTflg())
+          {
+            if (FrstPass)
+              ComputeMags(EvntStart); //"EvntStart" is the time stamp for this dataset
+            curclr = ToneClr();       // Returns Sig level as calculated by Goetzel.cpp
+            // printf("curclr: %d\n", curclr);
+          } // else printf("%d\n", CWsndengn.GetState());//just for diagnostic testing
+          /*The following is just for time/clock testing/veification */
+          unsigned long sampleIntrvl = Now - ToneStart;
+          ToneStart = Now;
+          cur_smpl_rate = ((ret_num) * 250) / sampleIntrvl;
+#ifdef POSTADC        
+        }// end if(!skip)
+#endif        
       }
       else if (ret == ESP_ERR_TIMEOUT)
       {
@@ -516,7 +522,8 @@ void GoertzelHandler(void *param)
       {
         ESP_LOGI(TAG2, "NO ADC Data Returned");
       }
-    }
+
+    } // end if(thread_notification)
   } // end while(1) loop
   /** JMH Added this to ESP32 version to handle random crashing with error,"Task Goertzel Task should not return, Aborting now" */
   vTaskDelete(NULL);
@@ -615,7 +622,7 @@ void DisplayUpDt(void *param)
       // } // END if (mutex != NULL)
       //sprintf(LogBuf,"DisplayUpDt complete\n");
       QuequeFulFlg = false;
-      
+      //printf("Cur ADC Sample Rate: %d\n", cur_smpl_rate);// just for diagnostic testing
     } // END if (thread_notification)
   } // end while(1) loop
   /** JMH Added this to ESP32 version to handle random crashing with error,"Task Goertzel Task should not return, Aborting now" */
@@ -658,6 +665,7 @@ void CWDecodeTask(void *param)
         sprintf(buf, "interval: %d; SmplRate: %d\n", (int)interval, (int)Smpl_rate);
         printf(buf);
         */
+       if(bt_keyboard.PairFlg)
         for (int Smpl_CntrA = 0; Smpl_CntrA < 6 * Goertzel_SAMPLE_CNT; Smpl_CntrA++)
         {
           if(Smpl_buf[Smpl_CntrA] !=0){
@@ -1139,7 +1147,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
   // vTaskSuspend( BLEscanTask_hndl);
   #endif /* USE_KYBrd*/
   /*initialize & start continuous DMA ADC conversion process*/
-  continuous_adc_init(channel, sizeof(channel) / sizeof(adc_channel_t), &adc_handle);
+  Cw_Machine_ADC_init(channel, sizeof(channel) / sizeof(adc_channel_t), &adc_handle);
   
   adc_continuous_evt_cbs_t cbs = {
       .on_conv_done = s_conv_done_cb,
@@ -1185,6 +1193,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
       {
         ESP_ERROR_CHECK(adc_continuous_stop(adc_handle)); // true; user has pressed Ctl+S key, & wants to configure default settings
         adcON = false;
+        printf("CASE 1\n");
         vTaskSuspend(GoertzelTaskHandle);
         ESP_LOGI(TAG1, "SUSPEND GoertzelHandler TASK");
         vTaskSuspend(CWDecodeTaskHandle);
@@ -1194,15 +1203,13 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
       /*Now ready to jump to "settings" screen */
       /*TODO for lvgl/waveshare need to work out how to navigate settings screen */
       lvglmsgbx.BldSettingScreen();
-      SettingsLoop();
-      //setuploop(&tft, &CWsndengn, &tftmsgbx, &bt_keyboard, &DFault); // function defined in SetUpScrn.cpp/.h file
-      //lvglmsgbx.ReBldDsplay();
+      SettingsLoop();// go here while settings screen is active
       CWsndengn.RefreshWPM();
       if (IntSOTstate && !CWsndengn.GetSOTflg())
         CWsndengn.SOTmode(); // Send On Type was enabled when we went to 'settings' so re-enable it
       if (ModeCnt != 4)
       {
-        // continuous_adc_init(channel, sizeof(channel) / sizeof(adc_channel_t), &adc_handle);
+        // Cw_Machine_ADC_init(channel, sizeof(channel) / sizeof(adc_channel_t), &adc_handle);
         // ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
         ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
         adcON = true;
@@ -1221,9 +1228,10 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     {
     case 1: // need to shut down all other spi activities, so the pending BT event has exclusive access to SPI
       bt_keyboard.Adc_Sw = 0;
-      if (adcON) // added "if" just to make sure we're not gonna do something that doesn't need doing
+      if (adcON && !CWsndengn.GetSOTflg()) // added "if" just to make sure we're not gonna do something that doesn't need doing
       {
         ESP_LOGI(TAG1, "!!!adc_continuous_stop!!!");
+        printf("CASE 2\n");
         ESP_ERROR_CHECK(adc_continuous_stop(adc_handle));
         adcON = false;
         vTaskSuspend(GoertzelTaskHandle);
@@ -1394,10 +1402,11 @@ void ProcsKeyEntry(uint8_t keyVal)
     int ChrCnt = CWsndengn.Delete(); // test to see if there's an "unsent" character that can be deleted
     if (ChrCnt > 0)
     {
-      if (adcON) // added "if" just to make sure we're not gonna do something that doesn't need doing
+      if (adcON && !CWsndengn.GetSOTflg()) // added "if" just to make sure we're not gonna do something that doesn't need doing
       {
         // ESP_LOGI(TAG1, "!!!adc_continuous_stop!!!");
         ESP_ERROR_CHECK(adc_continuous_stop(adc_handle));
+        printf("CASE 3\n");
         adcON = false;
         vTaskSuspend(GoertzelTaskHandle);
         // ESP_LOGI(TAG1, "SUSPEND GoertzelHandler TASK");
@@ -1580,12 +1589,6 @@ void ProcsKeyEntry(uint8_t keyVal)
       DeBug = true;
       DFault.DeBug = true;
     }
-    // DFault.SlwFlg = SlwFlg;
-    // DFault.NoisFlg = NoisFlg;
-    // InitGoertzel();
-    // vTaskDelay(20);
-    // showSpeed();
-    // vTaskDelay(250);
     return;
   }
   /*20240123 Disabled Ctrl+D function; replaced by AdvParser Class & methods*/

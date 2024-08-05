@@ -20,6 +20,7 @@ extern "C" {
 // #include "esp32-hal-delay.h" //included to support the arduino function 'delay(int ms)'
 
 #include "widgets/lv_bar.h"
+
 #define TODAY __DATE__
 /*Waveshare 800x480 display & touch specific parameters*/
 #define LV_TICK_PERIOD_MS (2) //JMH chnaged this from 2 to 10

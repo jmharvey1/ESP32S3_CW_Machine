@@ -1842,6 +1842,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		IntrCrsr(BlkStateVal[blks - BlkStateCntr]);
 		BlkStateCntr--;
 	}
+	//printf("[APP] Free memory: %d bytes\n", (int)esp_get_free_heap_size());
 	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2(); Complete\n");
 };
 //////////////////////////////////////////////////////////////////////
