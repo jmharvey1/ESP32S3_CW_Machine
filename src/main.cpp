@@ -700,7 +700,7 @@ void CWDecodeTask(void *param)
   }
 }
 /*look for 'advertising' BLE keyboards
-note: task remains actice until one is found & 'paired'('PairFlg' is set to true)*/
+note: task remains active until one is found & 'paired'('PairFlg' is set to true)*/
 void BLE_scan_tsk(void *param)
 {
   const char *TAG2 = "BLE_scan_tsk";
@@ -712,15 +712,13 @@ void BLE_scan_tsk(void *param)
   SkippDotClkISR = true;
   while (loop)
   {
-    // if (bt_keyboard.setup(pairing_handler, &bt_keyboard))
-    // { // Must be called once
     bt_keyboard.PairFlg = false;
     //printf("START BLE SCAN\n");
     ESP_LOGI(TAG2, "START BLE SCAN");
     bt_keyboard.devices_scan(2); // Required to discover new keyboards and for pairing
                                  // Default duration is 3 seconds
     if (bt_keyboard.GetPairFlg1())
-    { // bt_keyboard.GetPairFlg1() //bt_keyboard.PairFlg
+    { 
       bt_keyboard.PairFlg = true;
       /*Clear/Erase Keyboard text area*/
       if (!DFault.DeBug)
@@ -1113,22 +1111,9 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
   bt_keyboard.inPrgsFlg = false;
   /*start bluetooth pairing/linking process*/
     if (bt_keyboard.setup(pairing_handler, &bt_keyboard )) // Must be called once
-  {  
+  { 
+    /*Start BLE Scan */ 
     xTaskCreatePinnedToCore(BLE_scan_tsk, "BLE Scan Task", 8192, NULL, 1, &BLEscanTask_hndl, 0);
-    // printf("START BLE SCAN\n");
-    // bt_keyboard.devices_scan(2); // Required to discover new keyboards and for pairing
-    //                             // Default duration is 3 seconds
-    // if(bt_keyboard.GetPairFlg1()){ //bt_keyboard.GetPairFlg1() //bt_keyboard.PairFlg
-    //   bt_keyboard.PairFlg = true;
-    //   Title[0] = 0xFF;
-    //   Title[1] = 0x0; 
-    //   lvglmsgbx.dispKeyBrdTxt(Title, TFT_ORANGE);// clear send keyboard text area
-      
-    //   sprintf(Title, "KEYBOARD READY\n");
-    //   lvglmsgbx.dispKeyBrdTxt(Title, TFT_ORANGE);
-    //   ESP_LOGI(TAG2, "Pairing Complete; KEYBOARD READY");
-    // }                            
-    // printf("EXIT SCAN\n");                            
   }
   else
   {

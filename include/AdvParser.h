@@ -799,6 +799,9 @@ private:
         {"XKKI", "XYL", 2, 200}, //751
         {"ATHAT", "WHAT", 5, 0}, //752
         {"EQIL", "EMAIL", 4, 0}, //753
+        {"M9O", "MONO", 3, 0}, //754
+        {"ANKT", "ANY", 4, 0}, //755
+        {"TH9", "THON", 3, 0}, //756
     };
     
     bool AllDah;

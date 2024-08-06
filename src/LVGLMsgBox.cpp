@@ -1570,7 +1570,9 @@ void LVGLMsgBox::dispDeCdrTxt(char Msgbuf[50], uint16_t Color)
 		}
 	}
 };
-/*New for lvgl based screen*/
+/*New for lvgl based screen
+Pathway to display text in the keyboard (CW send space)
+Note: color parameter is ignored (legacy parameter from TFTSpi Displays)*/
 void LVGLMsgBox::dispKeyBrdTxt(char Msgbuf[50], uint16_t Color)
 {
 	int msgpntr = 0;

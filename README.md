@@ -5,6 +5,7 @@ ___
 A VS Code/PlatformIO project, Using ESPIDF's framework.
   
 This ham radio project uses a BLE Bluetooth Keyboard (such as Logitech's K380s) to send Morse Code (cw), and using the audio from say your RX will decode CW too.
+</p>
 Main Screen:
 <p align="center">  
 <img src="https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/Main.jpg"  width="60%" height="60%">
@@ -63,5 +64,8 @@ A .PDF schematic for the PCB version of this project is [Here](https://github.co
 If you have access to 3D printer, the [MiscFiles](https://github.com/jmharvey1/ESP32BtCWKeyBrd/tree/main/MiscFiles)
  folder contains “.stl” files for a simple case to host your completed project. 
 ___
-Note: the PCB is currently not provisioned for the the decoder's audio input circuitry, nor is it documented in the MiscFiles folder.
-But is super simple to add. It consists of pair of 10K voltage divider reisistors connected between gnd & the ESP32's 3.3V input, with the center tap connected to GPIO pin34 (ADC channel 6). A 0.1ufd DC blocking Capacitor is used to couple the external audio source (the RX's audio/speaker out) to GPIO pin 34. 
+Note: The decoder audio input circuit uses the AD senor, jack J8, (GPIO6). Depending on how you elect to link to your audio source (Hardwired or Acoustic couplping) Additional external components will be needed; i.e. bias resistors & capacitor (see below for more detial), or an Amplified condensor microphone. This signal should not exceed 2Vp-p.
+</p>
+Keying output is done via the UART's' TX pin Header, H3-1, (GPIO43). Note: SW1 needs to be set to route this signal to header H3. "Key Down" state is represented by a 'high' (3.3v) on the TX pin. This signal is not intended to key a transmitter directly.
+</p>
+To effect a hardwired audio interface, a pair of 10K voltage divider reisistors can be serries connected between gnd & the jack's 3.3V pins. Connect the resistor's middle point to J3-3 (AD sensor) pin (GPIO6). Complete the interface with, a 0.1ufd DC blocking Capacitor connected to your external source (the RX's audio/speaker out) to GPIO6. Don't forget to connect the Auido source's ground to J3-2 (Gnd). 
