@@ -5,20 +5,13 @@
  *      Author: jim
  * 20230617 To support advanced DcodeCW "Bug" processes, reworked dispMsg2(void) to handle ASCII chacacter 0x8 "Backspace" symbol
  */
-#include <LVGLMsgBox.h>
+#include <stdio.h>
+#include "sdkconfig.h"
+#include "LVGLMsgBox.h"
 #include "main.h"
 #include "globals.h"
 #include "CWSndEngn.h"
-/*Added the following for Waveshare & lvgl support*/
-#include <lv_conf.h>
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/semphr.h"
-#include "freertos/queue.h"
-
-#include <stdio.h>
-#include "sdkconfig.h"
 #include "esp_timer.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_rgb.h"
@@ -26,12 +19,17 @@
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_check.h"
+/*Added the following for Waveshare & lvgl support*/
+#include <lv_conf.h>
 #include "lvgl.h"
 #include "hal/lv_hal_tick.h"
 #include "widgets/lv_textarea.h" /*GUI support*/
 #include "widgets/lv_bar.h"
 #include "widgets/lv_checkbox.h"
 /*end Waveshare & lvgl includes*/
+#include "driver/i2c_master.h" //added for waveshare touch support
+#include "touch/base/esp_lcd_touch_gt911.h" //added for waveshare touch support
+
 
 CWSNDENGN *cwsnd;
 
@@ -64,6 +62,7 @@ static lv_obj_t *MemF5ta;
 lv_obj_t *label;
 lv_obj_t *label2;
 lv_obj_t *wpm_lbl;
+lv_obj_t *Bat_Lvl_lbl;
 lv_obj_t *bar1;
 lv_obj_t *F1_Str_lbl;
 lv_obj_t *F12_SOT_lbl;
@@ -106,6 +105,7 @@ bool TchEvnt = false;
 bool report = false;
 bool Msg2Actv = false;
 int timerID = 0;
+uint8_t OldBat_Lvl = 0;
 void Bld_Settings_scrn(void);
 void Bld_LVGL_GUI(void);
 void Sync_Dflt_Settings(void);
@@ -234,38 +234,31 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 			/*Method to cap the max number of characters in storage at any given moment*/
 			const char *p = lv_textarea_get_text(TxtArea);
 			void *Oldp = (void *)p;
-			// printf("%s/n", p);
-			int need = 1; // strlen(buffer);
 			int max = lv_textarea_get_max_length(TxtArea);
 			ta_charCnt = strlen(p);
 			if(updateCharCnt) CurKyBrdCharCnt = ta_charCnt;
-			int del = need - (max - ta_charCnt);
-
+			int del = 1 - (max - ta_charCnt);
 			if (del > 0)
-			{													  // make room - delete earliest
-				p += del;										  // ta_charCnt;
-				while ((*p != '\n') && (del < max) && (del < 98)) // Cap the max number of characters deleted to 98 i.e. one line of displayed text
+			{	
+				p += del;
+				while ((*p != '\n') && (del < 98))
+				/* Cap the number of characters deleted to 98 (i.e. ~one line of displayed text), or the 1st 'new line'*/
 				{
 					del++;
 					p++;
-				} // delete to a line ending
+				} // end while
 				if (*p == '\n')
 				{
 					del++;
 					p++;
 				}
-				// char *temp = (char *)malloc(max - del + 1);
-				// if (temp)
-				// {
-				//	memcpy(temp, p, max - del); // copy existing
-				memcpy(Oldp, p, max - del); // copy existing
+				memcpy(Oldp, p, max - del); //shift the remaining text to the original start location
 				Oldp = (char *)realloc(Oldp, 1 + (max - del));
 				ta_charCnt = (max - del) + 1;
 				if(updateCharCnt) CurKyBrdCharCnt = ta_charCnt;
 				char *TaBuf = (char *)(Oldp);
-				TaBuf[(max - del)] = '\0'; // terminate the newly truncated text buffer w/ a a NULL
+				TaBuf[(max - del)] = '\0'; // terminate the newly truncated text buffer w/ a 								//a NULL
 				vTaskDelay(pdMS_TO_TICKS(20));
-				//printf("Deleted %d spaces\n", del);
 			}
 			/*END CAP Text stored code*/
 			if (TxtArea != SendTxtArea)
@@ -371,6 +364,27 @@ void lvgl_update_KyBrdWPM(const char *buf2)
 	}
 	return;
 }
+
+void lvgl_update_Bat_Lvl(uint8_t lvl)
+{
+    char buf2[50];
+	sprintf(buf2, "Kbrd Bat %d%%", (int)lvl);
+	if (bypassMutex)
+	{
+		lv_label_set_text(Bat_Lvl_lbl, buf2);
+		return;
+	}
+
+	if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 20 / portTICK_PERIOD_MS))
+	{
+		MutexLckId = 2;
+		lv_label_set_text(Bat_Lvl_lbl, buf2);
+		_lv_disp_refr_timer(NULL);
+		xSemaphoreGive(lvgl_semaphore);
+		MutexLckId = 0;
+	}
+	return;
+}
 void lvgl_UpdateToneSig(int curval)
 {
 	/*New approach this gets update via dispMsg2(int RxSig). So no longer needs to set/clear semaphore */
@@ -389,8 +403,8 @@ void lvgl_UpdateF1Mem(bool ActvFlg)
 void lvgl_UpdateSOT(bool ActvFlg)
 {
 	/*this gets update via dispMsg2(int RxSig). So does not need set/clear semaphore */
-	if(ActvFlg) lv_label_set_text(F12_SOT_lbl, "SOT ON");
-	else lv_label_set_text(F12_SOT_lbl, "SOT OFF");
+	if(ActvFlg) lv_label_set_text(F12_SOT_lbl, "F12 SOT ON");
+	else lv_label_set_text(F12_SOT_lbl, "F12 SOT OFF");
 	return;
 }
 
@@ -832,7 +846,7 @@ void Bld_LVGL_GUI(void)
 
 		wpm_lbl = lv_label_create(cont1);
 		lv_obj_set_size(wpm_lbl, 150, 20);
-		lv_obj_set_pos(wpm_lbl, 650, 400);
+		lv_obj_set_pos(wpm_lbl, 675, 400);
 		lv_label_set_long_mode(wpm_lbl, LV_LABEL_LONG_CLIP);
 		lv_label_set_text(wpm_lbl, "-- WPM");
 
@@ -843,10 +857,16 @@ void Bld_LVGL_GUI(void)
 		lv_label_set_text(F1_Str_lbl, "F1 Mem");
 
 		F12_SOT_lbl = lv_label_create(cont1);
-		lv_obj_set_size(F12_SOT_lbl, 80, 20);
+		lv_obj_set_size(F12_SOT_lbl, 90, 20);
 		lv_obj_set_pos(F12_SOT_lbl, 100, 400);
 		lv_label_set_long_mode(F12_SOT_lbl, LV_LABEL_LONG_CLIP);
-		lv_label_set_text(F12_SOT_lbl, "SOT ON");
+		lv_label_set_text(F12_SOT_lbl, "F12 SOT ON");
+
+		Bat_Lvl_lbl = lv_label_create(cont1);
+		lv_obj_set_size(Bat_Lvl_lbl, 150, 20);
+		lv_obj_set_pos(Bat_Lvl_lbl, 550, 400);
+		lv_label_set_long_mode(Bat_Lvl_lbl, LV_LABEL_LONG_CLIP);
+		lv_label_set_text(Bat_Lvl_lbl, "-- %");
 
 		
 	}
@@ -896,28 +916,13 @@ esp_lcd_touch_config_t lcd_touch_config = {
 	.interrupt_callback = NULL,
 	.user_data = NULL,
 };
-
+/*lvgl_tick_timer Call back routine*/
 static void lvgl_tick(void *arg)
 {
 	(void)arg;
 
 	lv_tick_inc(LV_TICK_PERIOD_MS);
 }
-
-// bool MsgBx_lvgl_lock(int timeout_ms)
-// {
-//     // Convert timeout in milliseconds to FreeRTOS ticks
-//     // If `timeout_ms` is set to -1, the program will block until the condition is met
-//     const TickType_t timeout_ticks = (timeout_ms == -1) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
-//     /* We were able to obtain the semaphore and can now access the
-//     shared resource. */
-//     return xSemaphoreTakeRecursive(lvgl_mux, timeout_ticks) == pdTRUE;
-// }
-
-// void MsgBx_lvgl_unlock(void)
-// {
-//     xSemaphoreGiveRecursive(lvgl_mux);
-// }
 
 static bool lvgl_vsync_event(esp_lcd_panel_handle_t panel, const esp_lcd_rgb_panel_event_data_t *event_data, void *user_data)
 {
@@ -1298,7 +1303,8 @@ void LVGLMsgBox::InitDsplay(void)
 	disp->refr_timer = NULL;
 	/*Note: Call '_lv_disp_refr_timer(NULL);'
 	whenever you want to refresh the dirty areas */
-
+/*Only doing this to supress warning timer message from lv_timer.c; 
+In this application LVGLMsgBox::dispMsg2 actually manages the scan & display refresh */
 	ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, LV_TICK_PERIOD_MS * 1000)); // here time is in micro seconds
 																						  // Tick Interface for LVGL using esp_timer to generate 2ms periodic event
 
@@ -1676,6 +1682,11 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 			// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lvgl_update_RxStats; Start\n");
 			lvgl_update_RxStats(SpdBuf);
 			// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lvgl_update_RxStats; Complete\n");
+		}
+		if(OldBat_Lvl != Get_KyBrdBat_level())
+		{
+			OldBat_Lvl = Get_KyBrdBat_level();
+			lvgl_update_Bat_Lvl(OldBat_Lvl);
 		}
 		if (KBrdWPMFlg & !setupFlg)
 		{
@@ -2474,67 +2485,38 @@ void LVGLMsgBox::Exit_Settings(int paramptr)
 	MutexLckId = 0;
 	
 };
-
+/*This executes when the 'Home' button event fires*/
 void Sync_Dflt_Settings(void)
 {
-	// bool tryagn = true;
-	// int trycnt = 0;
-	// while (tryagn)
-	// {
-	// 	if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
-	// 	{
-	// 		MutexLckId = 15;
-	// 		tryagn = false;
-	// 		report = false;
-	// 		bypassMutex = true;
-	// 		// Msg2Actv = true;
-	// 	}
-	// 	else
-	// 	{
-	// 		trycnt++;
-	// 		if (trycnt > 5)
-	// 		{
-	// 			trycnt = 5;
-	// 			report = true;
-	// 			printf("Sync_Dflt_Settings(void) timed out; MutexLckId = %d; timerID = %d\n", MutexLckId, timerID);
-	// 		}
-	// 	}
-	// }
-	// /*if false, ready to pass current settings entries back to their default counterparts */
-	// if (!tryagn)
-	// {
-		const char *p = lv_textarea_get_text(MyCallta);
-		sprintf(DFault.MyCall, "%s", p);
-		p = lv_textarea_get_text(MemF2ta);
-		sprintf(DFault.MemF2, "%s", p);
-		p = lv_textarea_get_text(MemF3ta);
-		sprintf(DFault.MemF3, "%s", p);
-		p = lv_textarea_get_text(MemF4ta);
-		sprintf(DFault.MemF4, "%s", p);
-		p = lv_textarea_get_text(MemF5ta);
-		sprintf(DFault.MemF5, "%s", p);
-		p = lv_textarea_get_text(WPMta);
-		/*recover WPM value (an integer from a character array*/
-		int intVal = 0;
-		int len = 2;
-		for (int i = 0; i < len; i++)
-		{
-			if (p[i] > 0)
-				intVal = (i * 10 * intVal) + (p[i] - '0');
-		}
-		DFault.WPM = intVal;
-		lv_state_t state = lv_obj_get_state(Dbg_ChkBx);
-		if(state == LV_STATE_CHECKED) DFault.DeBug = 1;
-		else  DFault.DeBug = 0;
-		
-	// 	xSemaphoreGive(lvgl_semaphore);
-	// }
+
+	const char *p = lv_textarea_get_text(MyCallta);
+	sprintf(DFault.MyCall, "%s", p);
+	p = lv_textarea_get_text(MemF2ta);
+	sprintf(DFault.MemF2, "%s", p);
+	p = lv_textarea_get_text(MemF3ta);
+	sprintf(DFault.MemF3, "%s", p);
+	p = lv_textarea_get_text(MemF4ta);
+	sprintf(DFault.MemF4, "%s", p);
+	p = lv_textarea_get_text(MemF5ta);
+	sprintf(DFault.MemF5, "%s", p);
+	p = lv_textarea_get_text(WPMta);
+	/*recover WPM value (an integer from a character array*/
+	int intVal = 0;
+	int len = 2;
+	for (int i = 0; i < len; i++)
+	{
+		if (p[i] > 0)
+			intVal = (i * 10 * intVal) + (p[i] - '0');
+	}
+	DFault.WPM = intVal;
+	lv_state_t state = lv_obj_get_state(Dbg_ChkBx);
+	if (state == LV_STATE_CHECKED)
+		DFault.DeBug = 1;
+	else
+		DFault.DeBug = 0;
+
 	return;
 };
-
-
-
-
 
 void SaveUsrVals(void)
 {

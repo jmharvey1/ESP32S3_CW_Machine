@@ -1,11 +1,14 @@
 /*
- Note: parts of the BT-Keyboard code (bt_keyboard.cpp) was based on source code with the same file name &
+ Note 1: parts of the BT-Keyboard code (bt_keyboard.cpp) was based on source code with the same file name &
    Copyright (c) 2020 by Guy Turcotte
   see MIT License. Look at file licenses.txt for details.
-  Note 2 : for IDF 5.2 keneral code, i2c_master.c has been modified, at function 'i2c_master_transmit_receive()',
+  Note 2: for IDF 5.2 keneral code, i2c_master.c has been modified, at function 'i2c_master_transmit_receive()',
   after line 'ESP_RETURN_ON_ERROR(s_i2c_asynchronous_transaction(i2c_dev, i2c_ops, DIM(i2c_ops), xfer_timeout_ms), TAG, "I2C transaction failed");'
   added this entry: 'vTaskDelay(2);'
-  This stopped random crashes related to gt911 touch procssing
+  This stopped random crashes related to gt911 touch procssing.
+  Also added this statement, two places, in the same file, 
+  free(i2c_dev->master_bus->anyc_write_buffer[i2c_dev->master_bus->index]);
+  at lines 984, & 1023.
 */
 /*Note: When creating a new lvgl/WaveShare LCD/ESP32s3 project, to run menuconfig, & set the following settings:
 CONFIG_FREERTOS_HZ=1000
@@ -36,6 +39,7 @@ esp_event_loop_args_t event_task_args = {
  changed .task_stack_size = 4096,   
 */
 /*20240729 Fully functional but needs refinement*/
+/*20240822 Now support Keyboard battery state, but subject to crashing when running app tries to connect to keyboard a 2nd time*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -608,6 +612,7 @@ void DisplayUpDt(void *param)
            lpagn = false;
           }
         }
+        lvglmsgbx.Str_KyBrdBat_level(bt_keyboard.get_battery_level());
         //sprintf(LogBuf,"DisplayUpDt Step 3 complete\n");
         lvglmsgbx.dispMsg2(RxSig);
         //sprintf(LogBuf,"DisplayUpDt Step 4 complete\n");
@@ -738,7 +743,7 @@ void BLE_scan_tsk(void *param)
       loop = false;
       // vTaskSuspend(NULL); // NULL = suspend this task
     }
-  } // end while(1) loop
+  } // end while(loop)
   /** JMH Added this to ESP32 version to handle random crashing with error,"Task Goertzel Task should not return, Aborting now" */
   SkippDotClkISR = false;
   vTaskDelete(NULL);
@@ -1105,10 +1110,16 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
   vTaskResume( DsplUpDtTaskHandle);
   
   InitGoertzel();
-  vTaskDelay(100 / portTICK_PERIOD_MS);
+  /*This delay is just to give time for an external USB serrial monitor to get up and running*/
+  //vTaskDelay(5000 / portTICK_PERIOD_MS);
  
     #if USE_KYBrd
   bt_keyboard.inPrgsFlg = false;
+  if(DFault.DeBug)
+  {
+    vTaskDelay(pdMS_TO_TICKS(500));
+    printf("\n");
+  }  
   /*start bluetooth pairing/linking process*/
     if (bt_keyboard.setup(pairing_handler, &bt_keyboard )) // Must be called once
   { 

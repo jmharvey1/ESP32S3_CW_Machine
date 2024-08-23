@@ -28,12 +28,16 @@
 #include <stdio.h>  //JMH added
 #include <string.h> //JMH added
 #include "esp_hidh_private.h"
-extern "C" {
+extern "C"
+{
 #include "btc/btc_ble_storage.h"
 }
 #define SCAN 1
-
-// uncomment to print all devices that were seen during a scan
+/* uncomment the following, to get a detailed listing 
+*  of gattc call back events (via USB serial terminal)
+*/
+# define gatDebug
+/* uncomment to print all devices that were seen during a scan */
 #define GAP_DBG_PRINTF(...) printf(__VA_ARGS__)
 
 #define SIZEOF_ARRAY(a) (sizeof(a) / sizeof(*a))
@@ -63,11 +67,747 @@ const char BTKeyboard::shift_trans_dict[] =
     "\220\220\221\221\222\222\177\177"                  // Insert Home PageUp Delete
     "\223\223\224\224\225\225\226\226\227\227\230\230"; // End PageDown Right Left Dow Up
 
-static bool PairFlg1 = false; 
+static bool PairFlg1 = false;
+static esp_bd_addr_t Prd_bda;
+static esp_ble_addr_type_t Prd_addr_type;
 BTKeyboard *BLE_KyBrd = nullptr;
 char msgbuf[256];
+/*moved this here to also support GATT code*/
+static esp_ble_scan_params_t hid_scan_params = {
+    .scan_type = BLE_SCAN_TYPE_ACTIVE,
+    .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
+    .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
+    .scan_interval = 0x50,
+    .scan_window = 0x30,
+    .scan_duplicate = BLE_SCAN_DUPLICATE_ENABLE,
+};
 
+/*JMH GATT stuff*/
+const char *BLE_TAG = "BLE_GATT";
+#define PROFILE_BATTERY_SERVICE 0 // 0x180F
+// #define PROFILE_HID_SERVICE 1
+#define INVALID_HANDLE 0
+#define PROFILE_NUM 1
+static bool connect_ble = false;
+static bool get_server = false;
+static esp_gattc_char_elem_t *char_elem_result = NULL;
+static esp_gattc_descr_elem_t *descr_elem_result = NULL;
 
+struct gattc_profile_inst
+{
+  esp_gattc_cb_t gattc_cb;
+  uint16_t gattc_if;
+  uint16_t app_id;
+  uint16_t conn_id;
+  uint16_t service_start_handle;
+  uint16_t service_end_handle;
+  uint16_t char_handle;
+  esp_bd_addr_t remote_bda;
+};
+static void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
+static void gattc_battery_service_event_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
+/* One gatt-based profile one app_id and one gattc_if, this array will store the gattc_if returned by ESP_GATTS_REG_EVT */
+static struct gattc_profile_inst gl_profile_tab[PROFILE_NUM] = {
+    [PROFILE_BATTERY_SERVICE] = {
+        .gattc_cb = gattc_battery_service_event_cb,
+        .gattc_if = ESP_GATT_IF_NONE,
+    },
+
+    //    [PROFILE_DEVICE_INFO] = {
+    //        .gattc_cb = gattc_profile_device_info_event_handler,
+    //        .gattc_if = ESP_GATT_IF_NONE,       /* Not get the gatt_if, so initial is ESP_GATT_IF_NONE */
+    //    },
+
+    //  [PROFILE_HID_SERVICE] = {
+    //      .gattc_cb = esp_hidh_gattc_event_handler,
+    //      .gattc_if = ESP_GATT_IF_NONE,
+    //  },
+};
+static esp_bt_uuid_t remote_filter_battery_service_uuid = {
+    .len = ESP_UUID_LEN_16,
+    .uuid = {
+        .uuid16 = ESP_GATT_UUID_BATTERY_SERVICE_SVC,
+    },
+};
+static esp_bt_uuid_t remote_battery_filter_char_uuid = {
+    .len = ESP_UUID_LEN_16,
+    .uuid = {
+        .uuid16 = ESP_GATT_UUID_BATTERY_LEVEL,
+    },
+};
+static esp_bt_uuid_t notify_descr_uuid = {
+    .len = ESP_UUID_LEN_16,
+    .uuid = {
+        .uuid16 = ESP_GATT_UUID_CHAR_CLIENT_CONFIG,
+    },
+};
+
+static void gattc_battery_service_event_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
+{
+  const char *TAG_evnt = "BAT SVC EVNT";
+  esp_ble_gattc_cb_param_t *p_data = (esp_ble_gattc_cb_param_t *)param;
+  // int event1 = 2;
+  switch (event)
+  {
+  case ESP_GATTC_REG_EVT:
+  {
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)REG_EVT");
+#endif
+    esp_err_t scan_ret = esp_ble_gap_set_scan_params(&hid_scan_params);
+    if (scan_ret)
+    {
+      ESP_LOGE(TAG_evnt, "(battery)set scan params error, error code = %x", scan_ret);
+    }
+  }
+  break;
+  case ESP_GATTC_UNREG_EVT:
+  {
+    ESP_LOGE(TAG_evnt, "ESP_GATTC_UNREG_EVT");
+  }
+  break;
+  case ESP_GATTC_OPEN_EVT:
+  {
+    if (param->open.status != ESP_GATT_OK)
+    {
+      ESP_LOGE(TAG_evnt, "(battery)open failed, status %d", p_data->open.status);
+      break;
+    }
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_OPEN_EVT Ok");
+#endif
+  }
+  break;
+  case ESP_GATTC_READ_CHAR_EVT:
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_READ_CHAR_EVT");
+#endif
+    if (p_data->read.status != ESP_GATT_OK)
+    {
+      ESP_LOGE(TAG_evnt, "(battery)read char failed, error status = %x", p_data->read.status);
+      break;
+    }
+// ESP_LOGI(TAG_evnt, "(battery)read char success ");
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "p_data->read.value_len %d", p_data->read.value_len);
+#endif
+    if (p_data->read.value_len > 0)
+    {
+      char *char_pointer = (char *)p_data->read.value;
+      if (p_data->read.value_len > 1)
+      {
+#ifdef gatDebug        
+        //char* buffer = (char*) heap_caps_malloc(sizeof(char)*p_data->read.value_len, MALLOC_CAP_DMA);
+        // char* buffer = (char*) malloc(sizeof(char)*p_data->read.value_len);
+        // if (buffer == NULL) 
+        // {
+        // ESP_LOGE(TAG_evnt, "Memory allocation failed!");
+        // break;
+        // }
+        // memcpy(buffer, char_pointer, (sizeof(char)*p_data->read.value_len)+1);
+        /*now make sure we have a NULL terminated string*/
+        int i = 0;
+        while((char_pointer[i] != 0) && (i< p_data->read.value_len) )
+        {
+          i++;
+        }
+        if(i == p_data->read.value_len) char_pointer[p_data->read.value_len] = 0 ;
+        ESP_LOGI(TAG_evnt, "Battery Info: %s", char_pointer);
+        //free(buffer);
+#endif
+      }
+      else
+      {
+        // battery_level = (int)*char_pointer;
+        BLE_KyBrd->str_battery_level((int)*char_pointer);
+#ifdef gatDebug
+        ESP_LOGI(TAG_evnt, "Battery level: %d%%", BLE_KyBrd->get_battery_level());
+#endif
+      }
+    }
+    
+    break;
+  case ESP_GATTC_WRITE_CHAR_EVT:
+    if (p_data->write.status != ESP_GATT_OK)
+    {
+      ESP_LOGE(TAG_evnt, "(battery)write char failed, error status = %x", p_data->write.status);
+      break;
+    }
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)write char success ");
+#endif
+    break;
+  case ESP_GATTC_CLOSE_EVT:
+  #ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_CLOSE_EVT");
+#endif
+BLE_KyBrd->str_battery_level(0);
+/* free char_elem_result */
+        // free(char_elem_result);
+  break;  
+  case ESP_GATTC_SEARCH_CMPL_EVT:
+    if (p_data->search_cmpl.status != ESP_GATT_OK)
+    {
+      ESP_LOGE(TAG_evnt, "(battery)search service failed, error status = %x", p_data->search_cmpl.status);
+      break;
+    }
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_SEARCH_CMPL_EVT");
+#endif
+    if (get_server)
+    {
+#ifdef gatDebug
+      ESP_LOGI(TAG_evnt, "(battery)get_server");
+#endif
+      uint16_t count = 0;
+      esp_gatt_status_t status = esp_ble_gattc_get_attr_count(gattc_if,
+                                                              p_data->search_cmpl.conn_id,
+                                                              ESP_GATT_DB_CHARACTERISTIC,
+                                                              gl_profile_tab[PROFILE_BATTERY_SERVICE].service_start_handle,
+                                                              gl_profile_tab[PROFILE_BATTERY_SERVICE].service_end_handle,
+                                                              INVALID_HANDLE,
+                                                              &count);
+      if (status != ESP_GATT_OK)
+      {
+        ESP_LOGE(TAG_evnt, "(battery)esp_ble_gattc_get_attr_count error");
+      }
+
+      if (count > 0)
+      {
+        char_elem_result = (esp_gattc_char_elem_t *)malloc(sizeof(esp_gattc_char_elem_t) * count);
+        if (!char_elem_result)
+        {
+          ESP_LOGE(TAG_evnt, "(battery)gattc no mem");
+        }
+        else
+        {
+          status = esp_ble_gattc_get_char_by_uuid(gattc_if,
+                                                  p_data->search_cmpl.conn_id,
+                                                  gl_profile_tab[PROFILE_BATTERY_SERVICE].service_start_handle,
+                                                  gl_profile_tab[PROFILE_BATTERY_SERVICE].service_end_handle,
+                                                  remote_battery_filter_char_uuid, // remote_filter_char_uuid,
+                                                  char_elem_result,
+                                                  &count);
+          if (status != ESP_GATT_OK)
+          {
+            ESP_LOGE(TAG_evnt, "(battery)esp_ble_gattc_get_char_by_uuid error");
+          }
+
+          /*  Every service have only one char in our 'ESP_GATTS_DEMO' demo, so we used first 'char_elem_result' */
+          if (count > 0 && (char_elem_result[0].properties & ESP_GATT_CHAR_PROP_BIT_NOTIFY))
+          {
+            gl_profile_tab[PROFILE_BATTERY_SERVICE].char_handle = char_elem_result[0].char_handle;
+            esp_err_t errorcode = esp_ble_gattc_register_for_notify(gattc_if, gl_profile_tab[PROFILE_BATTERY_SERVICE].remote_bda, char_elem_result[0].char_handle);
+
+            if (errorcode)
+            {
+#ifdef gatDebug
+              ESP_LOGI(TAG_evnt, "(battery)esp_ble_gattc_register_for_notify error, code: %x", errorcode);
+#endif
+            }
+            else
+            {
+#ifdef gatDebug
+              ESP_LOGI(TAG_evnt, "(battery)esp_ble_gattc_register_for_notify success; %d Attributes", count);
+#endif
+            }
+          }
+        }
+        /* free char_elem_result */
+        free(char_elem_result);
+      }
+      else
+      {
+        ESP_LOGE(TAG_evnt, "(battery)no char found");
+      }
+    }
+    else
+    {
+#ifdef gatDebug
+      ESP_LOGI(TAG_evnt, "(battery) 'Get server' flag not set");
+#endif
+    }
+    break;
+  case ESP_GATTC_SEARCH_RES_EVT:
+  {
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_SEARCH_RES_EVT");
+#endif
+    esp_gatt_srvc_id_t *srvc_id = (esp_gatt_srvc_id_t *)&p_data->search_res.srvc_id;
+
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)srvc_id_len:%d [%x]", srvc_id->id.uuid.len, srvc_id->id.uuid.len);
+#endif
+    //        for (uint8_t i = 0; i < 15; i++)
+    //        {
+    //
+    // #ifdef gatDebug
+    // ESP_LOGI(TAG_evnt, "(battery)srvc_id:%d [%x]", i, srvc_id->id.uuid.uuid.uuid128[i]);
+    // #endif
+    //        }
+
+    if (srvc_id->id.uuid.len == ESP_UUID_LEN_16 && srvc_id->id.uuid.uuid.uuid16 == ESP_GATT_UUID_BATTERY_SERVICE_SVC)
+    {
+#ifdef gatDebug
+      ESP_LOGI(TAG_evnt, "(battery)service found 2");
+#endif
+      get_server = true;
+      gl_profile_tab[PROFILE_BATTERY_SERVICE].service_start_handle = p_data->search_res.start_handle;
+      gl_profile_tab[PROFILE_BATTERY_SERVICE].service_end_handle = p_data->search_res.end_handle;
+#ifdef gatDebug
+      ESP_LOGI(TAG_evnt, "(battery)UUID16: %x", srvc_id->id.uuid.uuid.uuid16);
+#endif
+    }
+    break;
+  }
+  case ESP_GATTC_READ_DESCR_EVT:
+  {
+    // ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_READ_DESCR_EVT");
+    if (p_data->read.status != ESP_GATT_OK)
+    {
+      ESP_LOGE(TAG_evnt, "(battery)read descr failed, error status = %x", p_data->write.status);
+      break;
+    }
+    // ESP_LOGI(TAG_evnt, "(battery)read descr success ");
+
+    esp_err_t ret_status = esp_ble_gattc_read_char(gattc_if,
+                                                   gl_profile_tab[PROFILE_BATTERY_SERVICE].conn_id,
+                                                   gl_profile_tab[PROFILE_BATTERY_SERVICE].char_handle,
+                                                   ESP_GATT_AUTH_REQ_NONE);
+    if (ret_status)
+    {
+      ESP_LOGE(TAG_evnt, "(battery) esp_ble_gattc_read_char failed, error code = %x", ret_status);
+    }
+    // else
+    // {
+    //   ESP_LOGI(TAG_evnt, "(battery) esp_ble_gattc_read_char success ");
+    // }
+    break;
+  }
+  case ESP_GATTC_WRITE_DESCR_EVT:
+  {
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_WRITE_DESCR_EVT");
+#endif
+    if (p_data->write.status != ESP_GATT_OK)
+    {
+      ESP_LOGE(TAG_evnt, "(battery)write descr failed, error status = %x", p_data->write.status);
+      break;
+    }
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)write descr success ");
+#endif
+    /*JMH the following comes from ESP32 idf demo code & is not needed for this application*/
+    //  uint8_t write_char_data[35];
+    //  for (int i = 0; i < sizeof(write_char_data); ++i)
+    //  {
+    //      write_char_data[i] = i % 256;
+    //  }
+    //  esp_ble_gattc_write_char( gattc_if,
+    //                            gl_profile_tab[PROFILE_BATTERY_SERVICE].conn_id,
+    //                            gl_profile_tab[PROFILE_BATTERY_SERVICE].char_handle,
+    //                            sizeof(write_char_data),
+    //                            write_char_data,
+    //                            ESP_GATT_WRITE_TYPE_RSP,
+    //                            ESP_GATT_AUTH_REQ_NONE);
+    break;
+  }
+  case ESP_GATTC_NOTIFY_EVT:
+    if (p_data->notify.is_notify)
+    {
+#ifdef gatDebug
+      ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_NOTIFY_EVT, receive notify value:");
+#endif
+    }
+    else
+    {
+#ifdef gatDebug
+      ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_NOTIFY_EVT, receive indicate value:");
+#endif
+    }
+    esp_log_buffer_hex(TAG_evnt, p_data->notify.value, p_data->notify.value_len);
+    break;
+  case ESP_GATTC_SRVC_CHG_EVT:
+  {
+    esp_bd_addr_t bda;
+    memcpy(bda, p_data->srvc_chg.remote_bda, sizeof(esp_bd_addr_t));
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_SRVC_CHG_EVT, bd_addr:");
+#endif
+    esp_log_buffer_hex(TAG_evnt, bda, sizeof(esp_bd_addr_t));
+    break;
+  }
+  case ESP_GATTC_CFG_MTU_EVT:
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_CFG_MTU_EVT, Status %d, MTU %d, if %d, conn_id %d", param->cfg_mtu.status, param->cfg_mtu.mtu, gattc_if, param->cfg_mtu.conn_id);
+#endif
+    if (param->cfg_mtu.status != ESP_GATT_OK)
+    {
+      ESP_LOGE(TAG_evnt, "(battery)config mtu failed, error status = %x", param->cfg_mtu.status);
+    }
+
+    // esp_err_t ret_search_gatt;
+    // ret_search_gatt = esp_ble_gattc_search_service(gattc_if, param->cfg_mtu.conn_id, &remote_filter_battery_service_uuid); // with filter
+    // // ret_search_gatt = esp_ble_gattc_search_service(gattc_if, param->cfg_mtu.conn_id, NULL);
+    // if (ret_search_gatt)
+    // {
+    //   ESP_LOGI(TAG_evnt, "(battery)service not found, error code = %x", ret_search_gatt);
+    // }
+    // else
+    // {
+    //   ESP_LOGI(TAG_evnt, "(battery)Search for Service Launched");
+    // }
+    // break;
+  case ESP_GATTC_REG_FOR_NOTIFY_EVT:
+  {
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_REG_FOR_NOTIFY_EVT");
+#endif
+    if (p_data->reg_for_notify.status != ESP_GATT_OK)
+    {
+      ESP_LOGE(TAG_evnt, "(battery)REG FOR NOTIFY failed: error status = %d", p_data->reg_for_notify.status);
+    }
+    else
+    {
+      uint16_t count = 0;
+      uint16_t notify_en = 1;
+      esp_gatt_status_t ret_status = esp_ble_gattc_get_attr_count(gattc_if,
+                                                                  gl_profile_tab[PROFILE_BATTERY_SERVICE].conn_id,
+                                                                  ESP_GATT_DB_DESCRIPTOR,
+                                                                  gl_profile_tab[PROFILE_BATTERY_SERVICE].service_start_handle,
+                                                                  gl_profile_tab[PROFILE_BATTERY_SERVICE].service_end_handle,
+                                                                  gl_profile_tab[PROFILE_BATTERY_SERVICE].char_handle,
+                                                                  &count);
+      if (ret_status != ESP_GATT_OK)
+      {
+        ESP_LOGE(TAG_evnt, "(battery)esp_ble_gattc_get_attr_count error");
+      }
+      if (count > 0)
+      {
+#ifdef gatDebug
+        ESP_LOGI(TAG_evnt, "(battery)malloc needs descr elem size %d X count %d", (int)sizeof(esp_gattc_descr_elem_t), count);
+#endif
+        descr_elem_result = (esp_gattc_descr_elem_t *)malloc(sizeof(esp_gattc_descr_elem_t) * count);
+        if (!descr_elem_result)
+        {
+          ESP_LOGE(TAG_evnt, "(battery)malloc error, gattc no mem");
+        }
+        else
+        {
+          ret_status = esp_ble_gattc_get_descr_by_char_handle(gattc_if,
+                                                              gl_profile_tab[PROFILE_BATTERY_SERVICE].conn_id,
+                                                              p_data->reg_for_notify.handle,
+                                                              notify_descr_uuid,
+                                                              descr_elem_result,
+                                                              &count);
+          if (ret_status != ESP_GATT_OK)
+          {
+            ESP_LOGE(TAG_evnt, "(battery)esp_ble_gattc_get_descr_by_char_handle error");
+          }
+
+          /* Every char has only one descriptor in our 'ESP_GATTS_DEMO' demo, so we used first 'descr_elem_result' */
+          if (count > 0 && descr_elem_result[0].uuid.len == ESP_UUID_LEN_16 && descr_elem_result[0].uuid.uuid.uuid16 == ESP_GATT_UUID_CHAR_CLIENT_CONFIG)
+          {
+            //                        ret_status = esp_ble_gattc_write_char_descr( gattc_if,
+            //                                                                     gl_profile_tab[PROFILE_BATTERY_SERVICE].conn_id,
+            //                                                                     descr_elem_result[0].handle,
+            //                                                                     sizeof(notify_en),
+            //                                                                     (uint8_t *)&notify_en,
+            //                                                                     ESP_GATT_WRITE_TYPE_RSP,
+            //                                                                     ESP_GATT_AUTH_REQ_NONE);
+            ret_status = (esp_gatt_status_t)esp_ble_gattc_read_char_descr(gattc_if,
+                                                                          gl_profile_tab[PROFILE_BATTERY_SERVICE].conn_id,
+                                                                          descr_elem_result[0].handle,
+                                                                          ESP_GATT_AUTH_REQ_NONE);
+          }
+
+          if (ret_status != ESP_GATT_OK)
+          {
+            // ESP_LOGE(TAG_evnt, "(battery)esp_ble_gattc_write_char_descr error");
+            ESP_LOGE(TAG_evnt, "(battery)esp_ble_gattc_read_char_descr error, code: %x", ret_status);
+          }
+
+          /* free descr_elem_result */
+          free(descr_elem_result);
+        }
+      }
+      else
+      {
+        ESP_LOGE(TAG_evnt, "(battery)decsr not found");
+      }
+    }
+    break;
+  }
+  case ESP_GATTC_CONNECT_EVT:
+  {
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_CONNECT_EVT conn_id %d, interface %d", p_data->connect.conn_id, gattc_if);
+#endif
+    gl_profile_tab[PROFILE_BATTERY_SERVICE].conn_id = p_data->connect.conn_id;
+    memcpy(gl_profile_tab[PROFILE_BATTERY_SERVICE].remote_bda, p_data->connect.remote_bda, sizeof(esp_bd_addr_t));
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)REMOTE BDA:");
+#endif
+    esp_log_buffer_hex(TAG_evnt, gl_profile_tab[PROFILE_BATTERY_SERVICE].remote_bda, sizeof(esp_bd_addr_t));
+    esp_err_t mtu_ret = esp_ble_gattc_send_mtu_req(gattc_if, p_data->connect.conn_id);
+    if (mtu_ret)
+    {
+      ESP_LOGE(TAG_evnt, "(battery)config MTU error, error code = %x", mtu_ret);
+    }
+    else
+    {
+      ESP_LOGE(TAG_evnt, "(battery) Send MTU request");
+    }
+    break;
+  }
+  case ESP_GATTC_DISCONNECT_EVT:
+    connect_ble = false;
+    get_server = false;
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "(battery)ESP_GATTC_DISCONNECT_EVT, reason = %d", p_data->disconnect.reason);
+#endif
+    break;
+  case ESP_GATTC_DIS_SRVC_CMPL_EVT:
+  {
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "JMH(battery)ESP_GATTC_DIS_SRVC_CMPL_EVT(46) conn_id %d, interface %d", p_data->connect.conn_id, gattc_if);
+#endif
+    esp_err_t mtu_ret = esp_ble_gattc_send_mtu_req(gattc_if, p_data->connect.conn_id);
+    if (mtu_ret)
+    {
+      ESP_LOGE(TAG_evnt, "JMH(battery)config MTU error, error code = %x", mtu_ret);
+    }
+    else
+    {
+#ifdef gatDebug
+      ESP_LOGI(TAG_evnt, "JMH(battery)config MTU request Launched");
+#endif
+    }
+  }
+  break;
+  default:
+#ifdef gatDebug
+    ESP_LOGI(TAG_evnt, "unregistered EVT:%d", event);
+#endif
+    break;
+  }
+}
+
+static void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param)
+{
+  const char *TAG_cb = "esp_gattc_cb";
+#ifdef gatDebug
+  char Evnt_name[35];
+  switch (event)
+  {
+  case ESP_GATTC_REG_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_REG_EVT");
+    break;
+  case ESP_GATTC_UNREG_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_UNREG_EVT");
+    break;
+  case ESP_GATTC_OPEN_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_OPEN_EVT");
+    break;
+  case ESP_GATTC_READ_CHAR_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_READ_CHAR_EVT");
+    break;
+  case ESP_GATTC_WRITE_CHAR_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_WRITE_CHAR_EVT");
+    break;
+  case ESP_GATTC_CLOSE_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_CLOSE_EVT");
+    break;
+  case ESP_GATTC_SEARCH_CMPL_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_SEARCH_CMPL_EVT");
+    break;
+  case ESP_GATTC_SEARCH_RES_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_SEARCH_RES_EVT");
+    break;
+  case ESP_GATTC_READ_DESCR_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_READ_DESCR_EVT");
+    break;
+  case ESP_GATTC_WRITE_DESCR_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_WRITE_DESCR_EVT");
+    break;
+  case ESP_GATTC_NOTIFY_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_NOTIFY_EVT");
+    break;
+  case ESP_GATTC_PREP_WRITE_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_PREP_WRITE_EVT");
+    break;
+  case ESP_GATTC_EXEC_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_EXEC_EVT");
+    break;
+  case ESP_GATTC_ACL_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_ACL_EVT");
+    break;
+  case ESP_GATTC_CANCEL_OPEN_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_CANCEL_OPEN_EVT");
+    break;
+  case ESP_GATTC_SRVC_CHG_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_SRVC_CHG_EVT");
+    break;
+  case ESP_GATTC_ENC_CMPL_CB_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_ENC_CMPL_CB_EVT");
+    break;
+  case ESP_GATTC_CFG_MTU_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_CFG_MTU_EVT");
+    break;
+  case ESP_GATTC_ADV_DATA_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_ADV_DATA_EVT");
+    break;
+  case ESP_GATTC_MULT_ADV_ENB_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_MULT_ADV_ENB_EVT");
+    break;
+  case ESP_GATTC_MULT_ADV_UPD_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_MULT_ADV_UPD_EVT");
+    break;
+  case ESP_GATTC_MULT_ADV_DATA_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_MULT_ADV_DATA_EVT");
+    break;
+  case ESP_GATTC_MULT_ADV_DIS_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_MULT_ADV_DIS_EV");
+    break;
+  case ESP_GATTC_CONGEST_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_CONGEST_EVT");
+    break;
+  case ESP_GATTC_BTH_SCAN_ENB_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_BTH_SCAN_ENB_EVT");
+    break;
+  case ESP_GATTC_BTH_SCAN_CFG_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_BTH_SCAN_CFG_EVT");
+    break;
+  case ESP_GATTC_BTH_SCAN_RD_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_BTH_SCAN_RD_EVT");
+    break;
+  case ESP_GATTC_BTH_SCAN_THR_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_BTH_SCAN_THR_EVT");
+    break;
+  case ESP_GATTC_BTH_SCAN_PARAM_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_BTH_SCAN_PARAM_EVT");
+    break;
+  case ESP_GATTC_BTH_SCAN_DIS_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_BTH_SCAN_DIS_EVT");
+    break;
+  case ESP_GATTC_SCAN_FLT_CFG_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_SCAN_FLT_CFG_EVT");
+    break;
+  case ESP_GATTC_SCAN_FLT_PARAM_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_SCAN_FLT_PARAM_EVT");
+    break;
+  case ESP_GATTC_SCAN_FLT_STATUS_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_SCAN_FLT_STATUS_EVT");
+    break;
+  case ESP_GATTC_ADV_VSC_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_ADV_VSC_EVT");
+    break;
+  case ESP_GATTC_REG_FOR_NOTIFY_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_REG_FOR_NOTIFY_EVT");
+    break;
+  case ESP_GATTC_UNREG_FOR_NOTIFY_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_UNREG_FOR_NOTIFY_EVT");
+    break;
+  case ESP_GATTC_CONNECT_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_CONNECT_EVT");
+    break;
+  case ESP_GATTC_DISCONNECT_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_DISCONNECT_EVT");
+    break;
+  case ESP_GATTC_READ_MULTIPLE_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_READ_MULTIPLE_EVT");
+    break;
+  case ESP_GATTC_QUEUE_FULL_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_QUEUE_FULL_EVT");
+    break;
+  case ESP_GATTC_SET_ASSOC_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_SET_ASSOC_EVT");
+    break;
+  case ESP_GATTC_GET_ADDR_LIST_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_GET_ADDR_LIST_EVT");
+    break;
+  case ESP_GATTC_DIS_SRVC_CMPL_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_DIS_SRVC_CMPL_EVT");
+    break;
+  case ESP_GATTC_READ_MULTI_VAR_EVT:
+    sprintf(Evnt_name, "ESP_GATTC_READ_MULTI_VAR_EVT");
+  default:
+    sprintf(Evnt_name, "UNKNOWN_EVT");
+    break;
+  }
+
+  ESP_LOGI(TAG_cb, "-> CallBk EVNT, app_id %04x, conn_id %d, if %d, event_id %s(%d)", param->reg.app_id, param->connect.conn_id, gattc_if, Evnt_name, event);
+#endif
+  if (event == ESP_GATTC_SEARCH_RES_EVT)
+  {
+
+    esp_gatt_srvc_id_t srvc_id = (esp_gatt_srvc_id_t)param->search_res.srvc_id;
+    if (srvc_id.id.uuid.len == ESP_UUID_LEN_16 && srvc_id.id.uuid.uuid.uuid16 == UUID_SERVCLASS_BATTERY)
+    {
+      // ESP_LOGI(TAG_cb, "!!BATTERY Service UUID16: %x found!!", srvc_id.id.uuid.uuid.uuid16);
+      gl_profile_tab[PROFILE_BATTERY_SERVICE].gattc_cb(event, gattc_if, param);
+      // return; // default hidh_gattc_event_handler does nothing with this event, so no need to to continue
+    }
+  }
+  /* If event is register event, store the gattc_if for each profile */
+  if (event == ESP_GATTC_CONNECT_EVT)
+  {
+    // ESP_LOGI(TAG_cb, "!!ESP_GATTC_CONNECT_EVT!!, app_id %04x, interface %d, status %d",
+    //          param->reg.app_id,
+    //          gattc_if,
+    //          param->reg.status);
+    //  gl_profile_tab[PROFILE_BATTERY_SERVICE].gattc_cb(event, gattc_if, param);
+    // return; // default hidh_gattc_event_handler does nothing with this event, so no need to to continue
+  }
+  if (event == ESP_GATTC_REG_EVT)
+  {
+    if (param->reg.status == ESP_GATT_OK)
+    {
+      gl_profile_tab[param->reg.app_id].gattc_if = gattc_if;
+      // ESP_LOGI(TAG_cb, "reg app COMPLETE, app_id %04x, interface %d, status %d",
+      //          param->reg.app_id,
+      //          gattc_if,
+      //          param->reg.status);
+      // esp_hidh_gattc_event_handler(event, gattc_if, param);
+    }
+    else
+    {
+#ifdef gatDebug
+      ESP_LOGI(TAG_cb, "reg app failed, app_id %04x, status %d",
+               param->reg.app_id,
+               param->reg.status);
+#endif
+      return;
+    }
+  }
+
+  /* If the param->reg.app_id equal to profile[n]app_id, call profile A cb handler,
+   * so here call each profile's callback */
+
+  int idx;
+  for (idx = 0; idx < PROFILE_NUM; idx++)
+  {
+    if (gl_profile_tab[idx].app_id == param->reg.app_id && gl_profile_tab[idx].gattc_if != ESP_GATT_IF_NONE)
+    {
+      if (gl_profile_tab[idx].gattc_cb)
+      {
+        // ESP_LOGI(TAG_cb, "-> Battery app CallBk, app_id %04x, conn_id %d, event_id %d", param->reg.app_id, param->connect.conn_id, event);
+        gl_profile_tab[idx].gattc_cb(event, gattc_if, param);
+        // if (event == ESP_GATTC_DIS_SRVC_CMPL_EVT)
+        //   return;
+        // if (event == ESP_GATTC_CFG_MTU_EVT)
+        //   return;
+        //if(event == ESP_GATTC_READ_CHAR_EVT)
+        //  return;
+      }
+    }
+  }
+
+  /*And finally, if this CB event has not been diverted, treat this event as an HID callback,
+  using the espidf default hid callback handler*/
+  esp_hidh_gattc_event_handler(event, gattc_if, param);
+}
+/*END GATT stuff*/
 const char *
 BTKeyboard::ble_addr_type_str(esp_ble_addr_type_t ble_addr_type)
 {
@@ -185,111 +925,131 @@ void BTKeyboard::print_uuid(esp_bt_uuid_t *uuid)
   }
 }
 
-/*new*/
+/*new runs once during main startup*/
 esp_err_t BTKeyboard::init_low_level(uint8_t mode)
 {
-    esp_err_t ret;
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+  esp_err_t ret;
+  esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
 #if CONFIG_IDF_TARGET_ESP32
-    bt_cfg.mode = mode;
+  bt_cfg.mode = mode;
 #endif
 #if CONFIG_BT_HID_HOST_ENABLED
-    if (mode & ESP_BT_MODE_CLASSIC_BT) {
-        bt_cfg.bt_max_acl_conn = 3;
-        bt_cfg.bt_max_sync_conn = 3;
-    } else
+  if (mode & ESP_BT_MODE_CLASSIC_BT)
+  {
+    bt_cfg.bt_max_acl_conn = 3;
+    bt_cfg.bt_max_sync_conn = 3;
+  }
+  else
 #endif
+  {
+    ret = esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
+    if (ret)
     {
-        ret = esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
-        if (ret) {
-            ESP_LOGE(TAG, "esp_bt_controller_mem_release failed: %d", ret);
-            return ret;
-        }
+      ESP_LOGE(TAG, "esp_bt_controller_mem_release failed: %d", ret);
+      return ret;
     }
-    ret = esp_bt_controller_init(&bt_cfg);
-    if (ret) {
-        ESP_LOGE(TAG, "esp_bt_controller_init failed: %d", ret);
-        return ret;
-    }
+  }
+  ret = esp_bt_controller_init(&bt_cfg);
+  if (ret)
+  {
+    // ESP_LOGE(TAG, "esp_bt_controller_init failed: %d", ret);
+    ESP_LOGE(TAG, "%s initialize controller failed: %s\n", __func__, esp_err_to_name(ret));
+    return ret;
+  }
 
-    ret = esp_bt_controller_enable((esp_bt_mode_t)mode);
-    if (ret) {
-        ESP_LOGE(TAG, "esp_bt_controller_enable failed: %d", ret);
-        return ret;
-    }
+  ret = esp_bt_controller_enable((esp_bt_mode_t)mode);
+  if (ret)
+  {
+    ESP_LOGE(TAG, "esp_bt_controller_enable failed: %d", ret);
+    return ret;
+  }
 
-    esp_bluedroid_config_t bluedroid_cfg = BT_BLUEDROID_INIT_CONFIG_DEFAULT();
+  esp_bluedroid_config_t bluedroid_cfg = BT_BLUEDROID_INIT_CONFIG_DEFAULT();
 #if (CONFIG_EXAMPLE_SSP_ENABLED == false)
-    bluedroid_cfg.ssp_en = false;
+  bluedroid_cfg.ssp_en = false;
 #endif
-    ret = esp_bluedroid_init_with_cfg(&bluedroid_cfg);
-    if (ret) {
-        ESP_LOGE(TAG, "esp_bluedroid_init failed: %d", ret);
-        return ret;
-    }
+  ret = esp_bluedroid_init_with_cfg(&bluedroid_cfg);
+  if (ret)
+  {
+    ESP_LOGE(TAG, "esp_bluedroid_init failed: %d", ret);
+    return ret;
+  }
 
-    ret = esp_bluedroid_enable();
-    if (ret) {
-        ESP_LOGE(TAG, "esp_bluedroid_enable failed: %d", ret);
-        return ret;
-    }
+  ret = esp_bluedroid_enable();
+  if (ret)
+  {
+    ESP_LOGE(TAG, "esp_bluedroid_enable failed: %d", ret);
+    return ret;
+  }
 #if CONFIG_BT_HID_HOST_ENABLED
-    if (mode & ESP_BT_MODE_CLASSIC_BT) {
-        ret = init_bt_gap();
-        if (ret) {
-            return ret;
-        }
+  if (mode & ESP_BT_MODE_CLASSIC_BT)
+  {
+    ret = init_bt_gap();
+    if (ret)
+    {
+      return ret;
     }
+  }
 #endif
 #if CONFIG_BT_BLE_ENABLED
-    if (mode & ESP_BT_MODE_BLE) {
-        ret = init_ble_gap();
-        if (ret) {
-            return ret;
-        }
+  if (mode & ESP_BT_MODE_BLE)
+  {
+    ret = init_ble_gap();
+    if (ret)
+    {
+      return ret;
     }
+  }
 #endif /* CONFIG_BT_BLE_ENABLED */
-    return ret;
+  return ret;
 }
 
-
+/* JMH for this application, the following never is used NOT TRUE, used during main startup */
 esp_err_t BTKeyboard::esp_hid_gap_init(uint8_t mode)
 {
-    esp_err_t ret;
-    if (!mode || mode > ESP_BT_MODE_BTDM) {
-        ESP_LOGE(TAG, "Invalid mode given!");
-        return ESP_FAIL;
-    }
+  esp_err_t ret;
+  if (!mode || mode > ESP_BT_MODE_BTDM)
+  {
+    ESP_LOGE(TAG, "Invalid mode given!");
+    return ESP_FAIL;
+  }
 
-    if (bt_hidh_cb_semaphore != NULL) {
-        ESP_LOGE(TAG, "Already initialised");
-        return ESP_FAIL;
-    }
+  if (bt_hidh_cb_semaphore != NULL)
+  {
+    ESP_LOGE(TAG, "Already initialized");
+    return ESP_FAIL;
+  }
 
-    bt_hidh_cb_semaphore = xSemaphoreCreateBinary();
-    if (bt_hidh_cb_semaphore == NULL) {
-        ESP_LOGE(TAG, "xSemaphoreCreateMutex failed!");
-        return ESP_FAIL;
-    }
+  bt_hidh_cb_semaphore = xSemaphoreCreateBinary();
+  if (bt_hidh_cb_semaphore == NULL)
+  {
+    ESP_LOGE(TAG, "xSemaphoreCreateMutex failed!");
+    return ESP_FAIL;
+  }
 
-    ble_hidh_cb_semaphore = xSemaphoreCreateBinary();
-    if (ble_hidh_cb_semaphore == NULL) {
-        ESP_LOGE(TAG, "xSemaphoreCreateMutex failed!");
-        vSemaphoreDelete(bt_hidh_cb_semaphore);
-        bt_hidh_cb_semaphore = NULL;
-        return ESP_FAIL;
-    }
+  ble_hidh_cb_semaphore = xSemaphoreCreateBinary();
+  if (ble_hidh_cb_semaphore == NULL)
+  {
+    ESP_LOGE(TAG, "xSemaphoreCreateMutex failed!");
+    vSemaphoreDelete(bt_hidh_cb_semaphore);
+    bt_hidh_cb_semaphore = NULL;
+    return ESP_FAIL;
+  }
 
-    ret = init_low_level(mode);
-    if (ret != ESP_OK) {
-        vSemaphoreDelete(bt_hidh_cb_semaphore);
-        bt_hidh_cb_semaphore = NULL;
-        vSemaphoreDelete(ble_hidh_cb_semaphore);
-        ble_hidh_cb_semaphore = NULL;
-        return ret;
-    }
-
-    return ESP_OK;
+  ret = init_low_level(mode);
+  if (ret != ESP_OK)
+  {
+    vSemaphoreDelete(bt_hidh_cb_semaphore);
+    bt_hidh_cb_semaphore = NULL;
+    vSemaphoreDelete(ble_hidh_cb_semaphore);
+    ble_hidh_cb_semaphore = NULL;
+    ESP_LOGE(TAG, "init_low_level(mode) failed!");
+    return ret;
+  }
+#ifdef gatDebug
+  ESP_LOGI(TAG, "esp_hid_gap_init() COMPLETE");
+#endif
+  return ESP_OK;
 }
 
 /*end new*/
@@ -472,9 +1232,9 @@ bool BTKeyboard::setup(pid_handler *handler, BTKeyboard *KBptr)
 {
   const char *TAG = "BTKeyboard::setup";
   esp_err_t ret;
-#if HID_HOST_MODE != HIDH_BLE_MODE//HIDH_IDLE_MODE
-    ESP_LOGE(TAG, "Please turn on BT HID host or BLE!");
-    return false;
+#if HID_HOST_MODE != HIDH_BLE_MODE // HIDH_IDLE_MODE
+  ESP_LOGE(TAG, "Please turn on BT HID host or BLE!");
+  return false;
 #endif
 
   const esp_bt_mode_t mode = HID_HOST_MODE;
@@ -491,18 +1251,21 @@ bool BTKeyboard::setup(pid_handler *handler, BTKeyboard *KBptr)
   }
   BLE_KyBrd = KBptr;
   pairing_handler = handler;
-
-    ESP_LOGI(TAG, "setting hid gap, mode:%d", HID_HOST_MODE);
-    ESP_ERROR_CHECK( esp_hid_gap_init(HID_HOST_MODE) );
+#ifdef gatDebug
+  ESP_LOGI(TAG, "setting hid gap, mode:%d", mode);
+#endif
+  ESP_ERROR_CHECK(esp_hid_gap_init(mode));
 #if CONFIG_BT_BLE_ENABLED
-    ESP_ERROR_CHECK( esp_ble_gattc_register_callback(esp_hidh_gattc_event_handler) );
+  // ESP_ERROR_CHECK(esp_ble_gattc_register_callback(esp_hidh_gattc_event_handler));
+  ESP_ERROR_CHECK(esp_ble_gattc_register_callback(esp_gattc_cb));
+
 #endif /* CONFIG_BT_BLE_ENABLED */
-    esp_hidh_config_t config = {
-        .callback = hidh_callback,
-        .event_stack_size = 4096,
-        .callback_arg = nullptr,
-    };
-    ESP_ERROR_CHECK( esp_hidh_init(&config) );
+  esp_hidh_config_t config = {
+      .callback = hidh_callback,
+      .event_stack_size = 4096,
+      .callback_arg = nullptr,
+  };
+  ESP_ERROR_CHECK(esp_hidh_init(&config));
   for (int i = 0; i < MAX_KEY_COUNT; i++)
   {
     key_avail[i] = true;
@@ -510,156 +1273,157 @@ bool BTKeyboard::setup(pid_handler *handler, BTKeyboard *KBptr)
   event_queue = xQueueCreate(10, sizeof(KeyInfo));
 
 #if CONFIG_BT_NIMBLE_ENABLED
-    /* XXX Need to have template for store */
-    ble_store_config_init();
+  /* XXX Need to have template for store */
+  ble_store_config_init();
 
-    ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
-	/* Starting nimble task after gatts is initialized*/
-    ret = esp_nimble_enable(ble_hid_host_task);
-    if (ret) {
-        ESP_LOGE(TAG, "esp_nimble_enable failed: %d", ret);
-    }
+  ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
+  /* Starting nimble task after gatts is initialized*/
+  ret = esp_nimble_enable(ble_hid_host_task);
+  if (ret)
+  {
+    ESP_LOGE(TAG, "esp_nimble_enable failed: %d", ret);
+  }
 #endif
 
-return true;
-/*The following is the OLD approach Based mostly claaic Bluetooth*/
-//   BLE_KyBrd = this;
+  return true;
+  /*The following is the OLD approach Based mostly claaic Bluetooth*/
+  //   BLE_KyBrd = this;
 
-//   pairing_handler = handler;
-//   event_queue = xQueueCreate(10, sizeof(KeyInfo));
+  //   pairing_handler = handler;
+  //   event_queue = xQueueCreate(10, sizeof(KeyInfo));
 
-//   if (HID_HOST_MODE == HIDH_IDLE_MODE)
-//   {
-//     ESP_LOGE(TAG, "Please turn on BT HID host or BLE!");
-//     sprintf(msgbuf, "Please turn on BT HID host or BLE!\n");
-//     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
-//     return false;
-//   }
+  //   if (HID_HOST_MODE == HIDH_IDLE_MODE)
+  //   {
+  //     ESP_LOGE(TAG, "Please turn on BT HID host or BLE!");
+  //     sprintf(msgbuf, "Please turn on BT HID host or BLE!\n");
+  //     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
+  //     return false;
+  //   }
 
-//   bt_hidh_cb_semaphore = xSemaphoreCreateBinary();
-//   if (bt_hidh_cb_semaphore == nullptr)
-//   {
-//     ESP_LOGE(TAG, "xSemaphoreCreateMutex failed!");
-//     sprintf(msgbuf, "xSemaphoreCreateMutex failed!\n");
-//     pmsgbx->dispStat(msgbuf, TFT_RED);
-//     return false;
-//   }
+  //   bt_hidh_cb_semaphore = xSemaphoreCreateBinary();
+  //   if (bt_hidh_cb_semaphore == nullptr)
+  //   {
+  //     ESP_LOGE(TAG, "xSemaphoreCreateMutex failed!");
+  //     sprintf(msgbuf, "xSemaphoreCreateMutex failed!\n");
+  //     pmsgbx->dispStat(msgbuf, TFT_RED);
+  //     return false;
+  //   }
 
-//   ble_hidh_cb_semaphore = xSemaphoreCreateBinary();
-//   if (ble_hidh_cb_semaphore == nullptr)
-//   {
-//     ESP_LOGE(TAG, "xSemaphoreCreateMutex failed!");
-//     sprintf(msgbuf, "xSemaphoreCreateMutex failed!\n");
-//     pmsgbx->dispStat(msgbuf, TFT_RED);
-//     vSemaphoreDelete(bt_hidh_cb_semaphore);
-//     bt_hidh_cb_semaphore = nullptr;
-//     return false;
-//   }
+  //   ble_hidh_cb_semaphore = xSemaphoreCreateBinary();
+  //   if (ble_hidh_cb_semaphore == nullptr)
+  //   {
+  //     ESP_LOGE(TAG, "xSemaphoreCreateMutex failed!");
+  //     sprintf(msgbuf, "xSemaphoreCreateMutex failed!\n");
+  //     pmsgbx->dispStat(msgbuf, TFT_RED);
+  //     vSemaphoreDelete(bt_hidh_cb_semaphore);
+  //     bt_hidh_cb_semaphore = nullptr;
+  //     return false;
+  //   }
 
-//   esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-// /*JMH commented out for BLE/5.2 version*/
-//   // bt_cfg.mode = mode;
-//   // bt_cfg.bt_max_acl_conn = 3;
-//   // bt_cfg.bt_max_sync_conn = 3;
+  //   esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+  // /*JMH commented out for BLE/5.2 version*/
+  //   // bt_cfg.mode = mode;
+  //   // bt_cfg.bt_max_acl_conn = 3;
+  //   // bt_cfg.bt_max_sync_conn = 3;
 
-//   if ((ret = esp_bt_controller_init(&bt_cfg)))
-//   {
-//     ESP_LOGE(TAG, "esp_bt_controller_init failed: %d", ret);
-//     sprintf(msgbuf, "esp_bt_controller_init failed: %d\n", ret);
-//     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
-//     return false;
-//   }
+  //   if ((ret = esp_bt_controller_init(&bt_cfg)))
+  //   {
+  //     ESP_LOGE(TAG, "esp_bt_controller_init failed: %d", ret);
+  //     sprintf(msgbuf, "esp_bt_controller_init failed: %d\n", ret);
+  //     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
+  //     return false;
+  //   }
 
-//   if ((ret = esp_bt_controller_enable(mode)))
-//   {
-//     ESP_LOGE(TAG, "esp_bt_controller_enable failed: %d", ret);
-//     sprintf(msgbuf, "esp_bt_controller_enable failed: %d\n", ret);
-//     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
-//     return false;
-//   }
+  //   if ((ret = esp_bt_controller_enable(mode)))
+  //   {
+  //     ESP_LOGE(TAG, "esp_bt_controller_enable failed: %d", ret);
+  //     sprintf(msgbuf, "esp_bt_controller_enable failed: %d\n", ret);
+  //     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
+  //     return false;
+  //   }
 
-//   if ((ret = esp_bluedroid_init()))
-//   {
-//     ESP_LOGE(TAG, "esp_bluedroid_init failed: %d", ret);
-//     sprintf(msgbuf, "esp_bluedroid_init failed: %d\n", ret);
-//     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
-//     return false;
-//   }
+  //   if ((ret = esp_bluedroid_init()))
+  //   {
+  //     ESP_LOGE(TAG, "esp_bluedroid_init failed: %d", ret);
+  //     sprintf(msgbuf, "esp_bluedroid_init failed: %d\n", ret);
+  //     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
+  //     return false;
+  //   }
 
-//   if ((ret = esp_bluedroid_enable()))
-//   {
-//     ESP_LOGE(TAG, "esp_bluedroid_enable failed: %d", ret);
-//     sprintf(msgbuf, "esp_bluedroid_enable failed: %d\n", ret);
-//     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
-//     return false;
-//   }
+  //   if ((ret = esp_bluedroid_enable()))
+  //   {
+  //     ESP_LOGE(TAG, "esp_bluedroid_enable failed: %d", ret);
+  //     sprintf(msgbuf, "esp_bluedroid_enable failed: %d\n", ret);
+  //     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
+  //     return false;
+  //   }
 
   // Classic Bluetooth GAP
-// #if CONFIG_BT_HID_HOST_ENABLED
-//   esp_bt_sp_param_t param_type = ESP_BT_SP_IOCAP_MODE;
-//   esp_bt_io_cap_t iocap = ESP_BT_IO_CAP_IO;
-//   esp_bt_gap_set_security_param(param_type, &iocap, sizeof(uint8_t));
+  // #if CONFIG_BT_HID_HOST_ENABLED
+  //   esp_bt_sp_param_t param_type = ESP_BT_SP_IOCAP_MODE;
+  //   esp_bt_io_cap_t iocap = ESP_BT_IO_CAP_IO;
+  //   esp_bt_gap_set_security_param(param_type, &iocap, sizeof(uint8_t));
 
-//   /*
-//    * Set default parameters for Legacy Pairing
-//    * Use fixed pin code
-//    */
-//   esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_FIXED;
-//   esp_bt_pin_code_t pin_code;
-//   pin_code[0] = '1';
-//   pin_code[1] = '2';
-//   pin_code[2] = '3';
-//   pin_code[3] = '4';
-//   esp_bt_gap_set_pin(pin_type, 4, pin_code);
+  //   /*
+  //    * Set default parameters for Legacy Pairing
+  //    * Use fixed pin code
+  //    */
+  //   esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_FIXED;
+  //   esp_bt_pin_code_t pin_code;
+  //   pin_code[0] = '1';
+  //   pin_code[1] = '2';
+  //   pin_code[2] = '3';
+  //   pin_code[3] = '4';
+  //   esp_bt_gap_set_pin(pin_type, 4, pin_code);
 
-//   if ((ret = esp_bt_gap_register_callback(bt_gap_event_handler)))
-//   {
-//     ESP_LOGE(TAG, "esp_bt_gap_register_callback failed: %d", ret);
-//     sprintf(msgbuf, "esp_bt_gap_register_callback failed: %d\n", ret);
-//     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
-//     return false;
-//   }
+  //   if ((ret = esp_bt_gap_register_callback(bt_gap_event_handler)))
+  //   {
+  //     ESP_LOGE(TAG, "esp_bt_gap_register_callback failed: %d", ret);
+  //     sprintf(msgbuf, "esp_bt_gap_register_callback failed: %d\n", ret);
+  //     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
+  //     return false;
+  //   }
 
-//   // Allow BT devices to connect back to us
-//   if ((ret = esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_NON_DISCOVERABLE)))
-//   {
-//     ESP_LOGE(TAG, "esp_bt_gap_set_scan_mode failed: %d", ret);
-//     sprintf(msgbuf, "esp_bt_gap_set_scan_mode failed: %d\n", ret);
-//     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
-//     return false;
-//   }
-// #endif /*CONFIG_BT_HID_HOST_ENABLED*/
-//   // BLE GAP
-//   /*for ESP32s3 changed how the esp_ble_gap_register_callback was done*/
-//   init_ble_gap();
-//   /*for ESP32s3 commented out the following*/
-//   // if ((ret = esp_ble_gap_register_callback(ble_gap_event_handler)))
-//   // {
-//   //   ESP_LOGE(TAG, "esp_ble_gap_register_callback failed: %d", ret);
-//   //   sprintf(msgbuf, "esp_bt_gap_set_scan_mode ffailed: %d\n", ret);
-//   //   pmsgbx->dispStat(msgbuf, TFT_YELLOW);
-//   //   return false;
-//   // }
+  //   // Allow BT devices to connect back to us
+  //   if ((ret = esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_NON_DISCOVERABLE)))
+  //   {
+  //     ESP_LOGE(TAG, "esp_bt_gap_set_scan_mode failed: %d", ret);
+  //     sprintf(msgbuf, "esp_bt_gap_set_scan_mode failed: %d\n", ret);
+  //     pmsgbx->dispStat(msgbuf, TFT_YELLOW);
+  //     return false;
+  //   }
+  // #endif /*CONFIG_BT_HID_HOST_ENABLED*/
+  //   // BLE GAP
+  //   /*for ESP32s3 changed how the esp_ble_gap_register_callback was done*/
+  //   init_ble_gap();
+  //   /*for ESP32s3 commented out the following*/
+  //   // if ((ret = esp_ble_gap_register_callback(ble_gap_event_handler)))
+  //   // {
+  //   //   ESP_LOGE(TAG, "esp_ble_gap_register_callback failed: %d", ret);
+  //   //   sprintf(msgbuf, "esp_bt_gap_set_scan_mode ffailed: %d\n", ret);
+  //   //   pmsgbx->dispStat(msgbuf, TFT_YELLOW);
+  //   //   return false;
+  //   // }
 
-//   // //ESP_ERROR_CHECK(esp_ble_gattc_register_callback(esp_hidh_gattc_event_handler));
-//   // ESP_ERROR_CHECK(esp_ble_gap_register_callback(esp_hidh_gattc_event_handler));
-//   esp_hidh_config_t config = {
-//       .callback = hidh_callback,
-//       .event_stack_size = 4 * 1024, // Required with ESP-IDF 4.4
-//       .callback_arg = nullptr       // idem
-//   };
-//   ESP_ERROR_CHECK(esp_hidh_init(&config));
+  //   // //ESP_ERROR_CHECK(esp_ble_gattc_register_callback(esp_hidh_gattc_event_handler));
+  //   // ESP_ERROR_CHECK(esp_ble_gap_register_callback(esp_hidh_gattc_event_handler));
+  //   esp_hidh_config_t config = {
+  //       .callback = hidh_callback,
+  //       .event_stack_size = 4 * 1024, // Required with ESP-IDF 4.4
+  //       .callback_arg = nullptr       // idem
+  //   };
+  //   ESP_ERROR_CHECK(esp_hidh_init(&config));
 
-//   for (int i = 0; i < MAX_KEY_COUNT; i++)
-//   {
-//     key_avail[i] = true;
-//   }
+  //   for (int i = 0; i < MAX_KEY_COUNT; i++)
+  //   {
+  //     key_avail[i] = true;
+  //   }
 
-//   last_ch = 0;
-//   battery_level = -1;
-//  return true;
+  //   last_ch = 0;
+  //   battery_level = -1;
+  //  return true;
 
-}//end setup()
+} // end setup()
 
 #if CONFIG_BT_HID_HOST_ENABLED
 void BTKeyboard::handle_bt_device_result(esp_bt_gap_cb_param_t *param)
@@ -827,14 +1591,14 @@ void BTKeyboard::handle_bt_device_result(esp_bt_gap_cb_param_t *param)
 void BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 {
   static const char *TAG1 = "bt_gap_event_handler";
-  //printf("bt_gap_event_handler Start\n"); //JMH Diagnosstic testing
+  // printf("bt_gap_event_handler Start\n"); //JMH Diagnosstic testing
   switch (event)
   {
   case ESP_BT_GAP_DISC_STATE_CHANGED_EVT:
   {
     ESP_LOGV(TAG, "BT GAP DISC_STATE %s", (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STARTED) ? "START" : "STOP");
     // if(pDFault->DeBug){
-    //sprintf(msgbuf, "BT GAP DISC_STATE %s", (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STARTED) ? "START" : "STOP"); //JMH Diagnosstic testing
+    // sprintf(msgbuf, "BT GAP DISC_STATE %s", (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STARTED) ? "START" : "STOP"); //JMH Diagnosstic testing
     //   pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
     // }
     if (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STOPPED)
@@ -843,18 +1607,18 @@ void BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb
     }
     break;
   }
-  #if CONFIG_BT_HID_HOST_ENABLED
+#if CONFIG_BT_HID_HOST_ENABLED
   case ESP_BT_GAP_DISC_RES_EVT:
   {
     BLE_KyBrd->handle_bt_device_result(param);
     break;
   }
-  #endif /*CONFIG_BT_HID_HOST_ENABLED*/
+#endif /*CONFIG_BT_HID_HOST_ENABLED*/
   case ESP_BT_GAP_KEY_NOTIF_EVT:
-    //ESP_LOGV(TAG, "BT GAP KEY_NOTIF passkey:%d", param->key_notif.passkey); // JMH changed %lu to %d 
+    // ESP_LOGV(TAG, "BT GAP KEY_NOTIF passkey:%d", param->key_notif.passkey); // JMH changed %lu to %d
     ESP_LOGV(TAG, "BT GAP KEY_NOTIF passkey:%lu", param->key_notif.passkey); // JMH changed for WINDOWS 10 version
     //   if(pDFault->DeBug){
-    //sprintf(msgbuf, "BT GAP KEY_NOTIF passkey:%lu", param->key_notif.passkey); //JMH Diagnosstic testing
+    // sprintf(msgbuf, "BT GAP KEY_NOTIF passkey:%lu", param->key_notif.passkey); //JMH Diagnosstic testing
     //   pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
     // }
     if (BLE_KyBrd->pairing_handler != nullptr)
@@ -863,12 +1627,15 @@ void BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb
   case ESP_BT_GAP_MODE_CHG_EVT:
     ESP_LOGV(TAG, "BT GAP MODE_CHG_EVT mode:%d", param->mode_chg.mode);
     // if(pDFault->DeBug){
-    //sprintf(msgbuf, "BT GAP MODE_CHG_EVT mode:%d", param->mode_chg.mode); //JMH Diagnosstic testing
+    // sprintf(msgbuf, "BT GAP MODE_CHG_EVT mode:%d", param->mode_chg.mode); //JMH Diagnosstic testing
     //   pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
     // }
 
-    if((param->mode_chg.mode == 0) && !BLE_KyBrd->OpnEvntFlg && adcON){
+    if ((param->mode_chg.mode == 0) && !BLE_KyBrd->OpnEvntFlg && adcON)
+    {
+#ifdef gatDebug
       ESP_LOGI(TAG1, "adc_continuous_stop");
+#endif
       BLE_KyBrd->Adc_Sw = 1;
       vTaskDelay(20);
     }
@@ -881,7 +1648,7 @@ void BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb
     // }
     break;
   }
-  //printf("bt_gap_event_handler: %s EXIT\n",msgbuf); //JMH Diagnosstic testing
+  // printf("bt_gap_event_handler: %s EXIT\n",msgbuf); //JMH Diagnosstic testing
 }
 #endif /*CONFIG_BT_HID_HOST_ENABLED*/
 
@@ -891,7 +1658,7 @@ void BTKeyboard::handle_ble_device_result(esp_ble_gap_cb_param_t *param)
   uint16_t uuid = 0;
   uint16_t appearance = 0;
   char name[64] = "";
-  
+
   uint8_t uuid_len = 0;
   uint8_t *uuid_d = esp_ble_resolve_adv_data(param->scan_rst.ble_adv, ESP_BLE_AD_TYPE_16SRV_CMPL, &uuid_len);
 
@@ -965,27 +1732,27 @@ void BTKeyboard::handle_ble_device_result(esp_ble_gap_cb_param_t *param)
   }
 
 #if SCAN
-  /*JMH Will use this function to see if the 'calling' BLE device address matches a previously 'paired'(registered) Keyboard */
+  /*JMH use this function to see if the 'calling' BLE device address matches a previously 'paired'(registered) Keyboard */
   // bt_status_t _btc_storage_get_ble_bonding_key(bt_bdaddr_t *remote_bd_addr,
   //                                           uint8_t key_type,
   //                                           char *key_value,
   //                                           int key_length)
 
-  
-  uint8_t key_type = BTM_LE_KEY_PID; 
+  uint8_t key_type = BTM_LE_KEY_PID;
   char key_value;
   int key_length = 30;
- 
+
   bt_bdaddr_t remote_bda;
   memcpy(&remote_bda, &param->scan_rst.bda, sizeof(bt_bdaddr_t));
-  bt_status_t stat =  btc_storage_get_ble_bonding_key(&remote_bda, key_type, &key_value, key_length);
+  bt_status_t stat = btc_storage_get_ble_bonding_key(&remote_bda, key_type, &key_value, key_length);
   if (stat == BT_STATUS_SUCCESS)
-  {/*we found a stored record for this BLE Keyboard/address*/
+  { /*we found a stored record for this BLE Keyboard/address*/
     ESP_LOGI(TAG, "Previously PAIRED");
+    PairFlg1 = true;
     sprintf(msgbuf, "Found Paired Keybrd\n Standby... while CW Machine Re-Connects...");
     pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
     /*So add it to the scan results list*/
-     add_ble_scan_result(param->scan_rst.bda,
+    add_ble_scan_result(param->scan_rst.bda,
                         param->scan_rst.ble_addr_type,
                         appearance, adv_name, adv_name_len,
                         param->scan_rst.rssi);
@@ -1001,17 +1768,18 @@ void BTKeyboard::handle_ble_device_result(esp_ble_gap_cb_param_t *param)
   {
     uint8_t curHexAddr[6];
     memcpy(&curHexAddr, &remote_bda, sizeof(bt_bdaddr_t));
-    sprintf(msgbuf,ESP_BD_ADDR_STR, ESP_BD_ADDR_HEX(curHexAddr));
-    ESP_LOGI(TAG, "Address '%s' does not match a 'Known' Device ", msgbuf );
+    sprintf(msgbuf, ESP_BD_ADDR_STR, ESP_BD_ADDR_HEX(curHexAddr));
+    ESP_LOGI(TAG, "Address '%s' does not match a 'Known' Device ", msgbuf);
   }
-  
+
 #endif
 }
 
 void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
   const char *TAG = "ble_gap_event_handler";
-  //printf("ble_gap_event_handler\n"); //JMH Diagnosstic testing
+  uint8_t *adv_name = NULL;
+  uint8_t adv_name_len = 0;
   switch (event)
   {
 
@@ -1019,11 +1787,12 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap
 
   case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
   {
-    
+
     ESP_LOGV(TAG, "BLE GAP EVENT SCAN_PARAM_SET_COMPLETE");
-    if(BLE_KyBrd->pDFault->DeBug){
+    if (BLE_KyBrd->pDFault->DeBug)
+    {
       sprintf(msgbuf, "%s: BLE GAP EVENT SCAN_PARAM_SET_COMPLETE\n", TAG);
-      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
+      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
     }
     SEND_BLE_CB();
     break;
@@ -1036,15 +1805,32 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap
     case ESP_GAP_SEARCH_INQ_RES_EVT:
     {
       BLE_KyBrd->handle_ble_device_result(param);
-      //handle_ble_device_result(&scan_result->scan_rst);
-      //handle_ble_device_result(param);
+      adv_name = esp_ble_resolve_adv_data(scan_result->scan_rst.ble_adv,
+                                          ESP_BLE_AD_TYPE_NAME_CMPL, &adv_name_len);
+      ESP_LOGI(TAG, "ESP_GAP_SEARCH_INQ_RES_EVT: @ Rmt Addr: " ESP_BD_ADDR_STR, ESP_BD_ADDR_HEX(scan_result->scan_rst.bda));
+      // if (PairFlg1)
+      // {
+      //   PairFlg1 = false;
+      //   esp_ble_gap_cb_param_t *scan_result = (esp_ble_gap_cb_param_t *)param;
+      //   printf("\nSTART - esp_ble_gattc_open()\n");
+      //   esp_err_t ret = esp_ble_gattc_open(gl_profile_tab[PROFILE_BATTERY_SERVICE].gattc_if, scan_result->scan_rst.bda, scan_result->scan_rst.ble_addr_type, true);
+      //   if (ret != ESP_OK)
+      //   {
+      //     ESP_LOGE(TAG, "esp_ble_gattc_open - FAILED");
+      //   }
+      //   else
+      //   {
+      //     ESP_LOGI(TAG, "esp_ble_gattc_open - COMPLETE; Remote Addr: " ESP_BD_ADDR_STR, ESP_BD_ADDR_HEX(scan_result->scan_rst.bda));
+      //   }
+      // }
       break;
     }
     case ESP_GAP_SEARCH_INQ_CMPL_EVT:
       ESP_LOGV(TAG, "BLE GAP EVENT SCAN DONE: %d", param->scan_rst.num_resps);
-      if(BLE_KyBrd->pDFault->DeBug){
+      if (BLE_KyBrd->pDFault->DeBug)
+      {
         sprintf(msgbuf, "%s: BLE GAP EVENT SCAN DONE: %d\n", TAG, param->scan_rst.num_resps);
-        BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
+        BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
       }
       SEND_BLE_CB();
       break;
@@ -1056,9 +1842,10 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap
   case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT:
   {
     ESP_LOGV(TAG, "BLE GAP EVENT SCAN CANCELED");
-    if(BLE_KyBrd->pDFault->DeBug){
+    if (BLE_KyBrd->pDFault->DeBug)
+    {
       sprintf(msgbuf, "%s: BLE GAP EVENT SCAN CANCELED\n", TAG);
-      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
+      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
     }
     break;
   }
@@ -1067,17 +1854,19 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap
 
   case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
     ESP_LOGV(TAG, "BLE GAP ADV_DATA_SET_COMPLETE");
-    if(BLE_KyBrd->pDFault->DeBug){
+    if (BLE_KyBrd->pDFault->DeBug)
+    {
       sprintf(msgbuf, "%s: BLE GAP ADV_DATA_SET_COMPLETE\n", TAG);
-      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
+      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
     }
     break;
 
   case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
     ESP_LOGV(TAG, "BLE GAP ADV_START_COMPLETE");
-    if(BLE_KyBrd->pDFault->DeBug){
+    if (BLE_KyBrd->pDFault->DeBug)
+    {
       sprintf(msgbuf, "%s: BLE GAP ADV_START_COMPLETE", TAG);
-      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
+      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
     }
     break;
 
@@ -1087,107 +1876,148 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap
     if (!param->ble_security.auth_cmpl.success)
     {
       ESP_LOGE(TAG, "BLE GAP AUTH ERROR: 0x%x", param->ble_security.auth_cmpl.fail_reason);
-      if(BLE_KyBrd->pDFault->DeBug){
+      if (BLE_KyBrd->pDFault->DeBug)
+      {
         sprintf(msgbuf, "%s: BLE GAP AUTH ERROR: 0x%x", TAG, param->ble_security.auth_cmpl.fail_reason);
-        BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf,TFT_RED);
+        BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_RED);
       }
     }
     else
     {
       ESP_LOGV(TAG, "BLE GAP AUTH SUCCESS");
-      if(BLE_KyBrd->pDFault->DeBug){
+
+      if (BLE_KyBrd->pDFault->DeBug)
+      {
         sprintf(msgbuf, "%s: BLE GAP AUTH SUCCESS\n", TAG);
-        BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf,TFT_GREEN);
+        BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_GREEN);
       }
-      break;
-
-    case ESP_GAP_BLE_KEY_EVT: // shows the ble key info share with peer device to the user.
-      ESP_LOGV(TAG, "BLE GAP KEY type = %s", ble_key_type_str(param->ble_security.ble_key.key_type));
-      if(BLE_KyBrd->pDFault->DeBug){
+    }
+    break;
+  case ESP_GAP_BLE_KEY_EVT: // shows the ble key info share with peer device to the user.
+    ESP_LOGV(TAG, "BLE GAP KEY type = %s", ble_key_type_str(param->ble_security.ble_key.key_type));
+    if (BLE_KyBrd->pDFault->DeBug)
+    {
       sprintf(msgbuf, "%s: BLE GAP KEY type = %s\n", TAG, ble_key_type_str(param->ble_security.ble_key.key_type));
-      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
-      }
-      break;
+      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
+    }
+    break;
 
-    case ESP_GAP_BLE_PASSKEY_NOTIF_EVT: // ESP_IO_CAP_OUT
-      // The app will receive this evt when the IO has Output capability and the peer device IO has Input capability.
-      // Show the passkey number to the user to input it in the peer device.
-      //ESP_LOGV(TAG, "BLE GAP PASSKEY_NOTIF passkey:%d", param->ble_security.key_notif.passkey); // JMH changed %d to %lu
-      ESP_LOGV(TAG, "BLE GAP PASSKEY_NOTIF passkey:%lu", param->ble_security.key_notif.passkey); // JMH changed %d to %lu for Windows 10 Version
-      if(BLE_KyBrd->pDFault->DeBug){
-         sprintf(msgbuf, "%s: \nBLE GAP PASSKEY_NOTIF passkey: %lu\n\nENTER NOW\n", TAG, param->ble_security.key_notif.passkey);
-         BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
-          sprintf(msgbuf, "%s: %lu\n", TAG, param->ble_security.key_notif.passkey);
-        BLE_KyBrd->pmsgbx->dispStat(msgbuf,TFT_WHITE); //this has to be syncronized with display updates
-      }
-      if (BLE_KyBrd->pairing_handler != nullptr)
-        (*BLE_KyBrd->pairing_handler)(param->ble_security.key_notif.passkey);
-      break;
+  case ESP_GAP_BLE_PASSKEY_NOTIF_EVT: // ESP_IO_CAP_OUT
+    // The app will receive this evt when the IO has Output capability and the peer device IO has Input capability.
+    // Show the passkey number to the user to input it in the peer device.
+    // ESP_LOGV(TAG, "BLE GAP PASSKEY_NOTIF passkey:%d", param->ble_security.key_notif.passkey); // JMH changed %d to %lu
+    ESP_LOGV(TAG, "BLE GAP PASSKEY_NOTIF passkey:%lu", param->ble_security.key_notif.passkey); // JMH changed %d to %lu for Windows 10 Version
+    if (BLE_KyBrd->pDFault->DeBug)
+    {
+      sprintf(msgbuf, "%s: \nBLE GAP PASSKEY_NOTIF passkey: %lu\n\nENTER NOW\n", TAG, param->ble_security.key_notif.passkey);
+      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
+      sprintf(msgbuf, "%s: %lu\n", TAG, param->ble_security.key_notif.passkey);
+      BLE_KyBrd->pmsgbx->dispStat(msgbuf, TFT_WHITE); // this has to be syncronized with display updates
+    }
+    if (BLE_KyBrd->pairing_handler != nullptr)
+      (*BLE_KyBrd->pairing_handler)(param->ble_security.key_notif.passkey);
+    break;
 
-    case ESP_GAP_BLE_NC_REQ_EVT: // ESP_IO_CAP_IO
-      // The app will receive this event when the IO has DisplayYesNO capability and the peer device IO also has DisplayYesNo capability.
-      // show the passkey number to the user to confirm it with the number displayed by peer device.
-      //ESP_LOGV(TAG, "BLE GAP NC_REQ passkey:%d", param->ble_security.key_notif.passkey); // JMH changed %d to %lu
-      ESP_LOGV(TAG, "BLE GAP NC_REQ passkey:%lu", param->ble_security.key_notif.passkey); // JMH changed %d to %lu for Windows 10 version
-      if(BLE_KyBrd->pDFault->DeBug){
+  case ESP_GAP_BLE_NC_REQ_EVT: // ESP_IO_CAP_IO
+    // The app will receive this event when the IO has DisplayYesNO capability and the peer device IO also has DisplayYesNo capability.
+    // show the passkey number to the user to confirm it with the number displayed by peer device.
+    // ESP_LOGV(TAG, "BLE GAP NC_REQ passkey:%d", param->ble_security.key_notif.passkey); // JMH changed %d to %lu
+    ESP_LOGV(TAG, "BLE GAP NC_REQ passkey:%lu", param->ble_security.key_notif.passkey); // JMH changed %d to %lu for Windows 10 version
+    if (BLE_KyBrd->pDFault->DeBug)
+    {
       sprintf(msgbuf, "%s: BLE GAP NC_REQ passkey:%lu\n", TAG, param->ble_security.key_notif.passkey);
-      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
-      }
-      if(esp_ble_confirm_reply(param->ble_security.key_notif.bd_addr, true) == ESP_OK)
-      {
-        /*with esp32s3 BLE this never happens*/
-        PairFlg1 = true;
-        ESP_LOGI(TAG, "hidh_dev_open complete");
-      }
-      else
-      {
-        ESP_LOGI(TAG, "esp_ble_confirm_reply: FAILED");
-      }
-      break;
+      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
+    }
+    if (esp_ble_confirm_reply(param->ble_security.key_notif.bd_addr, true) == ESP_OK)
+    {
+      /*with esp32s3 BLE this never happens*/
+      PairFlg1 = true;
+      ESP_LOGI(TAG, "hidh_dev_open complete");
+    }
+    else
+    {
+      ESP_LOGI(TAG, "esp_ble_confirm_reply: FAILED");
+    }
+    break;
 
-    case ESP_GAP_BLE_PASSKEY_REQ_EVT: // ESP_IO_CAP_IN
-      // The app will receive this evt when the IO has Input capability and the peer device IO has Output capability.
-      // See the passkey number on the peer device and send it back.
-      ESP_LOGV(TAG, "BLE GAP PASSKEY_REQ");
-      if(BLE_KyBrd->pDFault->DeBug){
+  case ESP_GAP_BLE_PASSKEY_REQ_EVT: // ESP_IO_CAP_IN
+    // The app will receive this evt when the IO has Input capability and the peer device IO has Output capability.
+    // See the passkey number on the peer device and send it back.
+    ESP_LOGV(TAG, "BLE GAP PASSKEY_REQ");
+    if (BLE_KyBrd->pDFault->DeBug)
+    {
       sprintf(msgbuf, "%s: BLE GAP PASSKEY_REQ\n", TAG);
-      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
-      }
-      esp_ble_passkey_reply(param->ble_security.ble_req.bd_addr, true, 1234);
-      break;
+      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
+    }
+    esp_ble_passkey_reply(param->ble_security.ble_req.bd_addr, true, 1234);
+    break;
 
-    case ESP_GAP_BLE_SEC_REQ_EVT:
-      ESP_LOGV(TAG, "BLE GAP SEC_REQ");
-      if(BLE_KyBrd->pDFault->DeBug){
+  case ESP_GAP_BLE_SEC_REQ_EVT:
+    ESP_LOGV(TAG, "BLE GAP SEC_REQ");
+    if (BLE_KyBrd->pDFault->DeBug)
+    {
       sprintf(msgbuf, "%s: BLE GAP SEC_REQ\n", TAG);
-      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
-      }
-      // Send the positive(true) security response to the peer device to accept the security request.
-      // If not accept the security request, should send the security response with negative(false) accept value.
-      esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
-      break;
+      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
+    }
+    // Send the positive(true) security response to the peer device to accept the security request.
+    // If not accept the security request, should send the security response with negative(false) accept value.
+    esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
+    break;
 
-    default:
-      ESP_LOGV(TAG, "BLE GAP EVENT %s", ble_gap_evt_str(event));
-      if(BLE_KyBrd->pDFault->DeBug){
+  default:
+    ESP_LOGV(TAG, "BLE GAP EVENT %s", ble_gap_evt_str(event));
+    if (BLE_KyBrd->pDFault->DeBug)
+    {
       sprintf(msgbuf, "%s: BLE GAP EVENT %s\n", TAG, ble_gap_evt_str(event));
-      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf,TFT_WHITE);
-      }
-      break;
+      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
     }
+    break;
   }
-  //printf("ble_gap_event_handler EXIT\n"); //JMH Diagnosstic testing
+
+  // printf("ble_gap_event_handler EXIT\n"); //JMH Diagnosstic testing
 } // jhm added this bracket
-
-esp_err_t  BTKeyboard::init_ble_gap(void)
+/*JMH for this application, the following runs once, as part of main startup; keyboard.setup*/
+esp_err_t BTKeyboard::init_ble_gap(void)
 {
-    esp_err_t ret;
-
-    if ((ret = esp_ble_gap_register_callback(ble_gap_event_handler)) != ESP_OK) {
-        ESP_LOGE(TAG, "esp_ble_gap_register_callback failed: %d", ret);
-        return ret;
-    }
+  esp_err_t ret;
+  printf("\n");
+  ESP_LOGI(BLE_TAG, "BEGIN... 'init_ble_gap()'");
+  if ((ret = esp_ble_gap_register_callback(ble_gap_event_handler)) != ESP_OK)
+  {
+    ESP_LOGE(BLE_TAG, "esp_ble_gap_register_callback failed: %d", ret);
     return ret;
+  }
+  else
+  {
+    ESP_LOGI(BLE_TAG, "%s(): esp_ble_gap_register_callback Complete\n", __func__);
+  }
+  /*added to support battery level status*/
+  // printf("\nStart - esp_ble_gattc_app_register(PROFILE_BATTERY_SERVICE)\n");
+  // ret = esp_ble_gattc_app_register(PROFILE_BATTERY_SERVICE); //  0x180f
+  // if (ret)
+  // {
+  //   ESP_LOGE(BLE_TAG, "%s(): gattc app register failed, error code = %x\n", __func__, ret);
+  //   return ret;
+  // }
+  // else
+  // {
+  //   ESP_LOGI(BLE_TAG, "%s(): gattc app register Complete\n", __func__);
+  //   vTaskDelay(1500/portTICK_PERIOD_MS);
+  // }
+  // printf("\nStart - esp_ble_gatt_set_local_mtu(128)\n");
+  // esp_err_t local_mtu_ret = esp_ble_gatt_set_local_mtu(128);
+  // if (local_mtu_ret)
+  // {
+  //   ESP_LOGE(BLE_TAG, "%s(): set local  MTU failed, error code = %x", __func__, local_mtu_ret);
+  //   return local_mtu_ret;
+  // }
+  // else
+  // {
+  //   ESP_LOGI(BLE_TAG, "%s(): gatt set local mtu Complete\n", __func__);
+  // }
+
+  /*END Battery status support*/
+  return ret;
 }
 
 #if CONFIG_BT_HID_HOST_ENABLED
@@ -1207,16 +2037,17 @@ esp_err_t BTKeyboard::start_bt_scan(uint32_t seconds)
   return ret;
 }
 #endif /*CONFIG_BT_HID_HOST_ENABLED*/
+
 esp_err_t BTKeyboard::start_ble_scan(uint32_t seconds)
 {
-  static esp_ble_scan_params_t hid_scan_params = {
-      .scan_type = BLE_SCAN_TYPE_ACTIVE,
-      .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
-      .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
-      .scan_interval = 0x50,
-      .scan_window = 0x30,
-      .scan_duplicate = BLE_SCAN_DUPLICATE_ENABLE,
-  };
+  // static esp_ble_scan_params_t hid_scan_params = {
+  //     .scan_type = BLE_SCAN_TYPE_ACTIVE,
+  //     .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
+  //     .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
+  //     .scan_interval = 0x50,
+  //     .scan_window = 0x30,
+  //     .scan_duplicate = BLE_SCAN_DUPLICATE_ENABLE,
+  // };
 
   esp_err_t ret = ESP_OK;
   if ((ret = esp_ble_gap_set_scan_params(&hid_scan_params)) != ESP_OK)
@@ -1247,98 +2078,117 @@ esp_err_t BTKeyboard::start_ble_scan(uint32_t seconds)
 esp_err_t BTKeyboard::esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
 {
 
-    esp_err_t ret;
+  esp_err_t ret;
 
-    const uint8_t hidd_service_uuid128[] = {
-        0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0x12, 0x18, 0x00, 0x00,
-    };
+  const uint8_t hidd_service_uuid128[] = {
+      0xfb,
+      0x34,
+      0x9b,
+      0x5f,
+      0x80,
+      0x00,
+      0x00,
+      0x80,
+      0x00,
+      0x10,
+      0x00,
+      0x00,
+      0x12,
+      0x18,
+      0x00,
+      0x00,
+  };
 
-    esp_ble_adv_data_t ble_adv_data = {
-        .set_scan_rsp = false,
-        .include_name = true,
-        .include_txpower = true,
-        .min_interval = 0x0006, //slave connection min interval, Time = min_interval * 1.25 msec
-        .max_interval = 0x0010, //slave connection max interval, Time = max_interval * 1.25 msec
-        .appearance = appearance,
-        .manufacturer_len = 0,
-        .p_manufacturer_data =  NULL,
-        .service_data_len = 0,
-        .p_service_data = NULL,
-        .service_uuid_len = sizeof(hidd_service_uuid128),
-        .p_service_uuid = (uint8_t *)hidd_service_uuid128,
-        .flag = 0x6,
-    };
+  esp_ble_adv_data_t ble_adv_data = {
+      .set_scan_rsp = false,
+      .include_name = true,
+      .include_txpower = true,
+      .min_interval = 0x0006, // slave connection min interval, Time = min_interval * 1.25 msec
+      .max_interval = 0x0010, // slave connection max interval, Time = max_interval * 1.25 msec
+      .appearance = appearance,
+      .manufacturer_len = 0,
+      .p_manufacturer_data = NULL,
+      .service_data_len = 0,
+      .p_service_data = NULL,
+      .service_uuid_len = sizeof(hidd_service_uuid128),
+      .p_service_uuid = (uint8_t *)hidd_service_uuid128,
+      .flag = 0x6,
+  };
 
-    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
-    //esp_ble_io_cap_t iocap = ESP_IO_CAP_OUT;//you have to enter the key on the host
-    //esp_ble_io_cap_t iocap = ESP_IO_CAP_IN;//you have to enter the key on the device
-    esp_ble_io_cap_t iocap = ESP_IO_CAP_IO;//you have to agree that key matches on both
-    //esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE;//device is not capable of input or output, unsecure
-    uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
-    uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
-    uint8_t key_size = 16; //the key size should be 7~16 bytes
-    uint32_t passkey = 1234;//ESP_IO_CAP_OUT
+  esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
+  // esp_ble_io_cap_t iocap = ESP_IO_CAP_OUT;//you have to enter the key on the host
+  // esp_ble_io_cap_t iocap = ESP_IO_CAP_IN;//you have to enter the key on the device
+  esp_ble_io_cap_t iocap = ESP_IO_CAP_IO; // you have to agree that key matches on both
+  // esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE;//device is not capable of input or output, unsecure
+  uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+  uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+  uint8_t key_size = 16;   // the key size should be 7~16 bytes
+  uint32_t passkey = 1234; // ESP_IO_CAP_OUT
 
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, 1)) != ESP_OK)// 
-    {
-        ESP_LOGE(TAG, "GAP set_security_param AUTHEN_REQ_MODE failed: %d", ret);
-        return ret;
-    }
-
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, 1)) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_security_param IOCAP_MODE failed: %d", ret);
-        return ret;
-    }
-
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, 1)) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_security_param SET_INIT_KEY failed: %d", ret);
-        return ret;
-    }
-
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, 1)) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_security_param SET_RSP_KEY failed: %d", ret);
-        return ret;
-    }
-
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, 1)) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_security_param MAX_KEY_SIZE failed: %d", ret);
-        return ret;
-    }
-
-    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_STATIC_PASSKEY, &passkey, sizeof(uint32_t))) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_security_param SET_STATIC_PASSKEY failed: %d", ret);
-        return ret;
-    }
-
-    if ((ret = esp_ble_gap_set_device_name(device_name)) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP set_device_name failed: %d", ret);
-        return ret;
-    }
-
-    if ((ret = esp_ble_gap_config_adv_data(&ble_adv_data)) != ESP_OK) {
-        ESP_LOGE(TAG, "GAP config_adv_data failed: %d", ret);
-        return ret;
-    }
-
+  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, 1)) != ESP_OK) //
+  {
+    ESP_LOGE(TAG, "GAP set_security_param AUTHEN_REQ_MODE failed: %d", ret);
     return ret;
+  }
+
+  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, 1)) != ESP_OK)
+  {
+    ESP_LOGE(TAG, "GAP set_security_param IOCAP_MODE failed: %d", ret);
+    return ret;
+  }
+
+  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, 1)) != ESP_OK)
+  {
+    ESP_LOGE(TAG, "GAP set_security_param SET_INIT_KEY failed: %d", ret);
+    return ret;
+  }
+
+  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, 1)) != ESP_OK)
+  {
+    ESP_LOGE(TAG, "GAP set_security_param SET_RSP_KEY failed: %d", ret);
+    return ret;
+  }
+
+  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, 1)) != ESP_OK)
+  {
+    ESP_LOGE(TAG, "GAP set_security_param MAX_KEY_SIZE failed: %d", ret);
+    return ret;
+  }
+
+  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_STATIC_PASSKEY, &passkey, sizeof(uint32_t))) != ESP_OK)
+  {
+    ESP_LOGE(TAG, "GAP set_security_param SET_STATIC_PASSKEY failed: %d", ret);
+    return ret;
+  }
+
+  if ((ret = esp_ble_gap_set_device_name(device_name)) != ESP_OK)
+  {
+    ESP_LOGE(TAG, "GAP set_device_name failed: %d", ret);
+    return ret;
+  }
+
+  if ((ret = esp_ble_gap_config_adv_data(&ble_adv_data)) != ESP_OK)
+  {
+    ESP_LOGE(TAG, "GAP config_adv_data failed: %d", ret);
+    return ret;
+  }
+
+  return ret;
 }
 /*end new*/
-/*new*/
+/*new beleive this is a server function & not used in this application, because this ESP32s3 is acting as a cliant*/
 esp_err_t BTKeyboard::esp_hid_ble_gap_adv_start(void)
 {
-    static esp_ble_adv_params_t hidd_adv_params = {
-        .adv_int_min        = 0x20,
-        .adv_int_max        = 0x30,
-        .adv_type           = ADV_TYPE_IND,
-        .own_addr_type      = BLE_ADDR_TYPE_PUBLIC,
-        .channel_map        = ADV_CHNL_ALL,
-        .adv_filter_policy  = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY,
-    };
-    return esp_ble_gap_start_advertising(&hidd_adv_params);
+  static esp_ble_adv_params_t hidd_adv_params = {
+      .adv_int_min = 0x20,
+      .adv_int_max = 0x30,
+      .adv_type = ADV_TYPE_IND,
+      .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
+      .channel_map = ADV_CHNL_ALL,
+      .adv_filter_policy = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY,
+  };
+  return esp_ble_gap_start_advertising(&hidd_adv_params);
 }
-
-
-
 
 esp_err_t
 BTKeyboard::esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_result_t **results)
@@ -1371,7 +2221,7 @@ BTKeyboard::esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_res
   {
     return ESP_FAIL;
   }
-#endif /*CONFIG_BT_HID_HOST_ENABLED */ 
+#endif /*CONFIG_BT_HID_HOST_ENABLED */
   *num_results = num_bt_scan_results + num_ble_scan_results;
   *results = bt_scan_results;
 
@@ -1402,7 +2252,7 @@ void BTKeyboard::devices_scan(int seconds_wait_time)
   esp_hid_scan_result_t *results = NULL;
   // bt_keyboard->OpnEvntFlg = false;
   ESP_LOGV(TAG, "SCAN...");
-  sprintf(msgbuf, "LooKing for New Keyboard...\n");
+  sprintf(msgbuf, "Looking for New Keyboard...\n");
   pmsgbx->dispKeyBrdTxt(msgbuf, TFT_YELLOW);
 
   // start scan for HID devices
@@ -1437,7 +2287,7 @@ void BTKeyboard::devices_scan(int seconds_wait_time)
         printf("COD: %s[", esp_hid_cod_major_str(r->bt.cod.major));
         esp_hid_cod_minor_print(r->bt.cod.minor, stdout);
         printf("] srv 0x%03x, ", r->bt.cod.service);
-        print_uuid(&r->bt.uuid);
+        ;
         printf(", ");
       }
       printf("NAME: %s ", r->name ? r->name : "Not Available");
@@ -1460,16 +2310,28 @@ void BTKeyboard::devices_scan(int seconds_wait_time)
         BLE_KyBrd->Adc_Sw = 2;
         BLE_KyBrd->inPrgsFlg = true;
       }
-      vTaskDelay(50 / portTICK_PERIOD_MS); // pause long enough for flag change to take effect
-      // sprintf(msgbuf, "Enter PAIRING code for %s\n", cr->name);
-      // pmsgbx->dispKeyBrdTxt(msgbuf, TFT_GREEN);
-      ESP_LOGI(TAG, "cr->ble.addr_type: %d\n", (int)cr->ble.addr_type);
-      esp_hidh_dev_t *dev_Opnd;
-      printf("esp_hidh_dev_open(" ESP_BD_ADDR_STR ")\n", ESP_BD_ADDR_HEX(cr->bda));
+      // ESP_ERROR_CHECK(adc_continuous_stop(adc_handle)); // true; user has pressed Ctl+S key, & wants to configure default settings
+      // adcON = false;
+      vTaskSuspend(GoertzelTaskHandle);
+      ESP_LOGI(TAG, "SUSPEND GoertzelHandler TASK");
+      vTaskSuspend(CWDecodeTaskHandle);
+      ESP_LOGI(TAG, "SUSPEND CWDecodeTaskHandle TASK");
+      vTaskDelay(20);
+      // ESP_LOGI(TAG, "cr->ble.addr_type: %d\n", (int)cr->ble.addr_type);
+      // printf("esp_hidh_dev_open(" ESP_BD_ADDR_STR ")\n", ESP_BD_ADDR_HEX(cr->bda));
       dev_Opnd = esp_hidh_dev_open(cr->bda, cr->transport, cr->ble.addr_type); // Returns immediately w/ BT classic device; But waits for pairing code w/ BLE device
       if (dev_Opnd != NULL)
-        PairFlg1 = true;
-      ESP_LOGI(TAG, "hidh_dev_open complete");
+      {
+        vTaskDelay(50 / portTICK_PERIOD_MS); // pause long enough for flag change to take effect
+        ESP_LOGI(TAG, "hidh_dev_open complete");
+      }
+      // ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
+      // adcON = true;
+      ESP_LOGI(TAG, "RESUME CWDecodeTaskHandle TASK");
+      vTaskResume(CWDecodeTaskHandle);
+      ESP_LOGI(TAG, "RESUME GoertzelHandler TASK");
+      vTaskResume(GoertzelTaskHandle);
+      vTaskDelay(20);
     }
     else
     {
@@ -1502,14 +2364,15 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
   temp[0] = 255;
   esp_hidh_event_t event = (esp_hidh_event_t)id;
   esp_hidh_event_data_t *param = (esp_hidh_event_data_t *)event_data;
-  bool talk = false; //true;//false; //set to true for hid callback debugging //JMH Diagnosstic testing
+  bool talk = true; // true;//false; //set to true for hid callback debugging //JMH Diagnosstic testing
   if (mutex != NULL)
   {
     /* See if we can obtain the semaphore.  If the semaphore is not
     available wait 15 ticks to see if it becomes free. */
     if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE) //(TickType_t)15
     {
-      if(talk) printf("hidh_callback\n"); 
+      if (talk)
+        printf("hidh_callback\n");
       switch (event)
       {
       case ESP_HIDH_OPEN_EVENT:
@@ -1518,11 +2381,11 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
         if (param->open.status == ESP_OK)
         {
           const uint8_t *bda = esp_hidh_dev_bda_get(param->open.dev);
-        //  ESP_LOGI(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->open.dev));
+          //  ESP_LOGI(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->open.dev));
           /*Now go query the reports for this device/keyboard, & See if the Logictech 'F-Key' config report can be found*/
           /*JMH added the following to ferrit out Logitech keyboards*/
           /*Query the keyboard for reports*/
-          
+
           if (talk)
           {
             printf("\n\nSTARTING REPORT REQUEST\n");
@@ -1531,8 +2394,21 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
           int rptIndx = 0;
           size_t num_reports;
           esp_hid_report_map_t MyMap;
-
-          ESP_ERROR_CHECK(esp_hidh_dev_reports_get(param->open.dev, &num_reports, &MyMap.reports));
+          //printf("ESP_HIDH_OPEN_EVENT: dev info "ESP_BD_ADDR_STR"\n",  ESP_BD_ADDR_HEX(param->open.dev->bda));
+          //ESP_ERROR_CHECK(esp_hidh_dev_reports_get(param->open.dev, &num_reports, &MyMap.reports));
+          esp_err_t ret = esp_hidh_dev_reports_get(param->open.dev, &num_reports, &MyMap.reports);
+          if (ret != ESP_OK){
+            printf("ESP_HIDH_OPEN_EVENT: dev info "ESP_BD_ADDR_STR" 'FAILED get reports'\n",  ESP_BD_ADDR_HEX(param->open.dev->bda));
+            break;
+          }
+          // esp_err_t ret =1;
+          // while(ret != ESP_OK)
+          // {
+          //   vTaskDelay(50/portTICK_PERIOD_MS);
+          //   printf("ESP_HIDH_OPEN_EVENT: dev info "ESP_BD_ADDR_STR"\n",  ESP_BD_ADDR_HEX(param->open.dev->bda));
+          //   ret =esp_hidh_dev_reports_get(param->open.dev, &num_reports, &MyMap.reports);
+          //   printf("stuck in wait loop\n");
+          // }
           MyMap.reports_len = num_reports;
           if (talk)
           {
@@ -1643,7 +2519,9 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
           if (K380Fnd) // If true, we found a K380 Keyboard; Send command to reconfigure 'F' Keys
           {
             /*Logitech K380 Key Command*/
-            uint8_t configKBrd[] = {0xff, 0x0b, 0x1e, 0x00, 0x00, 0x00};
+            // uint8_t configKBrd[] = {0xff, 0x0b, 0x1e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+            uint8_t configKBrd[] = {0xff, 0x0c, 0x00, 0x02, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+            // uint8_t configKBrd[] = {0x00, 0x00, 0x2a, 0x19, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb};
             if (talk)
             {
               printf("K380 Key command: ");
@@ -1657,20 +2535,29 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
             ESP_ERROR_CHECK(esp_hidh_dev_output_set(param->open.dev, MyMap.reports[rptIndx].map_index, MyMap.reports[rptIndx].report_id, configKBrd, sizeof(configKBrd)));
             sprintf(temp, "K380 Found-Configured F-keys");
             // BLE_KyBrd->pmsgbx->dispKeyBrdTxt(temp, TFT_BLUE);
+            // esp_ble_gap_cb_param_t *scan_result = (esp_ble_gap_cb_param_t *)param;
+            // esp_err_t ret = esp_ble_gattc_open(gl_profile_tab[PROFILE_BATTERY_SERVICE].gattc_if, scan_result->scan_rst.bda, scan_result->scan_rst.ble_addr_type, true);
+            // if (ret != ESP_OK)
+            // {
+            //   ESP_LOGI(TAG, "esp_ble_gattc_open - FAILED");
+            // }
+            // else
+            // {
+            //   ESP_LOGI(TAG, "esp_ble_gattc_open - COMPLETE; Remote Addr: "ESP_BD_ADDR_STR, ESP_BD_ADDR_HEX(scan_result->scan_rst.bda));
+            // }
           }
           else
             sprintf(temp, "OPEN: %02x:%02x:%02x:%02x:%02x:%02x", ESP_BD_ADDR_HEX(bda));
 
           clr = TFT_GREEN;
-          //if(!BLE_KyBrd->OpnEvntFlg && !adcON)
-          if(!BLE_KyBrd->OpnEvntFlg)
+          // if(!BLE_KyBrd->OpnEvntFlg && !adcON)
+          if (!BLE_KyBrd->OpnEvntFlg)
           {
             ESP_LOGI(TAG1, "adc_continuous_start");
             BLE_KyBrd->Adc_Sw = 2;
             PairFlg1 = true;
           }
           BLE_KyBrd->OpnEvntFlg = true;
-          
         }
         else
         {
@@ -1690,7 +2577,7 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
       case ESP_HIDH_INPUT_EVENT:
       {
         const uint8_t *bda = esp_hidh_dev_bda_get(param->input.dev);
-        ESP_LOGV("INPUT_EVENT", ESP_BD_ADDR_STR " INPUT: %8s, MAP: %2u, ID: %3u, Len: %d, Data:",
+        ESP_LOGV("INPUT_EVENT", ESP_BD_ADDR_STR " INPUT: %8s, MAP: %2u, ID: %02x, Len: %d, Data:",
                  ESP_BD_ADDR_HEX(bda),
                  esp_hid_usage_str(param->input.usage),
                  param->input.map_index,
@@ -1699,58 +2586,72 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
         char databuf[150];
         char databuf1[75];
         int cntr = 0;
-        databuf1[0] =0;
-        //const uint8_t indat = param->input.data;
-        //unsigned int curdata[2];
-        for(int i = 0; i<param->input.length; i++){
-          //curdata[0] = (unsigned int )param->input.data[i];
+        databuf1[0] = 0;
+        // const uint8_t indat = param->input.data;
+        // unsigned int curdata[2];
+        for (int i = 0; i < param->input.length; i++)
+        {
+          // curdata[0] = (unsigned int )param->input.data[i];
           sprintf(databuf, "%s:%02x", databuf1, param->input.data[i]);
-          if( param->input.data[i] == 0x01) cntr++;
-          else cntr = 0;
-          for(int p = 0; p<sizeof(databuf1); p++){
+          if (param->input.data[i] == 0x01)
+            cntr++;
+          else
+            cntr = 0;
+          for (int p = 0; p < sizeof(databuf1); p++)
+          {
             databuf1[p] = databuf[p];
-            if(databuf[p]==0) break;
+            if (databuf[p] == 0)
+              break;
           }
         }
-        for(int p = 0; p<sizeof(databuf1); p++){
+        for (int p = 0; p < sizeof(databuf1); p++)
+        {
           databuf1[p] = databuf[p];
-          if(databuf[p]==0) break;
+          if (databuf[p] == 0)
+            break;
         }
-        if (talk){
-          sprintf(temp, "INPUT_EVENT; ADDR:%02x:%02x:%02x:%02x:%02x:%02x; MAP:%s; NDX:%d; ID:%3u; LEN:%d; DATA%s\n",
-                   ESP_BD_ADDR_HEX(bda),
-                   esp_hid_usage_str(param->input.usage),
-                   param->input.map_index,
-                   param->input.report_id,
-                   param->input.length,
-                   databuf1);
+        if (talk)
+        {
+          sprintf(temp, "INPUT_EVENT; ADDR:%02x:%02x:%02x:%02x:%02x:%02x; MAP:%s; NDX:%d; ID:%02x; LEN:%d; DATA%s\n",
+                  ESP_BD_ADDR_HEX(bda),
+                  esp_hid_usage_str(param->input.usage),
+                  param->input.map_index,
+                  param->input.report_id,
+                  param->input.length,
+                  databuf1);
         }
-        clr = TFT_BLACK;                  
+        clr = TFT_BLACK;
         ESP_LOG_BUFFER_HEX_LEVEL(TAG, param->input.data, param->input.length, ESP_LOG_DEBUG);
-        if((cntr != 6) && !BLE_KyBrd->trapFlg){
+        if ((cntr != 6) && !BLE_KyBrd->trapFlg)
+        {
           /*Classic BT Keybrds send key press date w/ data len = 8; K380s keybrd has a deta lenght of 7*/
-          if(param->input.length == 8) BLE_KyBrd->push_key(param->input.data, param->input.length); // normal path when keystroke data is good/usuable
-          else if(param->input.length == 7){// looks like K380s data. So add one additional data element (0) to the array
+          if (param->input.length == 8)
+            BLE_KyBrd->push_key(param->input.data, param->input.length); // normal path when keystroke data is good/usuable
+          else if (param->input.length == 7)
+          { // looks like K380s data. So add one additional data element (0) to the array
             uint8_t tmpdat[8];
             tmpdat[0] = param->input.data[0];
             tmpdat[1] = 0;
-            for(int i =1; i< param->input.length; i++){
-              tmpdat[i+1] = param->input.data[i];
+            for (int i = 1; i < param->input.length; i++)
+            {
+              tmpdat[i + 1] = param->input.data[i];
             }
             BLE_KyBrd->push_key(tmpdat, 8);
-          } 
+          }
         }
-        else if(BLE_KyBrd->trapFlg){// path used to test for data corruption recovery 
-          if(param->input.length == 1){
+        else if (BLE_KyBrd->trapFlg)
+        { // path used to test for data corruption recovery
+          if (param->input.length == 1)
+          {
             BLE_KyBrd->trapFlg = false;
-            
+
             BLE_KyBrd->pmsgbx->dispStat("KEYBOARD READY", TFT_GREEN);
             xSemaphoreGive(mutex);
-            vTaskDelay(200/portTICK_PERIOD_MS);
+            vTaskDelay(200 / portTICK_PERIOD_MS);
             xSemaphoreTake(mutex, portMAX_DELAY);
           }
           break;
-        } 
+        }
         else
         {
           /*Keybrd data is corrupt. So sit and wait while send buffer contents is completeS*/
@@ -1760,11 +2661,12 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
           {
             printf("!!! DATA BLOCKED !!!\n");
           }
-          xSemaphoreGive(mutex);//we're likely going to be stuck for awhile. So let the other parts of the program conitnue (i.e. send whats in the cw buffer)
-          //while(clrbuf){
-            vTaskDelay(200/portTICK_PERIOD_MS);
+          xSemaphoreGive(mutex); // we're likely going to be stuck for awhile. So let the other parts of the program conitnue (i.e. send whats in the cw buffer)
+          // while(clrbuf){
+          vTaskDelay(200 / portTICK_PERIOD_MS);
           //}
-          if(talk) printf("WAITING FOR SOMETHING GOOD TO HAPPEN\n");
+          if (talk)
+            printf("WAITING FOR SOMETHING GOOD TO HAPPEN\n");
           xSemaphoreTake(mutex, portMAX_DELAY);
         }
         break;
@@ -1795,7 +2697,7 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
         sprintf(temp, " CLOSE: %02x:%02x:%02x:%02x:%02x:%02x", ESP_BD_ADDR_HEX(bda));
         clr = TFT_RED;
         PairFlg1 = false;
-        //vTaskResume(BLEscanTask_hndl);
+        // vTaskResume(BLEscanTask_hndl);
         xTaskCreatePinnedToCore(BLE_scan_tsk, "BLE Scan Task", 8192, NULL, 1, &BLEscanTask_hndl, 0);
         break;
       }
@@ -1807,11 +2709,13 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
       if (temp[0] != 255)
       {
         /*took the post to display status line out because it could induce an unnecessary crash out because */
-        if(clr != TFT_BLACK) BLE_KyBrd->pmsgbx->dispStat(temp, clr);
-        if(talk) printf("hidh_callback EXIT: %s\n", temp); //JMH Diagnostic testing
-        vTaskDelay(500/portTICK_PERIOD_MS);
+        if (clr != TFT_BLACK)
+          BLE_KyBrd->pmsgbx->dispStat(temp, clr);
+        if (talk)
+          printf("hidh_callback EXIT: %s\n", temp); // JMH Diagnostic testing
+        vTaskDelay(500 / portTICK_PERIOD_MS);
       }
-       
+
       xSemaphoreGive(mutex);
     }
   }
@@ -1819,7 +2723,7 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
 
 void BTKeyboard::push_key(uint8_t *keys, uint8_t size)
 {
-  
+
   KeyInfo inf;
   inf.modifier = (KeyModifier)keys[0];
 
@@ -1880,22 +2784,22 @@ char BTKeyboard::wait_for_ascii_char(bool forever)
       return last_ch = 0x98; // replace with down arrow
     }
     /* special test for ctr+Enter */
-    if ((inf.keys[1] == 0x28 || inf.keys[0] == 0x28) && ((uint8_t)inf.modifier == 1|| (uint8_t)inf.modifier == 16))
+    if ((inf.keys[1] == 0x28 || inf.keys[0] == 0x28) && ((uint8_t)inf.modifier == 1 || (uint8_t)inf.modifier == 16))
     {
       return last_ch = 0x9A;
     }
     /* special test for ctr+'T' */
-    if (((uint8_t)inf.modifier == 1|| (uint8_t)inf.modifier == 16) && (inf.keys[1] == 23 || inf.keys[0] == 0x17))
+    if (((uint8_t)inf.modifier == 1 || (uint8_t)inf.modifier == 16) && (inf.keys[1] == 23 || inf.keys[0] == 0x17))
     {
       return last_ch = 0x9B;
     }
     /* special test for ctr+'S' */
-    if (((uint8_t)inf.modifier == 1|| (uint8_t)inf.modifier == 16) && (inf.keys[1] == 22 || inf.keys[0] == 0x16))
+    if (((uint8_t)inf.modifier == 1 || (uint8_t)inf.modifier == 16) && (inf.keys[1] == 22 || inf.keys[0] == 0x16))
     {
       return last_ch = 0x9C;
     }
     /* special test for ctr+'f' */
-    if (((uint8_t)inf.modifier == 1|| (uint8_t)inf.modifier == 16) && ((inf.keys[0] == 9) || (inf.keys[1] == 9)))
+    if (((uint8_t)inf.modifier == 1 || (uint8_t)inf.modifier == 16) && ((inf.keys[0] == 9) || (inf.keys[1] == 9)))
     {
       return last_ch = 0x9D;
     }
@@ -1904,8 +2808,8 @@ char BTKeyboard::wait_for_ascii_char(bool forever)
     {
       return last_ch = 0x9E;
     }
-     /* special test for Left or Right ctr+'g' */
-    if (((uint8_t)inf.modifier == 1|| (uint8_t)inf.modifier == 16) && ((inf.keys[0] == 10) || (inf.keys[1] == 10)))
+    /* special test for Left or Right ctr+'g' */
+    if (((uint8_t)inf.modifier == 1 || (uint8_t)inf.modifier == 16) && ((inf.keys[0] == 10) || (inf.keys[1] == 10)))
     {
       return last_ch = 0xA1;
     }
@@ -1915,7 +2819,7 @@ char BTKeyboard::wait_for_ascii_char(bool forever)
       return last_ch = 0xA2;
     }
     /* special test for ctr+'p' */
-    if (((uint8_t)inf.modifier == 1|| (uint8_t)inf.modifier == 16) && ((inf.keys[0] == 0x13) || (inf.keys[1] == 0x13)))
+    if (((uint8_t)inf.modifier == 1 || (uint8_t)inf.modifier == 16) && ((inf.keys[0] == 0x13) || (inf.keys[1] == 0x13)))
     {
       return last_ch = 0x9F;
     }
@@ -1942,9 +2846,10 @@ char BTKeyboard::wait_for_ascii_char(bool forever)
       else if (ch <= 0x52)
       {
         // ESP_LOGI(TAG, "Scan code: %d", ch);
-        if (ch == KEY_CAPS_LOCK) ch =0; //JMH Don't need or want "Caps lock" feature on CW keyboard
+        if (ch == KEY_CAPS_LOCK)
+          ch = 0; // JMH Don't need or want "Caps lock" feature on CW keyboard
         // if (ch == KEY_CAPS_LOCK)
-          //caps_lock = !caps_lock; //JMH Don't need or want "Caps lock" feature on CW keyboard
+        // caps_lock = !caps_lock; //JMH Don't need or want "Caps lock" feature on CW keyboard
         if ((uint8_t)inf.modifier & SHIFT_MASK)
         {
           if (caps_lock)
@@ -1979,5 +2884,50 @@ char BTKeyboard::wait_for_ascii_char(bool forever)
 }
 bool BTKeyboard::GetPairFlg1(void)
 {
+  if (PairFlg1)
+  {
+    // /*added to support battery level status*/
+    // printf("\nStart - esp_ble_gattc_app_register(PROFILE_BATTERY_SERVICE)\n");
+    // esp_err_t ret = esp_ble_gattc_app_register(PROFILE_BATTERY_SERVICE); // 0x180f
+    // if (ret)
+    // {
+    //   ESP_LOGE(BLE_TAG, "%s(): gattc app register failed, error code = %x\n", __func__, ret);
+    //   // return ret;
+    // }
+    // else
+    // {
+    //   ESP_LOGI(BLE_TAG, "%s(): gattc app register Complete\n", __func__);
+    //   vTaskDelay(1500 / portTICK_PERIOD_MS);
+    // }
+  }
+
   return PairFlg1;
+};
+
+void BTKeyboard::BatValueRpt(void)
+{
+  const char *TAG = "BTKeyboard::BatValueRpt";
+  printf("\nStart - esp_ble_gatt_set_local_mtu(128)\n");
+  esp_err_t ret = esp_ble_gatt_set_local_mtu(128);
+  if (ret)
+  {
+    ESP_LOGE(TAG, "%s(): set local  MTU failed, error code = %x", __func__, ret);
+    return;
+  }
+  else
+  {
+    ESP_LOGI(TAG, "%s(): gatt set local mtu Complete\n", __func__);
+  }
+  printf("\nStart - BatValueRpt(void)\n");
+  ESP_LOGI(TAG, "Remote Dev Addr: " ESP_BD_ADDR_STR, ESP_BD_ADDR_HEX(Prd_bda));
+  ret = esp_ble_gattc_open(gl_profile_tab[PROFILE_BATTERY_SERVICE].gattc_if, Prd_bda, Prd_addr_type, true);
+  if (ret)
+  {
+    ESP_LOGE(TAG, "%s(): Open Battery Profile, error code = %x", __func__, ret);
+  }
+  else
+  {
+    ESP_LOGI(TAG, "%s(): Open Battery Profile Complete\n", __func__);
+  }
+  return;
 };

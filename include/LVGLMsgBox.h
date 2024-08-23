@@ -14,16 +14,14 @@ extern "C" {
 #endif
 
 #include "stdint.h" // need this to use char type
-#include "driver/i2c_master.h" //added for waveshare touch support
-#include "touch/base/esp_lcd_touch_gt911.h" //added for waveshare touch support
-
-// #include "esp32-hal-delay.h" //included to support the arduino function 'delay(int ms)'
-
-#include "widgets/lv_bar.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "freertos/queue.h"
 
 #define TODAY __DATE__
 /*Waveshare 800x480 display & touch specific parameters*/
-#define LV_TICK_PERIOD_MS (2) //JMH chnaged this from 2 to 10
+#define LV_TICK_PERIOD_MS (100) //JMH chnaged this from 2 to 100; In this application, this timer does nothing usueful
 
 #define CONFIG_MSGBX_AVOID_TEAR_EFFECT_WITH_SEM 1
 
@@ -103,7 +101,7 @@ private:
 	int KeyBrdRingbufPntr2;
 	int StrdRBufPntr1;
 	int StrdRBufPntr2;
-
+    uint8_t KyBrdBatLvl = 0;
 	
 
 #ifdef HiRes
@@ -205,6 +203,8 @@ public:
 	void ReStrtMainScrn(void);
 	void HiLite_Seltcd_Setting(int paramptr, int oldparamptr);
 	void Exit_Settings(int paramptr);
+	inline uint8_t Get_KyBrdBat_level(void) { return KyBrdBatLvl; }
+	inline void Str_KyBrdBat_level(uint8_t Lvl) { KyBrdBatLvl = Lvl; }
 	// void DelLastNtry(void);
 };
 #ifdef __cplusplus

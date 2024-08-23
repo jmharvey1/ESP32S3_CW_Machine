@@ -71,7 +71,8 @@
 #if CONFIG_BT_NIMBLE_ENABLED
 #include "nimble/ble.h"
 #endif
-
+#include "esp_gatt_defs.h"//jmh added to get keyboard battery status
+#include "esp_gatt_common_api.h"//jmh added to get keyboard battery status
 #include "LVGLMsgBox.h"
 #include "main.h"
 #include "globals.h"
@@ -126,7 +127,7 @@ private:
   static const esp_bt_mode_t HIDH_BTDM_MODE = (esp_bt_mode_t)0x03;
   LVGLMsgBox *pmsgbx; // JMH added To support TFT display logging.
   DF_t *pDFault;      // JMH added To support user settings; mainly to know 'DeBug' setting (on/off; i.e., 1/0).
-  
+  esp_hidh_dev_t *dev_Opnd;
   /*new*/
 #if CONFIG_BT_HID_HOST_ENABLED
 #if CONFIG_BT_BLE_ENABLED
@@ -141,6 +142,8 @@ private:
 #else
 #define HID_HOST_MODE HIDH_IDLE_MODE
 #endif
+
+
   /*end new*/
 
   // #if CONFIG_BT_HID_HOST_ENABLED
@@ -193,7 +196,7 @@ private:
 #endif
     };
   };
-
+  esp_hid_scan_result_t *crPrd;
   esp_hid_scan_result_t *bt_scan_results;
   esp_hid_scan_result_t *ble_scan_results;
   size_t num_bt_scan_results;
@@ -223,8 +226,10 @@ private:
   void handle_ble_device_result(esp_ble_gap_cb_param_t *scan_rst);
   void esp_hid_scan_results_free(esp_hid_scan_result_t *results);
   /*new*/
+  /*new beleive these two ar server functions & not used in this application, because this ESP32s3 is acting as a cliant*/
   esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name);
   esp_err_t esp_hid_ble_gap_adv_start(void);
+
 #if (CONFIG_BT_HID_HOST_ENABLED || CONFIG_BT_BLE_ENABLED)  
   esp_hid_scan_result_t *find_scan_result(esp_bd_addr_t bda, esp_hid_scan_result_t *results);
 #endif /* CONFIG_BT_HID_HOST_ENABLED || CONFIG_BT_BLE_ENABLED */
@@ -263,7 +268,7 @@ private:
 
     /*JMH 20230205 - replaced the following line xQueueHandle with QueueHandle_t */
     QueueHandle_t event_queue;
-    int8_t battery_level;
+    uint8_t battery_level;
     bool key_avail[MAX_KEY_COUNT];
     char last_ch;
     TickType_t repeat_period;
@@ -289,8 +294,9 @@ private:
     bool setup(pid_handler *handler = nullptr, BTKeyboard *KBptr = 0);
     void devices_scan(int seconds_wait_time = 5);
     bool GetPairFlg1(void);
+    void BatValueRpt(void);
     inline uint8_t get_battery_level() { return battery_level; }
-
+    inline void str_battery_level(int bat_val) { battery_level = bat_val; }
     /*JMH modified to support TFT display & BT CW Keyboard*/
     inline bool wait_for_low_event(KeyInfo &inf, TickType_t duration = portMAX_DELAY)
     {

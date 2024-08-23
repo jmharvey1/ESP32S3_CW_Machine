@@ -206,13 +206,13 @@ bool btc_config_get_bin(const char *section, const char *key, uint8_t *value, si
     size_t value_len = strlen(value_str);
     //printf("value_len %d\n", (int)value_len);
     if ((value_len % 2) != 0 || *length < (value_len / 2)) {
-        printf("Failt test 1\n");
+        printf("btc_config_get_bin, Fail test 1\n");
         return false;
     }
 
     for (size_t i = 0; i < value_len; ++i)
         if (!isxdigit((unsigned char)value_str[i])) {
-            printf("Failt test 2\n");
+            printf("btc_config_get_bin, Fail test 2\n");
             return false;
 
         }

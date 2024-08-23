@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "random": "cpp",
-        "limits": "cpp"
+        "limits": "cpp",
+        "ble_hidh.h": "c"
     }
 }

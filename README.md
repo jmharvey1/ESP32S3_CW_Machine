@@ -64,7 +64,7 @@ A .PDF schematic for the PCB version of this project is [Here](https://github.co
 If you have access to 3D printer, the [MiscFiles](https://github.com/jmharvey1/ESP32BtCWKeyBrd/tree/main/MiscFiles)
  folder contains “.stl” files for a simple case to host your completed project. 
 ___
-Note: The decoder audio input circuit uses the AD senor, jack J8, (GPIO6). Depending on how you elect to link to your audio source (Hardwired or Acoustic couplping) Additional external components will be needed; i.e. bias resistors & capacitor (see below for more detial), or an Amplified condensor microphone. This signal should not exceed 2Vp-p.
+Note: The decoder audio input circuit uses the AD senor, jack J8, (GPIO6). Depending on how you elect to link to your audio source (Hardwired or Acoustic couplping) Additional external components will be needed; i.e. bias resistors & capacitor (see below for more detail), or an Amplified condensor microphone. This signal should not exceed 2Vp-p.
 </p>
 Keying output is done via the UART's' TX pin Header, H3-1, (GPIO43). Note: SW1 needs to be set to route this signal to header H3. "Key Down" state is represented by a 'high' (3.3v) on the TX pin. This signal is not intended to key a transmitter directly.
 </p>
