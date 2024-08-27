@@ -30,7 +30,6 @@
 #include "driver/i2c_master.h" //added for waveshare touch support
 #include "touch/base/esp_lcd_touch_gt911.h" //added for waveshare touch support
 
-
 CWSNDENGN *cwsnd;
 
 esp_lcd_touch_handle_t kb = NULL;

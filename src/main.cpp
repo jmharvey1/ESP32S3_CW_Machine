@@ -36,7 +36,7 @@ esp_event_loop_args_t event_task_args = {
         .task_stack_size = 2048,
         .task_core_id = tskNO_AFFINITY
     };
- changed .task_stack_size = 4096,   
+ changed .task_stack_size = 5120,   
 */
 /*20240729 Fully functional but needs refinement*/
 /*20240822 Now support Keyboard battery state, but subject to crashing when running app tries to connect to keyboard a 2nd time*/
@@ -709,7 +709,8 @@ note: task remains active until one is found & 'paired'('PairFlg' is set to true
 void BLE_scan_tsk(void *param)
 {
   const char *TAG2 = "BLE_scan_tsk";
-  // static uint32_t thread_notification;// not used in AdvParserTask
+  const char *TAG2A = "\nBLE_scan_tsk";
+  esp_log_level_set("*", ESP_LOG_DEBUG);
   /*Used diagnose Advance parser CPU usage*/
   // UBaseType_t uxHighWaterMark;
   // unsigned long AdvPStart = 0;
@@ -718,10 +719,17 @@ void BLE_scan_tsk(void *param)
   while (loop)
   {
     bt_keyboard.PairFlg = false;
-    //printf("START BLE SCAN\n");
-    ESP_LOGI(TAG2, "START BLE SCAN");
+    ESP_LOGI(TAG2, "BLE SCAN - START");
+    uint32_t EvntStart = pdTICKS_TO_MS(xTaskGetTickCount());
+    uint16_t dev_scan_intrvl = 0;
     bt_keyboard.devices_scan(2); // Required to discover new keyboards and for pairing
                                  // Default duration is 3 seconds
+    //while(dev_scan_intrvl<2000)
+    //{
+    //  dev_scan_intrvl = (uint16_t)(pdTICKS_TO_MS(xTaskGetTickCount()) - EvntStart);
+    //}
+    //ESP_LOGI(TAG2, "BLE SCAN - DONE (interval: %d)", dev_scan_intrvl);
+    ESP_LOGI(TAG2, "BLE SCAN - DONE\n\n");
     if (bt_keyboard.GetPairFlg1())
     { 
       bt_keyboard.PairFlg = true;
@@ -941,7 +949,7 @@ void app_main()
 
   ModeCnt = 0;
   static const char *TAG = "Main Start";
-  
+  esp_log_level_set("*", ESP_LOG_DEBUG);
   // Configure CW send IO pin aka 'KEY'
   gpio_config_t io_conf;
   io_conf.intr_type = GPIO_INTR_DISABLE;

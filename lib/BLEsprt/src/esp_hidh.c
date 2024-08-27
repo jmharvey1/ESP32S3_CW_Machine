@@ -662,12 +662,16 @@ static void esp_hidh_dev_resources_free(esp_hidh_dev_t *dev)
     free((void *)dev->config.device_name);
     free((void *)dev->config.manufacturer_name);
     free((void *)dev->config.serial_number);
+    if(dev->config.report_maps_len>0)
+    {
+    printf("%s() HID CLOSE EVENT - report_maps_len %d\n", __func__, dev->config.report_maps_len);
     for (uint8_t d = 0; d < dev->config.report_maps_len; d++) {
         /* data of report map maybe is NULL */
         if (dev->config.report_maps[d].data) {
             free((void *)dev->config.report_maps[d].data);
         }
     }
+    } else printf("%s() HID CLOSE EVENT - report_maps_len NONE\n", __func__);
     free((void *)dev->config.report_maps);
     esp_hidh_dev_report_t *r;
     while (dev->reports) {
