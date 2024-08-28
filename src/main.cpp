@@ -40,6 +40,7 @@ esp_event_loop_args_t event_task_args = {
 */
 /*20240729 Fully functional but needs refinement*/
 /*20240822 Now support Keyboard battery state, but subject to crashing when running app tries to connect to keyboard a 2nd time*/
+/*20240828 Added BIAS auto-correction to ADC sampling */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -119,9 +120,9 @@ bool mutexFLG =false;
 bool adcON =false;
 bool SkippDotClkISR = false;
 uint8_t QueFullstate;
-//bool PairFlg = false;
-//bool trapFlg = false;
-volatile int DotClkstate = 0;
+float BiasError = 0;
+int Smplcnt = 0;
+bool SmplSetDone = false;
 volatile int CurHiWtrMrk = 0;
 static const uint8_t state_que_len = 100;//50;
 static QueueHandle_t state_que;
@@ -293,7 +294,17 @@ void addSmpl(int k, int i, int *pCntrA)
 
   /*Calculate Tone frequency*/
   /*the following is part of the auto tune process */
-  const int ToneThrsHld = 50; // minimum usable peak tone value; Anything less is noise
+  if(!SmplSetDone){
+    BiasError += k; 
+    Smplcnt++;
+    if(Smplcnt == 200000)
+    {
+      BiasError = BiasError/200000;
+      Smplcnt = 0;
+      SmplSetDone = true;
+    }
+  }
+  const int ToneThrsHld = 100; // minimum usable peak tone value; Anything less is noise
   if (AutoTune)
   {
     /*if we have a usable signal; start counting the number of samples needed capture 40 periods of the incoming tone;
@@ -345,9 +356,10 @@ void addSmpl(int k, int i, int *pCntrA)
         if (DemodFreq > DmodFrqOld - 2 && DemodFreq < DmodFrqOld + 2)
         {
           DemodFreq = (4*DmodFrqOld + DemodFreq)/5;
-          // sprintf(Title, "Tone: %d\t%d\n", DemodFreq, (int)SmplCNt);
-          // printf(Title);
+          //sprintf(Title, "Tone: %d\t%d\n", DemodFreq, (int)SmplCNt);
+          //printf(Title);
           CalGtxlParamFlg = true;
+          
         }
         DmodFrqOld = DemodFreq;
       }
@@ -396,7 +408,7 @@ void GoertzelHandler(void *param)
   int k;
   int offset = 0;
   /*for Waveshare/ESP32s3 & based on 11 bit ADC output; Set bias to 1024*/
-  int BIAS = 2000; // 1844+150; // based reading found when no signal applied to ESP32Cw_Machine_ADC_init
+  int BIAS = 1800; // 1844+150; // based reading found when no signal applied to ESP32Cw_Machine_ADC_init
   int Smpl_CntrA = 0;
   bool FrstPass = true;
   int pksigH = 0;
@@ -421,11 +433,15 @@ void GoertzelHandler(void *param)
 
     if (thread_notification)
     { // Goertzel data samples ready for processing
-      /*1st do a little house keeping*/
-      // if(!SlwFlg){
-      //   FrstPass = true;
-      // }
       unsigned long Now = EvntStart; //pdTICKS_TO_MS(xTaskGetTickCount());
+      if(SmplSetDone){
+        BIAS = BIAS + BiasError;
+        //printf("BIAS: %d; error: %f\n", BIAS, BiasError);
+        BiasError = 0;
+        SmplSetDone = false;
+        
+      }
+      
 
       /*the following 2 flags were added for LVGL support to manage the use of
       the 'ADCread_disp_refr_timer_mutx' Semaphore*/
@@ -582,7 +598,7 @@ void DisplayUpDt(void *param)
       int cnt = 0;
       bool readQueue = true;
       //sprintf(LogBuf,"DisplayUpDt Step 1 complete\n");
-      
+      /* get latest goertzel tone magnitude */
       while (readQueue)
       {
         readQueue = (xQueueReceive(RxSig_que, (void *)&CurSig, pdMS_TO_TICKS(3)) == pdTRUE);
@@ -614,6 +630,7 @@ void DisplayUpDt(void *param)
         }
         lvglmsgbx.Str_KyBrdBat_level(bt_keyboard.get_battery_level());
         //sprintf(LogBuf,"DisplayUpDt Step 3 complete\n");
+        /*update tone bar graph*/
         lvglmsgbx.dispMsg2(RxSig);
         //sprintf(LogBuf,"DisplayUpDt Step 4 complete\n");
         /* We have finished accessing the shared resource.  Release the

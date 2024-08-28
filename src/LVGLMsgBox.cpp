@@ -1677,7 +1677,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		}
 		if (SpdFlg & !setupFlg)
 		{
-			// 	SpdFlg = false;
+			SpdFlg = false;
 			// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lvgl_update_RxStats; Start\n");
 			lvgl_update_RxStats(SpdBuf);
 			// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lvgl_update_RxStats; Complete\n");
@@ -1820,7 +1820,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		*/
 		// }
 		TchEvnt = false;
-		SpdFlg = false;
+		//SpdFlg = false;
 		KBrdWPMFlg = false;
 		int lpcnt = 0;
 		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lv_timer_handler(); Start\n");

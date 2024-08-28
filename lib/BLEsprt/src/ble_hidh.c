@@ -60,7 +60,7 @@ static esp_gatt_status_t read_char(esp_gatt_if_t gattc_if, uint16_t conn_id, uin
         ESP_LOGE(TAG, "read_char failed");
         return ESP_GATT_ERROR;
     }
-    WAIT_CB();
+    WAIT_CB();// does a take semaphore
     if (s_read_status == ESP_GATT_OK) {
         *out = s_read_data_val;
         *out_len = s_read_data_len;
@@ -769,9 +769,13 @@ esp_hidh_dev_t *esp_ble_hidh_dev_open(esp_bd_addr_t bda, esp_ble_addr_type_t add
         return NULL;
     }
     EvntStart = pdTICKS_TO_MS(xTaskGetTickCount());
-    //vTaskDelay(500/portTICK_PERIOD_MS);
+    //vTaskDelay(500/portTICK_PERIOD_MS); //JMH curiously, this does not fix the reconnect problem
     printf("START - WAIT_CB()\n");
-    WAIT_CB();
+    WAIT_CB(); //JMH this does a semaphore take, which under normal conditions, creates ~2.5 second pause
+    /*JMH added the following code to solve re-connect issue
+    on re-connect 'WAIT_CB()' would return immediately
+    before the nomal gattc events would happen   
+    */
     CB_intrvl = (uint16_t)(pdTICKS_TO_MS(xTaskGetTickCount()) - EvntStart);
     if(CB_intrvl < 500){
         uint16_t old_intrvl = CB_intrvl;
