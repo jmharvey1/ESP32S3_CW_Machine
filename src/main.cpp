@@ -41,6 +41,7 @@ esp_event_loop_args_t event_task_args = {
 /*20240729 Fully functional but needs refinement*/
 /*20240822 Now support Keyboard battery state, but subject to crashing when running app tries to connect to keyboard a 2nd time*/
 /*20240828 Added BIAS auto-correction to ADC sampling */
+/*20240828 Moved modified i2c_master.c file plus support .h file to local project lib directory*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -963,7 +964,6 @@ void pairing_handler(uint32_t pid)
 
 void app_main()
 {
-
   ModeCnt = 0;
   static const char *TAG = "Main Start";
   esp_log_level_set("*", ESP_LOG_DEBUG);
@@ -1121,7 +1121,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     DFault.SlwFlg = (bool)strdAT;
     Rstat = Read_NVS_Val("NoisFlg", strdAT);
     DFault.NoisFlg = (bool)strdAT;
-    /*pass the decoder setting(s) back to their global counterpart(s) */
+    /*pass the decoder se vTaskDelay(5000 / portTICK_PERIOD_MS);tting(s) back to their global counterpart(s) */
     AutoTune = DFault.AutoTune;
     SlwFlg = DFault.SlwFlg;
     NoisFlg = DFault.NoisFlg;
@@ -1136,7 +1136,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
   
   InitGoertzel();
   /*This delay is just to give time for an external USB serrial monitor to get up and running*/
-  //vTaskDelay(5000 / portTICK_PERIOD_MS);
+  // vTaskDelay(5000 / portTICK_PERIOD_MS);
  
     #if USE_KYBrd
   bt_keyboard.inPrgsFlg = false;
