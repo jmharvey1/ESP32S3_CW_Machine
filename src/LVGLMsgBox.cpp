@@ -110,7 +110,6 @@ void Bld_LVGL_GUI(void);
 void Sync_Dflt_Settings(void);
 void SaveUsrVals(void);
 
-
 static void screen1_event_handler(lv_event_t *e)
 {
 	const char *TAG1 = "screen1_event_handler";
@@ -1126,7 +1125,7 @@ void LVGLMsgBox::InitDsplay(void)
 	UpdtKyBrdCrsr = false;
 	static lv_disp_draw_buf_t disp_buf;		 // contains internal graphic buffer(s) called draw buffer(s)
 	static lv_disp_drv_t disp_drv;			 // contains callback functions
-	esp_log_level_set("*", ESP_LOG_VERBOSE); // ESP_LOG_NONE,       /*!< No log output */
+	//esp_log_level_set("*", ESP_LOG_VERBOSE); // ESP_LOG_NONE,       /*!< No log output */
 											 // ESP_LOG_ERROR,      /*!< Critical errors, software module can not recover on its own */
 											 // ESP_LOG_WARN,       /*!< Error conditions from which recovery measures have been taken */
 											 // ESP_LOG_INFO,       /*!< Information messages which describe normal flow of events */
@@ -1238,14 +1237,14 @@ void LVGLMsgBox::InitDsplay(void)
 	/* instantuate touch object */
 	if (esp_lcd_new_panel_io_i2c_v2(i2c_master_bus_handle, &tp_io_config, &tp_io_handle) != ESP_OK)
 	{
-		printf("failed to create GT911 touch interface\n");
+		ESP_LOGE(TAG, "failed to create GT911 touch interface");
 	}
 	else
 	{
-		printf("touch interface handle %p\n", tp_io_handle);
+		ESP_LOGI(TAG, "touch interface handle %p", tp_io_handle);
 	}
 
-	/* Initialize touch */
+	/* Initialize touch using, esp_lcd_touch_gt911.c, found at /lib/ESP32_Display_Panel/src/touch/base */
 	ESP_LOGI(TAG, "Initialize/configure GT911 touch controller");
 	ESP_ERROR_CHECK(esp_lcd_touch_new_i2c_gt911(tp_io_handle, &lcd_touch_config, &tp));
 	printf("lcd_touch_handle %p\n", tp);
@@ -1304,6 +1303,7 @@ void LVGLMsgBox::InitDsplay(void)
 	whenever you want to refresh the dirty areas */
 /*Only doing this to supress warning timer message from lv_timer.c; 
 In this application LVGLMsgBox::dispMsg2 actually manages the scan & display refresh */
+/*in this project this will fire 10 time a second, mainly to keep the display 'touch' working*/
 	ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, LV_TICK_PERIOD_MS * 1000)); // here time is in micro seconds
 																						  // Tick Interface for LVGL using esp_timer to generate 2ms periodic event
 
@@ -1318,7 +1318,7 @@ In this application LVGLMsgBox::dispMsg2 actually manages the scan & display ref
 	lv_indev_drv_register(&indev_drv);
 	//lv_timer_del(indev_drv.read_timer);
 	indev_drv.read_timer->paused = true;
-	printf("indev_drv.read_timer %p  read_cb: %p \n", indev_drv.read_timer, indev_drv.read_cb);
+	ESP_LOGI(TAG, "indev_drv.read_timer %p  read_cb: %p", indev_drv.read_timer, indev_drv.read_cb);
 	ESP_LOGI(TAG, "Bld LVGL GUI");
 	Bld_LVGL_GUI();
 };

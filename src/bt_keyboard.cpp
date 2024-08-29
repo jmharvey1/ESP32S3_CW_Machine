@@ -1279,9 +1279,10 @@ bool BTKeyboard::setup(pid_handler *handler, BTKeyboard *KBptr)
   ESP_ERROR_CHECK(esp_ble_gattc_register_callback(esp_gattc_cb));
 
 #endif /* CONFIG_BT_BLE_ENABLED */
+/*Note: this sets the stack size for the 'esp_ble_hidh_events' TASK*/
   esp_hidh_config_t config = {
       .callback = hidh_callback,
-      .event_stack_size = 4096,
+      .event_stack_size = 5120,
       .callback_arg = nullptr,
   };
   ESP_ERROR_CHECK(esp_hidh_init(&config));
@@ -1670,7 +1671,7 @@ void BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb
   // printf("bt_gap_event_handler: %s EXIT\n",msgbuf); //JMH Diagnosstic testing
 }
 #endif /*CONFIG_BT_HID_HOST_ENABLED*/
-
+/*This is the call back event that gets fired during a SCAN for advertising BLE devices*/
 void BTKeyboard::handle_ble_device_result(esp_ble_gap_cb_param_t *param)
 {
   const char *TAG = "handle_ble_device_result";
@@ -1768,7 +1769,7 @@ void BTKeyboard::handle_ble_device_result(esp_ble_gap_cb_param_t *param)
   { /*we found a stored record for this BLE Keyboard/address*/
     ESP_LOGI(TAG, "Previously PAIRED");
     PairFlg1 = true;
-    sprintf(msgbuf, "Found Paired Keybrd\n Standby... while CW Machine Re-Connects...");
+    sprintf(msgbuf, "!!Found Paired Keyboard!!\n Standby... while CW Machine Re-Connects...");
     pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
     /*So add it to the scan results list*/
     add_ble_scan_result(param->scan_rst.bda,
@@ -2059,6 +2060,7 @@ esp_err_t BTKeyboard::start_bt_scan(uint32_t seconds)
 
 esp_err_t BTKeyboard::start_ble_scan(uint32_t seconds)
 {
+  /*shown here just for reference*/
   // static esp_ble_scan_params_t hid_scan_params = {
   //     .scan_type = BLE_SCAN_TYPE_ACTIVE,
   //     .own_addr_type = BLE_ADDR_TYPE_PUBLIC,

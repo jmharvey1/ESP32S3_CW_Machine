@@ -36,7 +36,11 @@ esp_event_loop_args_t event_task_args = {
         .task_stack_size = 2048,
         .task_core_id = tskNO_AFFINITY
     };
- changed .task_stack_size = 5120,   
+ changed .task_stack_size = 5120, 
+ Correction 20240829
+ think the real place to set the task stack size is in
+ the "bool BTKeyboard::setup(pid_handler *handler, BTKeyboard *KBptr)"
+ method, found in, 'bt_keyboard.cpp'  
 */
 /*20240729 Fully functional but needs refinement*/
 /*20240822 Now support Keyboard battery state, but subject to crashing when running app tries to connect to keyboard a 2nd time*/
@@ -728,7 +732,7 @@ void BLE_scan_tsk(void *param)
 {
   const char *TAG2 = "BLE_scan_tsk";
   const char *TAG2A = "\nBLE_scan_tsk";
-  esp_log_level_set("*", ESP_LOG_DEBUG);
+  //esp_log_level_set("*", ESP_LOG_DEBUG);
   /*Used diagnose Advance parser CPU usage*/
   // UBaseType_t uxHighWaterMark;
   // unsigned long AdvPStart = 0;
