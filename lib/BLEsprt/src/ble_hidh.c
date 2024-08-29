@@ -760,9 +760,9 @@ esp_hidh_dev_t *esp_ble_hidh_dev_open(esp_bd_addr_t bda, esp_ble_addr_type_t add
     uint16_t CB_intrvl = 0;
     uint64_t EvntStart = 0;
     //do{
-        printf("START - esp_ble_gattc_open\n");
+        ESP_LOGI(TAG, "START - esp_ble_gattc_open\n");
     ret = esp_ble_gattc_open(hid_gattc_if, dev->bda, dev->ble.address_type, true);
-    printf("DONE - esp_ble_gattc_open\n");
+    ESP_LOGI(TAG, "DONE - esp_ble_gattc_open\n");
     if (ret) {
         esp_hidh_dev_free_inner(dev);
         ESP_LOGE(TAG, "esp_ble_gattc_open failed: %d", ret);
@@ -770,7 +770,7 @@ esp_hidh_dev_t *esp_ble_hidh_dev_open(esp_bd_addr_t bda, esp_ble_addr_type_t add
     }
     EvntStart = pdTICKS_TO_MS(xTaskGetTickCount());
     //vTaskDelay(500/portTICK_PERIOD_MS); //JMH curiously, this does not fix the reconnect problem
-    printf("START - WAIT_CB()\n");
+    ESP_LOGI(TAG, "START - WAIT_CB()\n");
     WAIT_CB(); //JMH this does a semaphore take, which under normal conditions, creates ~2.5 second pause
     /*JMH added the following code to solve re-connect issue
     on re-connect 'WAIT_CB()' would return immediately
@@ -783,7 +783,7 @@ esp_hidh_dev_t *esp_ble_hidh_dev_open(esp_bd_addr_t bda, esp_ble_addr_type_t add
         while(CB_intrvl < MaxWaitTime)
         {
             vTaskDelay(200/portTICK_PERIOD_MS);
-            printf("STILL - WAIT_CB()\n");
+            ESP_LOGI(TAG, "STILL - WAIT_CB()\n");
             WAIT_CB();
             CB_intrvl = (uint16_t)(pdTICKS_TO_MS(xTaskGetTickCount()) - EvntStart);
             if(CB_intrvl < old_intrvl+300)
@@ -797,12 +797,11 @@ esp_hidh_dev_t *esp_ble_hidh_dev_open(esp_bd_addr_t bda, esp_ble_addr_type_t add
 
         }
     }
-    printf("DONE - WAIT_CB(); CB_intrvl: %d\n", CB_intrvl);
+    ESP_LOGI(TAG, "DONE - WAIT_CB(); CB_intrvl: %d\n", CB_intrvl);
     if (dev->ble.conn_id < 0 || (CB_intrvl <200)) {
         ret = dev->status;
         ESP_LOGE(TAG, "dev open failed! status: 0x%x", dev->status);
         esp_hidh_dev_free_inner(dev);
-         printf("CONNECT FAIL\n");
         return NULL;
     }
 
@@ -810,9 +809,9 @@ esp_hidh_dev_t *esp_ble_hidh_dev_open(esp_bd_addr_t bda, esp_ble_addr_type_t add
     dev->report_write = esp_ble_hidh_dev_report_write;
     dev->report_read = esp_ble_hidh_dev_report_read;
     dev->dump = esp_ble_hidh_dev_dump;
-    printf("START - read_device_services\n");
+    ESP_LOGI(TAG, "START - read_device_services\n");
     read_device_services(hid_gattc_if, dev);
-     printf("DONE - read_device_services\n");
+    ESP_LOGI(TAG, "DONE - read_device_services\n");
     if (event_loop_handle) {
         esp_hidh_event_data_t p = {0};
         p.open.status = ESP_OK;
@@ -820,9 +819,9 @@ esp_hidh_dev_t *esp_ble_hidh_dev_open(esp_bd_addr_t bda, esp_ble_addr_type_t add
          printf("SEND - ESP_HIDH_OPEN_EVENT\n");
         esp_event_post_to(event_loop_handle, ESP_HIDH_EVENTS, ESP_HIDH_OPEN_EVENT, &p, sizeof(esp_hidh_event_data_t), portMAX_DELAY);
     }
-    printf("START - attach_report_listener\n");
+    ESP_LOGI(TAG, "START - attach_report_listener\n");
     attach_report_listeners(hid_gattc_if, dev);
-    printf("DONE - attach_report_listener\n");
+    ESP_LOGI(TAG, "DONE - attach_report_listener\n");
     return dev;
 }
 

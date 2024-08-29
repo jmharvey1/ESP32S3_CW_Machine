@@ -46,6 +46,7 @@ esp_event_loop_args_t event_task_args = {
 /*20240822 Now support Keyboard battery state, but subject to crashing when running app tries to connect to keyboard a 2nd time*/
 /*20240828 Added BIAS auto-correction to ADC sampling */
 /*20240828 Moved modified i2c_master.c file plus support .h file to local project lib directory*/
+/*20240828 Moved CW Key output from UART TX to UART RX (GPIO44) */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -970,7 +971,13 @@ void app_main()
 {
   ModeCnt = 0;
   static const char *TAG = "Main Start";
-  esp_log_level_set("*", ESP_LOG_DEBUG);
+  esp_log_level_set("*", ESP_LOG_ERROR); // ESP_LOG_NONE,       /*!< No log output */
+											                   // ESP_LOG_ERROR,      /*!< Critical errors, software module can not recover on its own */
+											                   // ESP_LOG_WARN,       /*!< Error conditions from which recovery measures have been taken */
+											                   // ESP_LOG_INFO,       /*!< Information messages which describe normal flow of events */
+											                   // ESP_LOG_DEBUG,      /*!< Extra information which is not necessary for normal use (values, pointers, sizes, etc). */
+											                   // ESP_LOG_VERBOSE     /*!< Bigger chunks of debugging information, or frequent messages which can potentially flood the output. */
+
   // Configure CW send IO pin aka 'KEY'
   gpio_config_t io_conf;
   io_conf.intr_type = GPIO_INTR_DISABLE;

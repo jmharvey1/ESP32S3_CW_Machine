@@ -51,7 +51,7 @@
 //#include "TFT_eSPI.h"
 #include "LVGLMsgBox.h"
 #include "soc/gpio_num.h"
-#define KEY GPIO_NUM_43    // Using Waveshare 7"LCD version UART TX pin, aka RS485_TX
+#define KEY GPIO_NUM_44    // Using Waveshare 7"LCD version UART RX pin, aka UART_RX
 #define Key_Dwn 0
 #define Key_Up 1
 class CWSNDENGN
