@@ -12,7 +12,7 @@
 #include "lv_ll.h"
 #include "lv_gc.h"
 #include "stdio.h"
-#include "/home/jim/Documents/PlatformIO/Projects/LVGL_CW_Decoder/include/globals.h" //JMH ADD for debugging
+//#include "globals.h" //JMH ADD for debugging
 /*********************
  *      DEFINES
  *********************/
@@ -107,7 +107,7 @@ LV_ATTRIBUTE_TIMER_HANDLER uint32_t lv_timer_handler(void)
             /*The timer might be deleted if it runs only once ('repeat_count = 1')
              *So get next element until the current is surely valid*/
             next = _lv_ll_get_next(&LV_GC_ROOT(_lv_timer_ll), LV_GC_ROOT(_lv_timer_act));
-            sprintf(LogBuf,"lv_timer.c lv_timer_handler()  lv_timer_exec(%p); Start\n", _lv_timer_act); //JMH ADD for DeBugging
+            //sprintf(LogBuf,"lv_timer.c lv_timer_handler()  lv_timer_exec(%p); Start\n", _lv_timer_act); //JMH ADD for DeBugging
             //printf(LogBuf);
             if(lv_timer_exec(LV_GC_ROOT(_lv_timer_act))) { //->lvgl/src/misc/lv_timer.c:314 (discriminator 2)
                 /*If a timer was created or deleted then this or the next item might be corrupted*/

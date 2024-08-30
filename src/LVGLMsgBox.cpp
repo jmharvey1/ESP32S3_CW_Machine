@@ -5,6 +5,7 @@
  *      Author: jim
  * 20230617 To support advanced DcodeCW "Bug" processes, reworked dispMsg2(void) to handle ASCII chacacter 0x8 "Backspace" symbol
  */
+
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "LVGLMsgBox.h"
