@@ -26,7 +26,7 @@
 #include "hal/i2c_types.h"
 //#include "i2c_private.h"
 #include "esp_lcd_touch_gt911.h"
-#include "/home/jim/Documents/PlatformIO/Projects/LVGL_CW_Decoder/include/globals.h" //JMH ADD for debugging
+//#include "/home/jim/Documents/PlatformIO/Projects/LVGL_CW_Decoder/include/globals.h" //JMH ADD for debugging
 
 static const char *TAG = "GT911";
 
@@ -208,20 +208,20 @@ static esp_err_t esp_lcd_touch_gt911_read_data(esp_lcd_touch_handle_t tp)
     uint8_t touch_cnt = 0;
     uint8_t clear = 0;
     size_t i = 0;
-    sprintf(LogBuf,"esp_lcd_touch_gt911_read_data(%p) -   assert(tp != NULL)\n", *((void **)&tp));
+    //  sprintf(LogBuf,"esp_lcd_touch_gt911_read_data(%p) -   assert(tp != NULL)\n", *((void **)&tp));
     assert(tp != NULL);
-    sprintf(LogBuf,"esp_lcd_touch_gt911_read_data(%p) - START\n", *((void **)&tp));//JMH ADD
+    //  sprintf(LogBuf,"esp_lcd_touch_gt911_read_data(%p) - START\n", *((void **)&tp));//JMH ADD
     //printf(LogBuf);
     CalerID = 1;
     err = touch_gt911_i2c_read(tp, ESP_LCD_TOUCH_GT911_READ_XY_REG, buf, 1);//-> found in this same file
     ESP_RETURN_ON_ERROR(err, TAG, "I2C read error!");
-     sprintf(LogBuf,"esp_lcd_touch_gt911_read_data(%p) - Step 1 Complete\n", *((void **)&tp));//JMH ADD
+     //  sprintf(LogBuf,"esp_lcd_touch_gt911_read_data(%p) - Step 1 Complete\n", *((void **)&tp));//JMH ADD
     
     /* Any touch data? */
     if ((buf[0] & 0x80) == 0x00) {
-        sprintf(LogBuf,"esp_lcd_touch_gt911_read_data(%p) - Step 2 Start\n", *((void **)&tp));//JMH ADD
+        //  sprintf(LogBuf,"esp_lcd_touch_gt911_read_data(%p) - Step 2 Start\n", *((void **)&tp));//JMH ADD
         touch_gt911_i2c_write(tp, ESP_LCD_TOUCH_GT911_READ_XY_REG, clear);
-        sprintf(LogBuf,"esp_lcd_touch_gt911_read_data(%p) - Step 2 Complete\n", *((void **)&tp));//JMH ADD
+        //  sprintf(LogBuf,"esp_lcd_touch_gt911_read_data(%p) - Step 2 Complete\n", *((void **)&tp));//JMH ADD
 #if (CONFIG_ESP_LCD_TOUCH_MAX_BUTTONS > 0)
     } else if ((buf[0] & 0x10) == 0x10) {
         /* Read all keys */
@@ -284,7 +284,7 @@ static esp_err_t esp_lcd_touch_gt911_read_data(esp_lcd_touch_handle_t tp)
 
         portEXIT_CRITICAL(&tp->data.lock);
     }
-    sprintf(LogBuf,"esp_lcd_touch_gt911_read_data(%p) - Complete\n", *((void **)&tp));//JMH ADD
+    //  sprintf(LogBuf,"esp_lcd_touch_gt911_read_data(%p) - Complete\n", *((void **)&tp));//JMH ADD
     //printf(LogBuf);
     return ESP_OK;
 }
@@ -401,29 +401,29 @@ static esp_err_t touch_gt911_read_cfg(esp_lcd_touch_handle_t tp)
 
 static esp_err_t touch_gt911_i2c_read(esp_lcd_touch_handle_t tp, uint16_t reg, uint8_t *data, uint8_t len)
 {
-    sprintf(LogBuf,"touch_gt911_i2c_read(%p); CalerID:%d - ASSERT Check\n", *((void **)&tp), CalerID);//JMH ADD
+    //  sprintf(LogBuf,"touch_gt911_i2c_read(%p); CalerID:%d - ASSERT Check\n", *((void **)&tp), CalerID);//JMH ADD
     assert(tp != NULL);
     assert(data != NULL);
 
     /* Read data */
     //return esp_lcd_panel_io_rx_param(tp->io, reg, data, len);//->components/esp_lcd/src/esp_lcd_panel_io.c:13
-    sprintf(LogBuf,"touch_gt911_i2c_read(%p); CalerID:%d - START\n", *((void **)&tp), CalerID);//JMH ADD
+    //  sprintf(LogBuf,"touch_gt911_i2c_read(%p); CalerID:%d - START\n", *((void **)&tp), CalerID);//JMH ADD
     esp_err_t tchrdErr = esp_lcd_panel_io_rx_param(tp->io, reg, data, len);//->components/esp_lcd/src/esp_lcd_panel_io.c:13
-    sprintf(LogBuf,"touch_gt911_i2c_read(%p); CalerID:%d - Complete\n", *((void **)&tp), CalerID);//JMH ADD
+    //  sprintf(LogBuf,"touch_gt911_i2c_read(%p); CalerID:%d - Complete\n", *((void **)&tp), CalerID);//JMH ADD
     return tchrdErr;
 }
 
 static esp_err_t touch_gt911_i2c_write(esp_lcd_touch_handle_t tp, uint16_t reg, uint8_t data)
 {
-    sprintf(LogBuf, "touch_gt911_i2c_write(%p); CalerID:%d - ASSERT Check\n", *((void **)&tp), CalerID); // JMH ADD
+    //  sprintf(LogBuf, "touch_gt911_i2c_write(%p); CalerID:%d - ASSERT Check\n", *((void **)&tp), CalerID); // JMH ADD
     assert(tp != NULL);
 
     // *INDENT-OFF*
     /* Write data */
     /*JMH Note: I2C writes to the GT911 touch sensor get passed to components/driver/i2c_master.c 'i2c_master_transmit_receive()'*/
-    sprintf(LogBuf, "touch_gt911_i2c_write(%p); reg: %d; CalerID:%d - START\n", *((void **)&tp), (int)reg, CalerID); // JMH ADD
+    //  sprintf(LogBuf, "touch_gt911_i2c_write(%p); reg: %d; CalerID:%d - START\n", *((void **)&tp), (int)reg, CalerID); // JMH ADD
     esp_err_t tchrdErr = esp_lcd_panel_io_tx_param(tp->io, reg, (uint8_t[]){data}, 1);
-    sprintf(LogBuf, "touch_gt911_i2c_write(%p); reg: %d; CalerID:%d - Complete\n", *((void **)&tp), (int)reg, CalerID); // JMH ADD
+    //  sprintf(LogBuf, "touch_gt911_i2c_write(%p); reg: %d; CalerID:%d - Complete\n", *((void **)&tp), (int)reg, CalerID); // JMH ADD
     return tchrdErr;
     // *INDENT-ON*
 }

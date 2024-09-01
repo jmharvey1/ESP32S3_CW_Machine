@@ -57,6 +57,7 @@ extern int DeBug; // factory default setting; 0 => Debug "OFF"; 1 => Debug "ON"
 extern TaskHandle_t AdvParserTaskHandle;
 extern SemaphoreHandle_t mutex;//JMH Added
 extern SemaphoreHandle_t ADCread_disp_refr_timer_mutx;
+extern SemaphoreHandle_t DsplUpDt_AdvPrsrTsk_mutx;
 extern TaskHandle_t GoertzelTaskHandle;
 extern TaskHandle_t CWDecodeTaskHandle;
 extern TaskHandle_t BLEscanTask_hndl;
@@ -68,6 +69,7 @@ extern char MemF2[80];
 extern bool clrbuf;
 extern bool adcON;
 extern bool setupFlg;
+extern bool BlkDcdUpDts;
 extern COREDUMP_DRAM_ATTR uint8_t global_var;
 uint8_t Read_NVS_Str(const char *key, char *value);
 template <class T>

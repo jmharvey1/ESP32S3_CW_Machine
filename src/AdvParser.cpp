@@ -52,7 +52,7 @@
 #include "Goertzel.h"
 #include "main.h"
 //#define GLITCHDBG // uncomment to enable "post parsing" when running in "glicth" mode {Hi qrn conditions}
-#define DBugSrchEsRplace // uncomment to enable posting classic error fixes to serial port for debugging 
+//#define DBugSrchEsRplace // uncomment to enable posting classic error fixes to serial port for debugging 
 
 AdvParser::AdvParser(void) // TFT_eSPI *tft_ptr, char *StrdTxt
 {

@@ -1379,6 +1379,7 @@ bool chkChrCmplt(void)
 		}
 		// Ok just detected a new wordbreak interval; So Now need/can evaluate
 		// the contents of the AutoMode detector time buffers
+		// printf("%s\n",LtrHoldr);
 		if (KeyDwnPtr > 2 && KeyUpPtr > 2 && KeyUpIntrvls[0] > 0 && KeyDwnIntrvls[0] > 0)
 		{
 			// printf("\nWORD BREAK - KeyDwnPtr: %d; KeyUpPtr:%d\n", KeyDwnPtr, KeyUpPtr);

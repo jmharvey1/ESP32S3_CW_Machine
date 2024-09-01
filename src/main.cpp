@@ -47,6 +47,7 @@ esp_event_loop_args_t event_task_args = {
 /*20240828 Added BIAS auto-correction to ADC sampling */
 /*20240828 Moved modified i2c_master.c file plus support .h file to local project lib directory*/
 /*20240828 Moved CW Key output from UART TX to UART RX (GPIO44) */
+/*20240901 Removed full path reference, & reworked applying advance parser corrections */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -171,6 +172,7 @@ TaskHandle_t GoertzelTaskHandle;
 static TaskHandle_t DsplUpDtTaskHandle = NULL;
 TaskHandle_t CWDecodeTaskHandle = NULL;
 TaskHandle_t AdvParserTaskHandle = NULL;
+bool BlkDcdUpDts = false;
 //static TaskHandle_t UpDtRxSigTaskHandle = NULL;
 TaskHandle_t BLEscanTask_hndl = NULL;
 TaskHandle_t HKdotclkHndl;
@@ -796,48 +798,54 @@ void AdvParserTask(void *param)
     // printf("AdvParserTask Launched\n"); //added to verify task management
     /*Used diagnose Advance parser CPU usage*/
     // AdvPStart = pdTICKS_TO_MS(xTaskGetTickCount());
-    advparser.EvalTimeData();
-    /*Now compare Advparser decoded text to original text; If not the same,
-    replace displayed with Advparser version*/
-    bool same = true;
-    bool Tst4Match = true;
-    int i;
-    int FmtchPtr; // now only used for debugging
-    /*Scan/compare last word displayed w/ advpaser's version*/
-    int NuMsgLen = advparser.GetMsgLen();
-    int LtrPtr = advparser.LtrPtr;
-    wrdbrkFtcr = advparser.wrdbrkFtcr;
-    // printf("NuMsgLen = %d; LtrPtr %d\n", NuMsgLen, LtrPtr);
-    if (NuMsgLen > LtrPtr)
-    { // if the advparser test string is longer, then delete the last word printed
-      same = false;
-      i = LtrPtr;
-    }
-    else
-    {
-      for (i = 0; i < LtrPtr; i++)
-      {
-        if (advparser.Msgbuf[i] == 0)
-          Tst4Match = false;
-        if ((advparser.LtrHoldr[i] != advparser.Msgbuf[i]) && Tst4Match)
-        {
-          FmtchPtr = i; // now only used for debugging
-          same = false;
-        }
-        if (advparser.LtrHoldr[i] == 0)
-          break;
+    //if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+    //{
+      BlkDcdUpDts = true;
+      advparser.EvalTimeData();
+      /*Now compare Advparser decoded text to original text; If not the same,
+      replace displayed with Advparser version*/
+      bool same = true;
+      bool Tst4Match = true;
+      int i;
+      int FmtchPtr; // now only used for debugging
+      /*Scan/compare last word displayed w/ advpaser's version*/
+      int NuMsgLen = advparser.GetMsgLen();
+      int LtrPtr = advparser.LtrPtr;
+      wrdbrkFtcr = advparser.wrdbrkFtcr;
+      // printf("NuMsgLen = %d; LtrPtr %d\n", NuMsgLen, LtrPtr);
+      if (NuMsgLen > LtrPtr || NuMsgLen < LtrPtr)
+      { // if the advparser test string is longer, then delete the last word printed
+        same = false;
+        i = LtrPtr;
       }
-    }
-
-    /*If they don't match, replace displayed text with AdvParser's version*/
-    int deletCnt = 0; // moved to here to support lvgl debugging
-    char spacemarker = 'Y';
-    uint8_t LstChr = 0;
-    if (!same)
-    {
-      /*need to block display update task during this 'if()' code */
-      if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+      else
       {
+        for (i = 0; i < LtrPtr; i++)
+        {
+          if (advparser.Msgbuf[i] == 0)
+          {
+            Tst4Match = false;
+            break;
+          }
+          if ((advparser.LtrHoldr[i] != advparser.Msgbuf[i]) && Tst4Match)
+          {
+            FmtchPtr = i; // now only used for debugging
+            same = false;
+          }
+          // if (advparser.LtrHoldr[i] == 0)
+          //   break;
+        }
+      }
+
+      /*If they don't match, replace displayed text with AdvParser's version*/
+      int deletCnt = LtrPtr; // 0; // moved to here to support lvgl debugging
+      char spacemarker = 'Y';
+      uint8_t LstChr = 0;
+      if (!same)
+      {
+        /*need to block display update task during this 'if()' code */
+        if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+        {
         bool oldDltState = dletechar;
         // int deletCnt = 0;
         // char spacemarker = 'Y';
@@ -859,41 +867,88 @@ void AdvParserTask(void *param)
         // printf("lvglmsgbx.GetLastChar = %d\n", LstChr);// added for testing with lvgl display handler
         if (LstChr == 0x20) // test to see if a word break space has been applied
         {
-          deletCnt = 1 + i; // number of characters + space to be deleted
-          // printf("MsgChrCnt[1] = %d\n", 1+ i);
+          deletCnt++; // number of characters + space to be deleted
         }
         else
         {
           spacemarker = 'N';
-          deletCnt = i; // number of characters (No space) to be deleted
-          // printf("MsgChrCnt[1] = %d\n", i);
+          // deletCnt++;
+          /*shift the parsed text buffer one charater right, and put a 'space' at the begining*/
+          NuMsgLen++;
+          advparser.Msgbuf[NuMsgLen + 1] = 0;
+          for (int i = NuMsgLen; i > 0; i--)
+          {
+            advparser.Msgbuf[i] = advparser.Msgbuf[i - 1];
+          }
+          advparser.Msgbuf[0] = 0x20;
+          // deletCnt = i; // number of characters (No space) to be deleted
+          //  printf("MsgChrCnt[1] = %d\n", i);
         }
         /*Configure DCodeCW.cpp to erase/delete original text*/
-        // MsgChrCnt[1] = deletCnt; // Load delete buffer w/ the number of characters to be deleted
-        // dletechar = true;
-
-        lvglmsgbx.Delete(true, deletCnt);
         /*Add word break space to post parsed text*/
-        advparser.Msgbuf[NuMsgLen] = 0x20;
-        advparser.Msgbuf[NuMsgLen + 1] = 0x0;
+        //
+        if (!lvglmsgbx.TestRingBufPtrs())
+        {
+          // advparser.Msgbuf[NuMsgLen] = 0x5f;//0x20;
+          // advparser.Msgbuf[NuMsgLen + 1] = 0x0;
+          lvglmsgbx.XferRingbuf(advparser.Msgbuf);
+        }
+        else
+        {
+          advparser.Msgbuf[NuMsgLen] = 0x20; // 0x5f;//0x20;
+          advparser.Msgbuf[NuMsgLen + 1] = 0x0;
+        }
+        if(deletCnt>0)
+        {
+          char DelStr[30];
+          if(deletCnt>29) deletCnt = 29;
+          for(int i = 0; i < deletCnt; i++)
+          {
+            DelStr[i] = 0x8;
+          }
+          DelStr[deletCnt] = 0x0;
+          char tmpbuf[30];
+          int ptr = 0;
+          while(advparser.Msgbuf[ptr] !=0 && ptr <28)
+          {
+            tmpbuf[ptr] = advparser.Msgbuf[ptr];
+            ptr++;
+          }
+          tmpbuf[ptr] = 0;
+          sprintf(advparser.Msgbuf,"%s%s", DelStr, tmpbuf);
+          // ptr = 0;
+          // while(advparser.Msgbuf[ptr] != 0)
+          // {
+          // printf("%d. %d; ", ptr, advparser.Msgbuf[ptr]);
+          // ptr++; 
+          // }
+          // printf("\n");
+          // printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
+        }
+        //lvglmsgbx.Delete(true, deletCnt);
+        
         if (advparser.Dbug)
-          printf("old txt %s;  new txt %s delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
+          printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
         // printf("Pointer ERROR\n");/ printf("No Match @ %d; %d; %d\n", FmtchPtr, LtrHoldr[FmtchPtr], advparser.Msgbuf[FmtchPtr]);
         CptrTxt = false;
         lvglmsgbx.dispDeCdrTxt(advparser.Msgbuf, TFT_GREEN); // Added for lvgl; Note: color value is meaningless
         CptrTxt = true;
         dletechar = oldDltState;
         /*now should be safe resume displayupdate task*/
-        xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
-      }
-    } // else printf("Same\n");
-    if (advparser.Dbug)
-      printf("%s\n", advparser.LtrHoldr);
-    if (same)
-    {
-    } // printf("END Scan SAME true\n");
-    else
-      printf("old txt %s;  new txt %s delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
+           xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
+        }
+      } // else printf("%s\n", advparser.LtrHoldr);
+
+      if (advparser.Dbug)
+        printf("%s\n", advparser.LtrHoldr);
+      if (same)
+      {
+      } // printf("END Scan SAME true\n");
+      //else
+      //  printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
+    //  xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
+    //}
+    BlkDcdUpDts = false;
     // erase contents of LtrHoldr & reset its index pointer (LtrPtr)
     for (int i = 0; i < LtrPtr; i++)
       advparser.LtrHoldr[i] = 0;
@@ -909,6 +964,7 @@ void AdvParserTask(void *param)
     /* Sleep until instructed to resume from DcodeCW.cpp */
     // printf("AdvParser Task Done\n"); //added to verify task management
     vTaskSuspend(AdvParserTaskHandle);
+
   } // end while(1) loop
   /** JMH Added this to ESP32 version to handle random crashing with error,"Task Goertzel Task should not return, Aborting now" */
   vTaskDelete(NULL);
@@ -1201,13 +1257,10 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
   CWsndengn.SetWPM(DFault.WPM); // 20230507 Added this seperate method call after changing how the dot clocktiming gets updated
   CWsndengn.UpDtWPM = true;
   
-
   /* main CW keyboard loop*/
-  
   while (true)
   {
-
-    #if 1 // 0 = scan codes retrieval, 1 = augmented ASCII retrieval
+   #if 1 // 0 = scan codes retrieval, 1 = augmented ASCII retrieval
     /* note: this loop only completes when there is a key entery from a paired/connected Bluetooth Keyboard */
 
     vTaskDelay(pdMS_TO_TICKS(10)); // give the watchdogtimer a chance to reset

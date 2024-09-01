@@ -203,6 +203,8 @@ public:
 	void ReStrtMainScrn(void);
 	void HiLite_Seltcd_Setting(int paramptr, int oldparamptr);
 	void Exit_Settings(int paramptr);
+	bool TestRingBufPtrs(void);
+	void XferRingbuf(char Bfr[50] );
 	inline uint8_t Get_KyBrdBat_level(void) { return KyBrdBatLvl; }
 	inline void Str_KyBrdBat_level(uint8_t Lvl) { KyBrdBatLvl = Lvl; }
 	// void DelLastNtry(void);

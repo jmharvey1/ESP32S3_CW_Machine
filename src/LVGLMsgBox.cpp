@@ -239,6 +239,7 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 			int del = 1 - (max - ta_charCnt);
 			if (del > 0)
 			{	
+				printf("LINE DELETE\n");
 				p += del;
 				while ((*p != '\n') && (del < 98))
 				/* Cap the number of characters deleted to 98 (i.e. ~one line of displayed text), or the 1st 'new line'*/
@@ -1559,21 +1560,24 @@ void LVGLMsgBox::dispDeCdrTxt(char Msgbuf[50], uint16_t Color)
 		else
 			DeCdrRingbufChar[0] = 0;
 		DeCdrRingbufChar[RingbufPntr1] = Msgbuf[msgpntr];
+		/*Added for lvgl*/
+		//Pgbuf[0] = Msgbuf[msgpntr];
 		//printf("%c; RingbufPntr1 %d\n",Msgbuf[msgpntr], RingbufPntr1);
-		DeCdrRingbufClr[RingbufPntr1] = Color;
+		/*Not needed for vlgl display*/
+		// DeCdrRingbufClr[RingbufPntr1] = Color;
 		RingbufPntr1++;
 		if (RingbufPntr1 == RingBufSz)
 			RingbufPntr1 = 0;
 		msgpntr++;
-		/*Added the following lines to maintain sync of the keyboard cursor as new characters are added to the screen via the CW decoder process*/
-		if (Color == TFT_GREENYELLOW)
-		{
-			if (CursorPntr < cnt + 1)
-				CursorPntr = cnt + 1;
-			// char buf[30];
-			// sprintf(buf, "CrsrPntr: %d; cnt: %d\r\n", CursorPntr, cnt);
-			// printf(buf);
-		}
+		// /*Added the following lines to maintain sync of the keyboard cursor as new characters are added to the screen via the CW decoder process*/
+		// if (Color == TFT_GREENYELLOW)
+		// {
+		// 	if (CursorPntr < cnt + 1)
+		// 		CursorPntr = cnt + 1;
+		// 	// char buf[30];
+		// 	// sprintf(buf, "CrsrPntr: %d; cnt: %d\r\n", CursorPntr, cnt);
+		// 	// printf(buf);
+		// }
 	}
 };
 /*New for lvgl based screen
@@ -1592,7 +1596,7 @@ void LVGLMsgBox::dispKeyBrdTxt(char Msgbuf[50], uint16_t Color)
 		else
 			KeyBrdRingbufChar[0] = 0;
 		KeyBrdRingbufChar[KeyBrdPntr1] = Msgbuf[msgpntr];
-		KeyBrdRingbufClr[KeyBrdPntr1] = Color;
+		//KeyBrdRingbufClr[KeyBrdPntr1] = Color;
 		KeyBrdPntr1++;
 		if (KeyBrdPntr1 == RingBufSz)
 			KeyBrdPntr1 = 0;
@@ -1709,52 +1713,58 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 			lvgl_update_KyBrdCrsr(BGHilite);
 			UpdtKyBrdCrsr = false;
 		}
-
-		while (RingbufPntr2 != RingbufPntr1)
+		
+		//if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, pdMS_TO_TICKS(1)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+		if(!BlkDcdUpDts)
 		{
-			NuTxt = true;
-			/*test if this next entry is going to generate a scroll page event
-			& are we in the middle of sending a letter; if true, skip this update.
-			This was done to fix an issue with the esp32 & not being able to give the dotclock ISR
-			priority over the display ISR */
-			if (CWActv && (((cnt + 1) - offset) * fontW >= displayW) && (curRow + 1 == ROW))
+			while (RingbufPntr2 != RingbufPntr1)
 			{
-				// char buf[50];
-				// sprintf(buf, "currow: %d; row: %d", curRow, row);
-				// dispStat(buf, TFT_GREENYELLOW);//update status line
-				// setSOTFlg(false);//changes status square to yellow
-				break;
-			}
-			// ptft->setCursor(cursorX, cursorY);
-			char curChar = DeCdrRingbufChar[RingbufPntr2];
-			// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Start\n");
-			//  post  this character at the end of text shown in the decoded text space on the waveshare display
-			Update_textarea(DecdTxtArea, curChar);
-			//printf("Decoded textarea char %c\n", curChar);
-			// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Complete\n");
-			if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
-			{
-				// sprintf(LogBuf,"Msg2 Delete Initiated/n");
-				if (!this->Delete(true, 1))
-					printf("Msg2 Delete FAILED!!!/n");
-				// sprintf(LogBuf,"Msg2 Delete Completed/n");
-			}
-			else if (curChar == 10)
-			{	// test for "line feed" character
-				/*LVGL version shouldn't  a /DisplCrLf() function*/
-				// DisplCrLf();
-				//  printf("cnt:%d; \n", cnt);
-			}
-			else // at this point, whatever is left shoud be regular text
-			{
-				//
-			}
+				NuTxt = true;
+				/*test if this next entry is going to generate a scroll page event
+				& are we in the middle of sending a letter; if true, skip this update.
+				This was done to fix an issue with the esp32 & not being able to give the dotclock ISR
+				priority over the display ISR */
+				/*Not needed for lvgl display*/
+				// if (CWActv && (((cnt + 1) - offset) * fontW >= displayW) && (curRow + 1 == ROW))
+				// {
+				// 	// char buf[50];
+				// 	// sprintf(buf, "currow: %d; row: %d", curRow, row);
+				// 	// dispStat(buf, TFT_GREENYELLOW);//update status line
+				// 	// setSOTFlg(false);//changes status square to yellow
+				// 	break;
+				// }
+				// ptft->setCursor(cursorX, cursorY);
+				char curChar = DeCdrRingbufChar[RingbufPntr2];
+				Pgbuf[0] = curChar;
+				// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Start\n");
+				//  post  this character at the end of text shown in the decoded text space on the waveshare display
+				Update_textarea(DecdTxtArea, curChar);
+				// printf("Decoded textarea char %c\n", curChar);
+				//  sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Complete\n");
+				if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
+				{
+					// sprintf(LogBuf,"Msg2 Delete Initiated/n");
+					// if (!this->Delete(true, 1))
+					// 	printf("Msg2 Delete FAILED!!!/n");
+					// sprintf(LogBuf,"Msg2 Delete Completed/n");
+				}
+				else if (curChar == 10)
+				{	// test for "line feed" character
+					/*LVGL version shouldn't  a /DisplCrLf() function*/
+					// DisplCrLf();
+					//  printf("cnt:%d; \n", cnt);
+				}
+				else // at this point, whatever is left shoud be regular text
+				{
+					//
+				}
 
-			RingbufPntr2++;
-			if (RingbufPntr2 == RingBufSz)
-				RingbufPntr2 = 0;
-		} // End while (RingbufPntr2 != RingbufPntr1)
-
+				RingbufPntr2++;
+				if (RingbufPntr2 == RingBufSz)
+					RingbufPntr2 = 0;
+			} // End while (RingbufPntr2 != RingbufPntr1)
+		//	xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
+		}
 		while (KeyBrdRingbufPntr2 != KeyBrdPntr1)
 		{
 			NuTxt = true;
@@ -1860,12 +1870,16 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 };
 //////////////////////////////////////////////////////////////////////
 /*Normally called via dispMsg2()
-BUT the AdvParserTask (main.cpp) can also call this direct as part of the overwirte process*/
+*BUT the AdvParserTask (main.cpp) can also call this direct as part of the overwirte process
+* Note: On lvgl displays the ''DeCdTxtFlg' controls which text area the delete applies to
+*/
 bool LVGLMsgBox::Delete(bool DeCdTxtFlg, int ChrCnt)
 {
 	bool tryagn = true;
 	int trycnt = 0;
 	bool DeltCmplt = false;
+	int lpcnt = 0;
+	
 	while (tryagn && !Msg2Actv)
 	{
 		if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
@@ -1889,29 +1903,31 @@ bool LVGLMsgBox::Delete(bool DeCdTxtFlg, int ChrCnt)
 	while (ChrCnt != 0)
 	{ // delete display of ever how many characters were printed in the last decodeval (may be more than one letter generated)
 		// first,buzz thru the pgbuf array until we find the the last character (delete the last character in the pgbuf)
-		int TmpPntr = 0;
-		while (Pgbuf[TmpPntr] != 0)
-			TmpPntr++;
-		if (TmpPntr > 0)
-			Pgbuf[TmpPntr - 1] = 0; // delete last character in the array by replacing it with a "0"
+		/*not needed for lvgl displays*/
+		//int TmpPntr = 0;
+		// while (Pgbuf[TmpPntr] != 0)
+		// 	TmpPntr++;
+		// if (TmpPntr > 0)
+		// 	Pgbuf[TmpPntr - 1] = 0; // delete last character in the array by replacing it with a "0"
 		cnt--;
-		int xoffset = cnt;
-		// use xoffset to locate the character position (on the display's x axis)
-		curRow = 0;
-		while (xoffset >= CPL)
-		{
-			xoffset -= CPL;
-			curRow++;
-		}
-		cursorX = xoffset * (fontW);
-		cursorY = curRow * (fontH);
-		if (xoffset == (CPL - 1))
-			offset = offset - CPL;
-
+		// int xoffset = cnt;
+		// // use xoffset to locate the character position (on the display's x axis)
+		// curRow = 0;
+		// while (xoffset >= CPL)
+		// {
+		// 	xoffset -= CPL;
+		// 	curRow++;
+		// }
+		// cursorX = xoffset * (fontW);
+		// cursorY = curRow * (fontH);
+		// if (xoffset == (CPL - 1))
+		// 	offset = offset - CPL;
+		// printf("DELETE\n");
 		if (DeCdTxtFlg)
 			Update_textarea(DecdTxtArea, (char)0x08); // Ascii value for 'Back-Space'
 		else
 			Update_textarea(SendTxtArea, (char)0x08);
+		
 		// vTaskDelay(pdMS_TO_TICKS(10));
 		--ChrCnt;
 		/*Now if we are also storing characters (via "F1" command) need to remove last entry from that buffer too */
@@ -1940,116 +1956,103 @@ bool LVGLMsgBox::Delete(bool DeCdTxtFlg, int ChrCnt)
 void LVGLMsgBox::DisplCrLf(void)
 {
 	/* Pad the remainder of the line with space */
-	if ((cnt - offset) == 0)
-		return;
-	int curOS = offset;
-	// ptft->setTextColor(TFT_BLACK);
-	while ((cnt - curOS) * fontW <= displayW)
-	{
-		// ptft->print(" "); // ASCII "Space"
-		/* If needed add this character to the Pgbuf */
-		if (curRow > 0)
-		{
-			Pgbuf[cnt - CPL] = 32;
-			Pgbuf[cnt - (CPL - 1)] = 0;
-			PgbufColor[cnt - CPL] = TFT_BLACK;
-		}
-		cnt++;
-		if ((cnt - offset) * fontW >= displayW)
-		{
-			curRow++;
-			cursorX = 0;
-			cursorY = curRow * (fontH);
-			offset = cnt;
-			// ptft->setCursor(cursorX, cursorY);
-			if (curRow + 1 > ROW)
-			{
-				scrollpg();
-				return;
-			}
-		}
-		else
-		{
-			cursorX = (cnt - offset) * fontW;
-		}
-		if (((curOS + CPL) - cnt) == 0)
-			break;
-	}
+	/*Not needed for lvgl display*/
+	return;
+	// if ((cnt - offset) == 0)
+	// 	return;
+	// int curOS = offset;
+	// while ((cnt - curOS) * fontW <= displayW)
+	// {
+	// 	// ptft->print(" "); // ASCII "Space"
+	// 	/* If needed add this character to the Pgbuf */
+	// 	if (curRow > 0)
+	// 	{
+	// 		Pgbuf[cnt - CPL] = 32;
+	// 		Pgbuf[cnt - (CPL - 1)] = 0;
+	// 		PgbufColor[cnt - CPL] = TFT_BLACK;
+	// 	}
+	// 	cnt++;
+	// 	if ((cnt - offset) * fontW >= displayW)
+	// 	{
+	// 		curRow++;
+	// 		cursorX = 0;
+	// 		cursorY = curRow * (fontH);
+	// 		offset = cnt;
+	// 		// ptft->setCursor(cursorX, cursorY);
+	// 		if (curRow + 1 > ROW)
+	// 		{
+	 			scrollpg();
+	// 			return;
+	// 		}
+	// 	}
+	// 	else
+	// 	{
+	// 		cursorX = (cnt - offset) * fontW;
+	// 	}
+	// 	if (((curOS + CPL) - cnt) == 0)
+	// 		break;
+	// }
 };
 //////////////////////////////////////////////////////////////////////
 void LVGLMsgBox::scrollpg()
 {
-	// buttonEnabled =false;
-	// unsigned long Tstrt= millis();
-	BlkState = true;
-	BlkStateCntr = 0;
-	cursorX = 0;
-	cnt = 0;
-	cursorY = 0;
-	curRow = 0;
-	offset = 0;
-	PgScrld = true;
-	bool PrintFlg = true;
-	int curptr = RingbufPntr1;
-	if (RingbufPntr2 > RingbufPntr1)
-		curptr = RingbufPntr1 + RingBufSz;
-	if ((curptr - RingbufPntr2) > CPL - 1)
-		PrintFlg = false;
-	//  enableDisplay(); //this is for touch screen support
-	if (PrintFlg)
-	{
-		// ptft->fillRect(cursorX, cursorY, displayW, ROW * (fontH), TFT_BLACK); // erase current page of text
-		// ptft->setCursor(cursorX, cursorY);
-	}
-	while (Pgbuf[cnt] != 0 && curRow + 1 < ROW)
-	{ // print current page buffer and move current text up one line
-		if (PrintFlg)
-		{
-			// ptft->setTextColor(PgbufColor[cnt]);
-			// ptft->print(Pgbuf[cnt]);
-		}
-		Pgbuf[cnt] = Pgbuf[cnt + CPL]; // shift existing text character forward by one line
-		PgbufColor[cnt] = PgbufColor[cnt + CPL];
-		cnt++;
-		if (((cnt)-offset) * fontW >= displayW)
-		{
-			curRow++;
-			offset = cnt;
-			cursorX = 0;
-			cursorY = curRow * (fontH);
-			if (PrintFlg)
-			{
-				// ptft->setCursor(cursorX, cursorY);
-			}
-		}
-		else
-		{
-			cursorX = (cnt - offset) * (fontW);
-			// ptft->setCursor(cursorX, cursorY);
-		}
-
-	} // end While Loop
-	if (!PrintFlg)
-	{ // clear last line of text
-	  // ptft->fillRect(cursorX, cursorY, displayW, (fontH), TFT_BLACK); // erase current page of text
-	  // ptft->setCursor(cursorX, cursorY);
-	}
-	/* And if needed, move the CursorPntr up one line*/
-	if (CursorPntr - CPL > 0)
-		CursorPntr = CursorPntr - CPL;
-	// char temp[50];
-	// int ScrollTime = int(millis() - Tstrt);
-	// sprintf(temp,"SCROLPG Time: %d\n", ScrollTime);
-	// printf(temp);
-	BlkState = false;
-	/* now, if a usable state change happened while scrolling the text,
-	 * apply that state value now */
-	// int blks = BlkStateCntr;
-	// while (BlkStateCntr > 0)
+	/*not needed for lvgl display*/
+	return;
+	// BlkState = true;
+	// BlkStateCntr = 0;
+	// cursorX = 0;
+	// cnt = 0;
+	// cursorY = 0;
+	// curRow = 0;
+	// offset = 0;
+	// PgScrld = true;
+	// bool PrintFlg = true;
+	// int curptr = RingbufPntr1;
+	// if (RingbufPntr2 > RingbufPntr1)
+	// 	curptr = RingbufPntr1 + RingBufSz;
+	// if ((curptr - RingbufPntr2) > CPL - 1)
+	// 	PrintFlg = false;
+	// //  enableDisplay(); //this is for touch screen support
+	// if (PrintFlg)
 	// {
-	// 	IntrCrsr(BlkStateVal[blks - BlkStateCntr]);
-	// 	BlkStateCntr--;
+	// 	// ptft->fillRect(cursorX, cursorY, displayW, ROW * (fontH), TFT_BLACK); // erase current page of text
+	// 	// ptft->setCursor(cursorX, cursorY);
 	// }
+	// while (Pgbuf[cnt] != 0 && curRow + 1 < ROW)
+	// { // print current page buffer and move current text up one line
+	// 	if (PrintFlg)
+	// 	{
+	// 		// ptft->setTextColor(PgbufColor[cnt]);
+	// 		// ptft->print(Pgbuf[cnt]);
+	// 	}
+	// 	Pgbuf[cnt] = Pgbuf[cnt + CPL]; // shift existing text character forward by one line
+	// 	PgbufColor[cnt] = PgbufColor[cnt + CPL];
+	// 	cnt++;
+	// 	if (((cnt)-offset) * fontW >= displayW)
+	// 	{
+	// 		curRow++;
+	// 		offset = cnt;
+	// 		cursorX = 0;
+	// 		cursorY = curRow * (fontH);
+	// 		if (PrintFlg)
+	// 		{
+	// 			// ptft->setCursor(cursorX, cursorY);
+	// 		}
+	// 	}
+	// 	else
+	// 	{
+	// 		cursorX = (cnt - offset) * (fontW);
+	// 		// ptft->setCursor(cursorX, cursorY);
+	// 	}
+
+	// } // end While Loop
+	
+	// /* And if needed, move the CursorPntr up one line*/
+	// if (CursorPntr - CPL > 0)
+	// 	CursorPntr = CursorPntr - CPL;
+	
+	// BlkState = false;
+	
 };
 /*Manage highlighting the CW character currently being sent*/
 /*this routine gets executed everytime the dotclockgenerates an interrupt*/
@@ -2313,7 +2316,9 @@ void LVGLMsgBox::ShwTone(uint16_t color)
 ////////////////////////////////////////////////////////
 char LVGLMsgBox::GetLastChar(void)
 {
-	return Pgbuf[cnt - (CPL + 1)];
+	/*Modified for lvgl*/
+	return Pgbuf[0];
+	//return Pgbuf[cnt - (CPL + 1)];
 };
 /*Not used inlvgl version */
 void LVGLMsgBox::UpdateToneSig(int curval)
@@ -2484,6 +2489,32 @@ void LVGLMsgBox::Exit_Settings(int paramptr)
 	xSemaphoreGive(lvgl_semaphore);
 	MutexLckId = 0;
 	
+};
+
+bool LVGLMsgBox::TestRingBufPtrs(void)
+{
+	if(RingbufPntr1 == RingbufPntr2) return true;
+	else return false;
+};
+void LVGLMsgBox::XferRingbuf(char Bfr[50])
+{
+	/*find end  of Bfr*/
+	int i =0;
+	while(Bfr[i] !=0) i++;
+	while(RingbufPntr1 != RingbufPntr2)
+	{
+		Bfr[i] = DeCdrRingbufChar[RingbufPntr2];
+		i++;
+		Bfr[i] = 0;
+		if(i == 49){// not likely to ever happen
+			Bfr[i-1] = 0;
+			return;
+		} 	
+		RingbufPntr2++;
+		if(RingbufPntr2 == RingBufSz)
+				RingbufPntr2 = 0;
+	} 
+
 };
 /*This executes when the 'Home' button event fires*/
 void Sync_Dflt_Settings(void)
