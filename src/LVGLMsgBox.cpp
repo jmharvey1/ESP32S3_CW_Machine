@@ -5,7 +5,7 @@
  *      Author: jim
  * 20230617 To support advanced DcodeCW "Bug" processes, reworked dispMsg2(void) to handle ASCII chacacter 0x8 "Backspace" symbol
  */
-
+/*20240902 re-instated setStrTxtFlg(bool flg) - mainly to clear F1 Memory */
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "LVGLMsgBox.h"
@@ -239,7 +239,7 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 			int del = 1 - (max - ta_charCnt);
 			if (del > 0)
 			{	
-				printf("LINE DELETE\n");
+				//printf("LINE DELETE\n");
 				p += del;
 				while ((*p != '\n') && (del < 98))
 				/* Cap the number of characters deleted to 98 (i.e. ~one line of displayed text), or the 1st 'new line'*/
@@ -2244,6 +2244,8 @@ void LVGLMsgBox::setSOTFlg(bool flg)
 	// 	color = TFT_YELLOW;
 	// ptft->fillRect(StusBxX+10, StusBxY + 10, Wdth, Hght, color);
 };
+/*Under Waveshare/vlgl the main purpose of this function
+is to erase/clear F1 memory when F1 is activated */
 void LVGLMsgBox::setStrTxtFlg(bool flg)
 {
 	StrTxtFlg = flg;
@@ -2253,16 +2255,20 @@ void LVGLMsgBox::setStrTxtFlg(bool flg)
 	// int Ypos = StusBxY;
 	// int Wdth = 15;
 	// int Hght = 15;
-	// if (!StrTxtFlg && SOTFlg)
-	// 	color = TFT_GREEN;
-	// else if (!StrTxtFlg && !SOTFlg)
-	// 	color = TFT_YELLOW;
-	// else
-	// {
-	// 	color = TFT_WHITE;
-	// 	pStrdTxt[0] = 0;
-	// 	txtpos = 0;
-	// }
+	if (!StrTxtFlg && SOTFlg)
+	{
+		return;	//color = TFT_GREEN;
+	}		
+	else if (!StrTxtFlg && !SOTFlg)
+	{
+		return;	//color = TFT_YELLOW;
+	}
+	else
+	{
+		//color = TFT_WHITE;
+		pStrdTxt[0] = 0;
+		txtpos = 0;
+	}
 	// ptft->fillRect(StusBxX+10, StusBxY + 10, Wdth, Hght, color);
 };
 void LVGLMsgBox::SaveSettings(void)

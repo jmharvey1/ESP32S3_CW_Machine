@@ -620,6 +620,7 @@ static void esp_ble_hidh_dev_dump(esp_hidh_dev_t *dev, FILE *fp)
 static void esp_ble_hidh_event_handler_wrapper(void *event_handler_arg, esp_event_base_t event_base, int32_t event_id,
                                                void *event_data)
 {
+    /*JMH ADD for debugging*/
     char evntname[40];
     switch (event_id)
     {
@@ -652,7 +653,7 @@ static void esp_ble_hidh_event_handler_wrapper(void *event_handler_arg, esp_even
         break;
     }
 
-    printf("JMH HID EVENT id %s", evntname);
+    //printf("JMH HID EVENT id %s", evntname);//JMH ADD for debugging
     esp_hidh_preprocess_event_handler(event_handler_arg, event_base, event_id, event_data);
 
     if (s_event_callback)
