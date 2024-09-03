@@ -6,6 +6,7 @@
  * 20230617 To support advanced DcodeCW "Bug" processes, reworked dispMsg2(void) to handle ASCII chacacter 0x8 "Backspace" symbol
  */
 /*20240902 re-instated setStrTxtFlg(bool flg) - mainly to clear F1 Memory */
+/*20240903 re-worked keyboard 'delete' key handling */
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "LVGLMsgBox.h"
@@ -217,10 +218,35 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 	// if(traceFlg) printf("update_text2(char bufChar) %c\n", bufChar);
 	if (bypassMutex)
 	{
-		
-		if(TxtArea == SendTxtArea) lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
+		int CurPos = 0;
+		if(TxtArea == SendTxtArea)
+		{
+			lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
+			CurPos = lv_textarea_get_cursor_pos(TxtArea);
+		}
 		if (bufChar == 0x08){
-			lv_textarea_del_char(TxtArea);
+			if (TxtArea == SendTxtArea)
+			{
+				lv_textarea_del_char(TxtArea);
+				// const char *p = lv_textarea_get_text(TxtArea);
+				// char LstChar = p[CurPos-1];
+				// char Mthd = ' ';
+				// if(LstChar == 0) LstChar = '?';
+				// else if(LstChar == ' ')
+				// {
+				// 	lv_textarea_del_char(TxtArea);
+				// 	LstChar = p[CurPos-1];//'*';
+				// 	Mthd = 'D';
+				// } 
+				// int ChrCnt = strlen(p);
+				// void *Oldp = (void *)p;
+				// //Oldp = (char *)realloc(Oldp, ChrCnt-1);
+				// char *TaBuf = (char *)(Oldp);
+				// if(ChrCnt>0) TaBuf[(ChrCnt-1)] = 0;//'\0';
+				// int ChrCnt2 = strlen(p);
+				// printf("CurPos:%d; ChrCnt:%d; ChrCnt2:%d; LstChar:%c; Mthd:%c;\n",CurPos , ChrCnt, ChrCnt2, LstChar, Mthd);
+			} 
+			else lv_textarea_del_char(TxtArea);
 		}
 		else if	 (bufChar == 0xFF)  //CW machine 'clear screen' command
 		{
@@ -230,6 +256,10 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 		}
 		else
 		{
+			// if (TxtArea == SendTxtArea)
+			// {
+			// 	printf("bufChar %c; Val %d\n", bufChar, (int)bufChar);
+			// }
 			/*Method to cap the max number of characters in storage at any given moment*/
 			const char *p = lv_textarea_get_text(TxtArea);
 			void *Oldp = (void *)p;
@@ -281,8 +311,18 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 			if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
 			{
 				MutexLckId = 1;
-				if(TxtArea == SendTxtArea) lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
-				
+				if(TxtArea == SendTxtArea)
+				{
+					lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
+					int CurPos = 0;
+		if(TxtArea == SendTxtArea)
+		{
+			lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
+			// CurPos = lv_textarea_get_cursor_pos(TxtArea);
+			// printf("+CurPos:%d;\n",CurPos);
+			// vTaskDelay(4/portTICK_PERIOD_MS);
+		}
+				}
 				if (bufChar == 0x08){
 					lv_textarea_del_char(TxtArea);
 				}
@@ -1393,6 +1433,7 @@ void LVGLMsgBox::KBentry(char Ascii, int paramptr)
 	/*Removed for lvgl/waveshare cursor management*/
 	// if (CursorPntr == 0)
 	// 	CursorPntr = cnt;
+	//printf("Ascii:'%c'; AsciiVal %d\n", Ascii, (int)Ascii);
 	traceFlg = true;
 	dispKeyBrdTxt(buf, color);
 };
@@ -1582,15 +1623,20 @@ void LVGLMsgBox::dispDeCdrTxt(char Msgbuf[50], uint16_t Color)
 };
 /*New for lvgl based screen
 Pathway to display text in the keyboard (CW send space)
-Note: color parameter is ignored (legacy parameter from TFTSpi Displays)*/
+Note: for lvgl, color parameter is ignored (legacy parameter from TFTSpi Displays)*/
 void LVGLMsgBox::dispKeyBrdTxt(char Msgbuf[50], uint16_t Color)
 {
 	int msgpntr = 0;
-
+	int ChrCnt = strlen(Msgbuf);
+	//printf("%d\n", ChrCnt);
+	if(ChrCnt == 2){
+		if(Msgbuf[0] == 0x08 && Msgbuf[1] == 0x20) Msgbuf[1] = 0;
+	}
 	/* Add the contents of the Msgbuf to ringbuffer */
 
 	while (Msgbuf[msgpntr] != 0)
 	{
+		//printf("%d. bufChar '%c'; Val %d\n", msgpntr,  Msgbuf[msgpntr], (int)Msgbuf[msgpntr]);
 		if (KeyBrdPntr1 < RingBufSz - 1)
 			KeyBrdRingbufChar[KeyBrdPntr1 + 1] = 0;
 		else
@@ -1601,15 +1647,7 @@ void LVGLMsgBox::dispKeyBrdTxt(char Msgbuf[50], uint16_t Color)
 		if (KeyBrdPntr1 == RingBufSz)
 			KeyBrdPntr1 = 0;
 		msgpntr++;
-		/*Added the following lines to maintain sync of the keyboard cursor as new characters are added to the screen via the CW decoder process*/
-		if (Color == TFT_GREENYELLOW)
-		{
-			if (CursorPntr < cnt + 1)
-				CursorPntr = cnt + 1;
-			// char buf[30];
-			// sprintf(buf, "CrsrPntr: %d; cnt: %d\r\n", CursorPntr, cnt);
-			// printf(buf);
-		}
+		
 	}
 };
 
@@ -1765,6 +1803,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 			} // End while (RingbufPntr2 != RingbufPntr1)
 		//	xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
 		}
+		/*now update any pending keyboard text entries*/
 		while (KeyBrdRingbufPntr2 != KeyBrdPntr1)
 		{
 			NuTxt = true;
@@ -1782,29 +1821,30 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 			}
 			// ptft->setCursor(cursorX, cursorY);
 			char curChar = KeyBrdRingbufChar[KeyBrdRingbufPntr2];
+			//printf("bufChar '%c'; Val %d\n", curChar, (int)curChar);
 			// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Start\n");
 			//  post  this character at the end of text shown in the decoded text space on the waveshare display
 			Update_textarea(SendTxtArea, curChar);
 			// printf("%c", curChar);
 			// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Complete\n");
-			if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
-			{
-				// sprintf(LogBuf,"Msg2 Delete Initiated/n");
-				if (!this->Delete(false, 1))
-					printf("Msg2 Delete FAILED!!!/n");
-				// sprintf(LogBuf,"Msg2 Delete Completed/n");
-			}
-			else if (curChar == 10)
-			{	// test for "line feed" character
-				/*LVGL version shouldn't  a /DisplCrLf() function*/
-				// DisplCrLf();
-				//  printf("cnt:%d; \n", cnt);
-			}
-			else // at this point, whatever is left shoud be regular text
-			{
+			// if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
+			// {
+			// 	// sprintf(LogBuf,"Msg2 Delete Initiated/n");
+			// 	if (!this->Delete(false, 1))
+			// 		printf("Msg2 Delete FAILED!!!/n");
+			// 	// sprintf(LogBuf,"Msg2 Delete Completed/n");
+			// }
+			// // else if (curChar == 10)
+			// // {	// test for "line feed" character
+			// // 	/*LVGL version shouldn't  a /DisplCrLf() function*/
+			// // 	// DisplCrLf();
+			// // 	//  printf("cnt:%d; \n", cnt);
+			// // }
+			// else // at this point, whatever is left shoud be regular text
+			// {
 
-				cnt++;
-			}
+			// 	cnt++;
+			// }
 
 			KeyBrdRingbufPntr2++;
 			if (KeyBrdRingbufPntr2 == RingBufSz)
@@ -1925,10 +1965,9 @@ bool LVGLMsgBox::Delete(bool DeCdTxtFlg, int ChrCnt)
 		// printf("DELETE\n");
 		if (DeCdTxtFlg)
 			Update_textarea(DecdTxtArea, (char)0x08); // Ascii value for 'Back-Space'
-		else
+		else{
 			Update_textarea(SendTxtArea, (char)0x08);
-		
-		// vTaskDelay(pdMS_TO_TICKS(10));
+		}
 		--ChrCnt;
 		/*Now if we are also storing characters (via "F1" command) need to remove last entry from that buffer too */
 		if (StrTxtFlg && (txtpos > 0))

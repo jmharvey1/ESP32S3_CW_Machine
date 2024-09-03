@@ -49,6 +49,7 @@ esp_event_loop_args_t event_task_args = {
 /*20240828 Moved CW Key output from UART TX to UART RX (GPIO44) */
 /*20240901 Removed full path reference, & reworked applying advance parser corrections */
 /*20240902 LVGLMsgBox.cpp - re-instated setStrTxtFlg(bool flg) - mainly to clear F1 Memory */
+/*20240903 re-worked keyboard 'delete' key handling */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -124,7 +125,7 @@ bool PlotFlg = false;
 bool UrTurn = true;
 bool WokeFlg = false;
 bool QuequeFulFlg = false;
-bool mutexFLG =false;
+bool mutexFLG =false; // used to manage SPI shared resource
 bool adcON =false;
 bool SkippDotClkISR = false;
 uint8_t QueFullstate;
@@ -579,10 +580,19 @@ void DisplayUpDt(void *param)
     if (thread_notification)
     {
       
-       //sprintf(LogBuf,"DisplayUpDt Started But Queque Reports FULL\n");
-      
-      if (mutexFLG)
-        printf("ERROR timer driven DisplayUpDt out of Sync\n");
+      // if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE) // wait forever
+      // {
+      //   xSemaphoreGive(mutex);
+      //   mutexFLG = false;
+      // }
+      // if (mutexFLG)
+      int lpcnt = 0;
+      while(mutexFLG){
+        lpcnt++;
+        
+        vTaskDelay(pdMS_TO_TICKS(6));
+      }
+      if(lpcnt > 0) printf("%d. ERROR timer driven DisplayUpDt out of Sync\n", lpcnt);
       // if (mutex != NULL)
       // {
       /* See if we can obtain the semaphore.  If the semaphore is not
@@ -597,7 +607,6 @@ void DisplayUpDt(void *param)
       // {
       /* We were able to obtain the semaphore and can now access the
       shared resource. */
-      //  mutexFLG = true;
       if (CWsndengn.UpDtWPM)
       {
         CWsndengn.UpDtWPM = false;
@@ -646,12 +655,6 @@ void DisplayUpDt(void *param)
         semaphore. */
         xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
       }
-      //    mutexFLG = false;
-      // tryagn = false;
-
-      // } // END while(tryagn) loop
-      // } // END if (mutex != NULL)
-      //sprintf(LogBuf,"DisplayUpDt complete\n");
       QuequeFulFlg = false;
       //printf("Cur ADC Sample Rate: %d\n", cur_smpl_rate);// just for diagnostic testing
     } // END if (thread_notification)
@@ -1435,17 +1438,10 @@ void IRAM_ATTR DotClk_ISR(void *arg)
   BaseType_t Woke;
   uint8_t state =0;
   if(SkippDotClkISR) return; //this will be true while BLE scan task is active
-  // if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
-  // {
-  //   /* We were able to obtain the semaphore and can now access the
-  //   shared resource. 
-  //   this was placed here because CWsndengn.Intr() can cause the SHOWWPM function to write to the display*/
-  //   mutexFLG = true;
+  
     state = CWsndengn.Intr(); // check CW send Engine & process as code as needed
                                       /* We have finished accessing the shared resource.  Release the semaphore. */
-  //   xSemaphoreGive(mutex);
-  //   mutexFLG = false;
-  // }
+  
   if (state != 0)
   {
     vTaskSuspend(CWDecodeTaskHandle);
@@ -1482,7 +1478,7 @@ void ProcsKeyEntry(uint8_t keyVal)
 {
   bool addspce = false;
   char SpcChr = char(0x20);
-
+  //printf("bufChar '%c'; Val %d\n", (char)keyVal, (int)keyVal);
   if (keyVal == 0x8)
   {                                  //"BACKSpace" key pressed
     int ChrCnt = CWsndengn.Delete(); // test to see if there's an "unsent" character that can be deleted
@@ -1505,7 +1501,10 @@ void ProcsKeyEntry(uint8_t keyVal)
         shared resource. */
         mutexFLG = true;
         /*TODO When Keyboard is enabled, this needs work*/
-        lvglmsgbx.Delete(false, ChrCnt);
+        //lvglmsgbx.Delete(false, ChrCnt);
+        char DelChar[1];
+			  DelChar[0]= 0x08;
+        lvglmsgbx.dispKeyBrdTxt(DelChar, (uint16_t)0x00);//
         /* We have finished accessing the shared resource.  Release the
         semaphore. */
         xSemaphoreGive(mutex);
