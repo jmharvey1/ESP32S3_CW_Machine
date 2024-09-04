@@ -7,6 +7,7 @@
  */
 /*20240902 re-instated setStrTxtFlg(bool flg) - mainly to clear F1 Memory */
 /*20240903 re-worked keyboard 'delete' key handling */
+/*20240904 re-worked cursor management, in send test area, to improve outgoing character hilighting */
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "LVGLMsgBox.h"
@@ -120,7 +121,7 @@ static void screen1_event_handler(lv_event_t *e)
 	{
 	case LV_EVENT_CLICKED:
 	{
-		printf("Main Screen (sc_1) 'Settings' button click event\n");
+		//printf("Main Screen (sc_1) 'Settings' button click event\n");
 		setupFlg = true;
 	}
 	break;
@@ -214,17 +215,19 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 	char buf2[25];
 	bool tryagn = true;
 	bool updateCharCnt = false;
-	if(SendTxtArea == TxtArea) updateCharCnt = true;
+	if (SendTxtArea == TxtArea)
+		updateCharCnt = true;
 	// if(traceFlg) printf("update_text2(char bufChar) %c\n", bufChar);
 	if (bypassMutex)
 	{
 		int CurPos = 0;
-		if(TxtArea == SendTxtArea)
+		if (TxtArea == SendTxtArea)
 		{
 			lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
 			CurPos = lv_textarea_get_cursor_pos(TxtArea);
 		}
-		if (bufChar == 0x08){
+		if (bufChar == 0x08)
+		{
 			if (TxtArea == SendTxtArea)
 			{
 				lv_textarea_del_char(TxtArea);
@@ -237,7 +240,7 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 				// 	lv_textarea_del_char(TxtArea);
 				// 	LstChar = p[CurPos-1];//'*';
 				// 	Mthd = 'D';
-				// } 
+				// }
 				// int ChrCnt = strlen(p);
 				// void *Oldp = (void *)p;
 				// //Oldp = (char *)realloc(Oldp, ChrCnt-1);
@@ -245,14 +248,16 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 				// if(ChrCnt>0) TaBuf[(ChrCnt-1)] = 0;//'\0';
 				// int ChrCnt2 = strlen(p);
 				// printf("CurPos:%d; ChrCnt:%d; ChrCnt2:%d; LstChar:%c; Mthd:%c;\n",CurPos , ChrCnt, ChrCnt2, LstChar, Mthd);
-			} 
-			else lv_textarea_del_char(TxtArea);
+			}
+			else
+				lv_textarea_del_char(TxtArea);
 		}
-		else if	 (bufChar == 0xFF)  //CW machine 'clear screen' command
+		else if (bufChar == 0xFF) // CW machine 'clear screen' command
 		{
 			lv_textarea_set_text(TxtArea, "");
-			if(updateCharCnt) CurKyBrdCharCnt =0;
-			//printf("CLEAR TEXT AREA 2\n");
+			if (updateCharCnt && (TxtArea == SendTxtArea))
+				CurKyBrdCharCnt = 0;
+			// printf("CLEAR TEXT AREA 2\n");
 		}
 		else
 		{
@@ -265,11 +270,12 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 			void *Oldp = (void *)p;
 			int max = lv_textarea_get_max_length(TxtArea);
 			ta_charCnt = strlen(p);
-			if(updateCharCnt) CurKyBrdCharCnt = ta_charCnt;
+			if (updateCharCnt && (TxtArea == SendTxtArea))
+				CurKyBrdCharCnt = ta_charCnt;
 			int del = 1 - (max - ta_charCnt);
 			if (del > 0)
-			{	
-				//printf("LINE DELETE\n");
+			{
+				// printf("LINE DELETE\n");
 				p += del;
 				while ((*p != '\n') && (del < 98))
 				/* Cap the number of characters deleted to 98 (i.e. ~one line of displayed text), or the 1st 'new line'*/
@@ -282,26 +288,37 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 					del++;
 					p++;
 				}
-				memcpy(Oldp, p, max - del); //shift the remaining text to the original start location
+				memcpy(Oldp, p, max - del); // shift the remaining text to the original start location
 				Oldp = (char *)realloc(Oldp, 1 + (max - del));
 				ta_charCnt = (max - del) + 1;
-				if(updateCharCnt) CurKyBrdCharCnt = ta_charCnt;
+				if (updateCharCnt && (TxtArea == SendTxtArea))
+					CurKyBrdCharCnt = ta_charCnt;
 				char *TaBuf = (char *)(Oldp);
 				TaBuf[(max - del)] = '\0'; // terminate the newly truncated text buffer w/ a 								//a NULL
+				/*now if the send text area is bienf update, need to recalc where the cureent letter being sent
+				 * located within the text string*/
+				if (TxtArea == SendTxtArea)
+					KBrdCursorPntr -= del;
 				vTaskDelay(pdMS_TO_TICKS(20));
 			}
 			/*END CAP Text stored code*/
 			if (TxtArea != SendTxtArea)
-				lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST); 
+				lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
 			lv_textarea_add_char(TxtArea, bufChar);
 		}
-		if(!updateCharCnt) lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
-		
-		if(updateCharCnt) ta_charCnt = CurKyBrdCharCnt;	
-		 
-		else ta_charCnt++;
-		sprintf(buf2, "CharCnt: %d", ta_charCnt);
-		lv_label_set_text(label2, buf2);
+		if (!updateCharCnt)
+			lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
+
+		if (updateCharCnt)
+			ta_charCnt = CurKyBrdCharCnt;
+
+		else
+			ta_charCnt++;
+		if (TxtArea == DecdTxtArea)
+		{
+			sprintf(buf2, "CharCnt: %d", ta_charCnt);
+			lv_label_set_text(label2, buf2);
+		}
 	} // end bypass set mutex
 	else
 	{
@@ -311,42 +328,49 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 			if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
 			{
 				MutexLckId = 1;
-				if(TxtArea == SendTxtArea)
+				if (TxtArea == SendTxtArea)
 				{
 					lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
 					int CurPos = 0;
-		if(TxtArea == SendTxtArea)
-		{
-			lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
-			// CurPos = lv_textarea_get_cursor_pos(TxtArea);
-			// printf("+CurPos:%d;\n",CurPos);
-			// vTaskDelay(4/portTICK_PERIOD_MS);
-		}
+					if (TxtArea == SendTxtArea)
+					{
+						lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
+						// CurPos = lv_textarea_get_cursor_pos(TxtArea);
+						// printf("+CurPos:%d;\n",CurPos);
+						// vTaskDelay(4/portTICK_PERIOD_MS);
+					}
 				}
-				if (bufChar == 0x08){
+				if (bufChar == 0x08)
+				{
 					lv_textarea_del_char(TxtArea);
 				}
-				else if	 (bufChar == 0xFF)
+				else if (bufChar == 0xFF)
 				{
 					lv_textarea_set_text(TxtArea, "");
-					if(updateCharCnt) CurKyBrdCharCnt =0;
-					//printf("CLEAR TEXT AREA 1\n");
-				}	
-				else{
+					if (updateCharCnt)
+						CurKyBrdCharCnt = 0;
+					// printf("CLEAR TEXT AREA 1\n");
+				}
+				else
+				{
 					lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
 					lv_textarea_add_char(TxtArea, bufChar);
 				}
 				if (TxtArea == SendTxtArea)
-					lv_textarea_set_cursor_pos(TxtArea,  KBrdCursorPntr);
+					lv_textarea_set_cursor_pos(TxtArea, KBrdCursorPntr);
 				else
 					lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
 				ta_charCnt++;
-				if(updateCharCnt) {
+				if (updateCharCnt && (TxtArea == SendTxtArea))
+				{
 					const char *p = lv_textarea_get_text(TxtArea);
 					CurKyBrdCharCnt = strlen(p);
-				} 
-				sprintf(buf2, "CharCnt: %d", ta_charCnt);
-				lv_label_set_text(label2, buf2);
+				}
+				if (TxtArea == DecdTxtArea)
+				{
+					sprintf(buf2, "CharCnt: %d", ta_charCnt);
+					lv_label_set_text(label2, buf2);
+				}
 				xSemaphoreGive(lvgl_semaphore);
 				MutexLckId = 0;
 				tryagn = false;
@@ -363,7 +387,6 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 			}
 		}
 	}
-	//if(updateCharCnt  && (bufChar == '\n')) CurKyBrdCharCnt++;
 	return;
 }
 /*Text Label that hosts Decoder Stats: WPM/Freq/Mode & other*/
@@ -543,20 +566,19 @@ void lvgl_DeSelct_Param(int paramptr)
 	{
 	case 0:
 		lv_obj_add_style(MyCallta, &style_Deslctd_bg, 0);
-		printf("deselected MyCallta\n");
+		//printf("deselected MyCallta\n");
 		break;
 	case 1:
 		lv_obj_add_style(WPMta, &style_Deslctd_bg, 0);
-		printf("deselected WPMta\n");
+		//printf("deselected WPMta\n");
 		break;
 	case 2:
 		lv_obj_add_style(chkbx_lbl, &style_Deslctd_bg, 0);
-		// lv_obj_add_style(Dbg_ChkBx, &style_Deslctd_bg, 0);
-		printf("deselected Dbg_ChkBx\n");
+		//printf("deselected Dbg_ChkBx\n");
 		break;
 	case 3:
 		lv_obj_add_style(MemF2ta, &style_Deslctd_bg, 0);
-		printf("deselected MemF2ta\n");
+		//printf("deselected MemF2ta\n");
 		break;
 	case 4:
 		lv_obj_add_style(MemF3ta, &style_Deslctd_bg, 0);
@@ -564,23 +586,23 @@ void lvgl_DeSelct_Param(int paramptr)
 		break;
 	case 5:
 		lv_obj_add_style(MemF4ta, &style_Deslctd_bg, 0);
-		printf("deselected MemF4ta\n");
+		//printf("deselected MemF4ta\n");
 		break;
 	case 6:
 		lv_obj_add_style(MemF5ta, &style_Deslctd_bg, 0);
-		printf("deselected MemF5ta\n");
+		//printf("deselected MemF5ta\n");
 		break;
 	case 7:
 		lv_obj_add_style(save_btn, &style_BtnDeslctd_bg, 0);
-		printf("deselected save_btn\n");
+		//printf("deselected save_btn\n");
 		break;
 	case 8:
 		lv_obj_add_style(exit_btn, &style_BtnDeslctd_bg, 0);
-		printf("deselected exit_btn\n");
+		//printf("deselected exit_btn\n");
 		break;
 	}
 };
-/*Updates selected setting */
+/*Seeting Screen - Updates selected setting */
 void lvgl_HiLite_Seltcd_Param(int paramptr)
 {
 	//style_Slctd_bg
@@ -592,42 +614,41 @@ void lvgl_HiLite_Seltcd_Param(int paramptr)
 	{
 	case 0:
 		lv_obj_add_style(MyCallta, &style_Slctd_bg, 0);
-		printf("Selected MyCallta\n\n");
+		//printf("Selected MyCallta\n\n");
 		break;
 	case 1:
 		lv_obj_add_style(WPMta, &style_Slctd_bg, 0);
-		printf("Selected WPMta\n\n");
+		//printf("Selected WPMta\n\n");
 		break;
 	case 2:
 	{
 		lv_obj_add_style(chkbx_lbl, &style_Slctd_bg, 0);
-		// lv_obj_add_style(Dbg_ChkBx, &style_Slctd_bg, 0);
-		printf("Selected Dbg_ChkBx\n\n");
+		//printf("Selected Dbg_ChkBx\n\n");
 		break;
 	}
 	case 3:
 		lv_obj_add_style(MemF2ta, &style_Slctd_bg, 0);
-		printf("Selected MemF2ta\n\n");
+		//printf("Selected MemF2ta\n\n");
 		break;
 	case 4:
 		lv_obj_add_style(MemF3ta, &style_Slctd_bg, 0);
-		printf("Selected MemF3ta\n\n");
+		//printf("Selected MemF3ta\n\n");
 		break;
 	case 5:
 		lv_obj_add_style(MemF4ta, &style_Slctd_bg, 0);
-		printf("Selected MemF4ta\n\n");
+		//printf("Selected MemF4ta\n\n");
 		break;
 	case 6:
 		lv_obj_add_style(MemF5ta, &style_Slctd_bg, 0);
-		printf("Selected MemF5ta\n\n");
+		//printf("Selected MemF5ta\n\n");
 		break;
 	case 7:
 		lv_obj_add_style(save_btn, &style_Slctd_bg, 0);
-		printf("Selected save_btn\n\n");
+		//printf("Selected save_btn\n\n");
 		break;
 	case 8:
 		lv_obj_add_style(exit_btn, &style_Slctd_bg, 0);
-		printf("Selected exit_btn\n\n");
+		//printf("Selected exit_btn\n\n");
 		break;
 	}
 }
@@ -912,7 +933,7 @@ void Bld_LVGL_GUI(void)
 	}
 	else
 	{
-		printf("SKIP win1 = lv_win_create(scr_1, title_height);\n");
+		//printf("SKIP win1 = lv_win_create(scr_1, title_height);\n");
 	}
 
 	/*Setup settings button at bottom of display*/
@@ -2181,7 +2202,7 @@ void LVGLMsgBox::RestoreBG(void)
 	// ptft->print(Pgbuf[CursorPntr - CPL]);
 	/*following was added to support lvgl/waveshare cursor management*/
 	KBrdCursorPntr++;
-	if(KBrdCursorPntr > CurKyBrdCharCnt+1)  KBrdCursorPntr = CurKyBrdCharCnt+1;//CurKyBrdCharCnt = KBrdCursorPntr;  
+	if(KBrdCursorPntr > CurKyBrdCharCnt+1)  KBrdCursorPntr = CurKyBrdCharCnt+1;  
 	BGHilite = false;
 	UpdtKyBrdCrsr = true;
 	// if(CursorPntr == cnt) CursorPntr = 0;

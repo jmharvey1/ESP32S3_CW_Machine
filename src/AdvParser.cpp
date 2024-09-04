@@ -1702,7 +1702,7 @@ bool AdvParser::SloppyBgRules(int &n)
     }
     /*Should never Get Here*/
     ExitPath[n] = 22;
-    printf("Error 2: NO letter brk test\n");
+    printf("Error 3: NO letter brk test\n");
     return ltrbrkFlg;
 };
 ////////////////////////////////////////////////////////
@@ -2158,7 +2158,7 @@ bool AdvParser::Bug1Rules(int &n)
         }
         else
         {
-            printf("Error 2: NO letter brk test\n");
+            printf("Error 4: NO letter brk test\n");
             ExitPath[n] = 20;
             return ltrbrkFlg;
         }
@@ -2172,7 +2172,7 @@ bool AdvParser::Bug1Rules(int &n)
     }
     /*Should never Get Here*/
     ExitPath[n] = 22;
-    printf("Error 2: NO letter brk test\n");
+    printf("Error 5: NO letter brk test\n");
     return ltrbrkFlg;
 };
 
@@ -2527,7 +2527,7 @@ bool AdvParser::Bug2Rules(int &n)
     }
     /*Should never Get Here*/
     ExitPath[n] = 21;
-    printf("Error 2: NO letter brk test\n");
+    printf("Error 6: NO letter brk test\n");
     return ltrbrkFlg;
 };
 ////////////////////////////////////////////////////////

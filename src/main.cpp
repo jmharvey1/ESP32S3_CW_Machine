@@ -50,6 +50,7 @@ esp_event_loop_args_t event_task_args = {
 /*20240901 Removed full path reference, & reworked applying advance parser corrections */
 /*20240902 LVGLMsgBox.cpp - re-instated setStrTxtFlg(bool flg) - mainly to clear F1 Memory */
 /*20240903 re-worked keyboard 'delete' key handling */
+/*20240904 LVGLMsgBox.cpp - re-worked cursor management, in send test area, to improve outgoing character hilighting */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -1271,7 +1272,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     //printf("main loop\n");
     if (setupFlg)
     {
-      printf("setupFlg: 'true'\n");
+      //printf("setupFlg: 'true'\n");
       /*if true, exit main loop and jump to "settings" screen */
       bool IntSOTstate = CWsndengn.GetSOTflg();
       if (IntSOTstate)
