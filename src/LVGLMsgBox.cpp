@@ -8,6 +8,7 @@
 /*20240902 re-instated setStrTxtFlg(bool flg) - mainly to clear F1 Memory */
 /*20240903 re-worked keyboard 'delete' key handling */
 /*20240904 re-worked cursor management, in send test area, to improve outgoing character hilighting */
+/*20240924 reworked Update_textarea() when 'capping the ta buffer to take in account the character width*/
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "LVGLMsgBox.h"
@@ -261,47 +262,62 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 		}
 		else
 		{
-			// if (TxtArea == SendTxtArea)
-			// {
-			// 	printf("bufChar %c; Val %d\n", bufChar, (int)bufChar);
-			// }
 			/*Method to cap the max number of characters in storage at any given moment*/
 			const char *p = lv_textarea_get_text(TxtArea);
 			void *Oldp = (void *)p;
 			int max = lv_textarea_get_max_length(TxtArea);
 			ta_charCnt = strlen(p);
-			if (updateCharCnt && (TxtArea == SendTxtArea))
-				CurKyBrdCharCnt = ta_charCnt;
+			if (updateCharCnt && (TxtArea == SendTxtArea)) CurKyBrdCharCnt = ta_charCnt;
 			int del = 1 - (max - ta_charCnt);
 			if (del > 0)
 			{
-				// printf("LINE DELETE\n");
-				p += del;
-				while ((*p != '\n') && (del < 98))
-				/* Cap the number of characters deleted to 98 (i.e. ~one line of displayed text), or the 1st 'new line'*/
-				{
+				del = 0;
+				//p += del;
+				int w = 0;
+				int lastWrdBrk = 0;
+				char *TaBuf = (char *)(Oldp);
+				lv_point_t Scrn_pt;
+				lv_draw_label_dsc_t label_dsc;
+            	lv_draw_label_dsc_init(&label_dsc);
+            	label_dsc.font = &lv_font_montserrat_18;
+				char curChr;
+				while ((*p != '\n') && (del < 98) && (w < 800)) // && (w < 760)
+				{/* Cap the number of characters deleted to 98 (i.e. ~one line of displayed text), or the 1st 'new line'*/
 					del++;
 					p++;
+					curChr = TaBuf[del];
+					if(curChr == 0x20) lastWrdBrk = del;  
+					TaBuf[del] = '\0';
+				
+        			lv_txt_get_size(&Scrn_pt, TaBuf, label_dsc.font, label_dsc.letter_space, label_dsc.line_space, LV_COORD_MAX,
+                        label_dsc.flag);
+        			w = Scrn_pt.x;
+					//printf("del %d; X: %d; %s\n", del, w, TaBuf);
+					TaBuf[del] = curChr;
 				} // end while
 				if (*p == '\n')
 				{
 					del++;
 					p++;
 				}
+				else if(lastWrdBrk < del )
+				{
+					p -= del - lastWrdBrk;
+					del = lastWrdBrk;
+				}
+				//printf("del %d\n\n", del);
 				memcpy(Oldp, p, max - del); // shift the remaining text to the original start location
 				Oldp = (char *)realloc(Oldp, 1 + (max - del));
 				ta_charCnt = (max - del) + 1;
 				if (updateCharCnt && (TxtArea == SendTxtArea))
 					CurKyBrdCharCnt = ta_charCnt;
-				char *TaBuf = (char *)(Oldp);
+				//char *TaBuf = (char *)(Oldp);
 				TaBuf[(max - del)] = '\0'; // terminate the newly truncated text buffer w/ a 								//a NULL
-				/*now if the send text area is bienf update, need to recalc where the cureent letter being sent
+				/*now if the send text area is being updated, need to recalc where the current letter being sent
 				 * located within the text string*/
-				if (TxtArea == SendTxtArea)
-					KBrdCursorPntr -= del;
+				if (TxtArea == SendTxtArea) KBrdCursorPntr -= del;
 				vTaskDelay(pdMS_TO_TICKS(20));
-			}
-			/*END CAP Text stored code*/
+			}/*END CAP Text stored code*/
 			if (TxtArea != SendTxtArea)
 				lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
 			lv_textarea_add_char(TxtArea, bufChar);
@@ -884,8 +900,8 @@ void Bld_LVGL_GUI(void)
 		lv_bar_set_value(bar1, 10, LV_ANIM_OFF);
 		DecdTxtArea = lv_textarea_create(cont1);
 		SendTxtArea = lv_textarea_create(cont1);
-		lv_obj_set_size(DecdTxtArea, 760, 179); // widht & Height
-		lv_obj_set_size(SendTxtArea, 760, 179); // widht & Height
+		lv_obj_set_size(DecdTxtArea, 760, 179); // width & Height
+		lv_obj_set_size(SendTxtArea, 760, 179); // width & Height
 		lv_obj_set_pos(DecdTxtArea, 0, 0);
 		lv_obj_set_pos(SendTxtArea, 0, 220);
 		lv_textarea_set_max_length(DecdTxtArea, 804);									// 1000-(2*98) = 804

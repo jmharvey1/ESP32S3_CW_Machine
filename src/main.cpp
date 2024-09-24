@@ -51,6 +51,7 @@ esp_event_loop_args_t event_task_args = {
 /*20240902 LVGLMsgBox.cpp - re-instated setStrTxtFlg(bool flg) - mainly to clear F1 Memory */
 /*20240903 re-worked keyboard 'delete' key handling */
 /*20240904 LVGLMsgBox.cpp - re-worked cursor management, in send test area, to improve outgoing character hilighting */
+/*20240924 LVGLMsgBox.cpp - reworked Update_textarea() when 'capping the ta buffer to take in account character width & word breaks*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

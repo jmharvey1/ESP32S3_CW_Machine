@@ -2082,7 +2082,8 @@ esp_err_t BTKeyboard::start_ble_scan(uint32_t seconds)
     return ret;
   }
   WAIT_BLE_CB();
-
+  int64_t alarm = esp_timer_get_time();
+  printf("alarm: %llu\n",alarm);
   if ((ret = esp_ble_gap_start_scanning(seconds)) != ESP_OK)
   {
     ESP_LOGE(TAG, "esp_ble_gap_start_scanning failed: %d", ret);
@@ -2230,8 +2231,12 @@ BTKeyboard::esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_res
   if (start_ble_scan(seconds) == ESP_OK)
   {
     printf("BLE scan - START\n");
+    //printf("Free memory: %d bytes\n", (int)esp_get_free_heap_size());
+    /*Uncomment next 2 lins for Crash Demo*/
+    //int *ptr = NULL;
+    //*ptr = 0;
     WAIT_BLE_CB();
-     printf("BLE scan - DONE\n");
+    printf("BLE scan - DONE\n");
   }
   else
   {

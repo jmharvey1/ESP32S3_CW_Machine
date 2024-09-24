@@ -884,8 +884,8 @@ err:
 esp_err_t i2c_master_bus_add_device(i2c_master_bus_handle_t bus_handle, const i2c_device_config_t *dev_config, i2c_master_dev_handle_t *ret_handle)
 {
     esp_err_t ret = ESP_OK;
-    if(bus_handle != NULL)  printf("i2c_master.c - bus_handle: %p\n", bus_handle); //JMH ADD
-    else  printf("i2c_master.c - ERROR: i2c_master_bus_handle is NULL !!!\n");
+    //if(bus_handle != NULL)  printf("i2c_master.c - bus_handle: %p\n", bus_handle); //JMH ADD
+    //else  printf("i2c_master.c - ERROR: i2c_master_bus_handle is NULL !!!\n");
     ESP_RETURN_ON_FALSE((bus_handle != NULL), ESP_ERR_INVALID_ARG, TAG, "this bus is not initialized, please call `i2c_new_master_bus`");
     ESP_RETURN_ON_FALSE(dev_config, ESP_ERR_INVALID_ARG, TAG, "invalid argument");
     ESP_RETURN_ON_FALSE(dev_config->scl_speed_hz > 0, ESP_ERR_INVALID_ARG, TAG, "invalid scl frequency");
