@@ -2,6 +2,7 @@
     "files.associations": {
         "random": "cpp",
         "limits": "cpp",
-        "ble_hidh.h": "c"
+        "ble_hidh.h": "c",
+        "i2c_types.h": "c"
     }
 }

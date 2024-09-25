@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+/*20240925 updated i2c_device_config_t definition/structure*/
 
 #pragma once
 
@@ -34,11 +35,25 @@ typedef struct {
 /**
  * @brief I2C device configuration
  */
+// typedef struct {
+//     i2c_addr_bit_len_t dev_addr_length;         /*!< Select the address length of the slave device. */
+//     uint16_t device_address;                    /*!< I2C device raw address. (The 7/10 bit address without read/write bit) */
+//     uint32_t scl_speed_hz;                      /*!< I2C SCL line frequency. */
+// } i2c_device_config_t;
+/**
+ * @brief I2C device configuration
+ */
 typedef struct {
     i2c_addr_bit_len_t dev_addr_length;         /*!< Select the address length of the slave device. */
     uint16_t device_address;                    /*!< I2C device raw address. (The 7/10 bit address without read/write bit) */
     uint32_t scl_speed_hz;                      /*!< I2C SCL line frequency. */
+    uint32_t scl_wait_us;                      /*!< Timeout value. (unit: us). Please note this value should not be so small that it can handle stretch/disturbance properly. If 0 is set, that means use the default reg value*/
+    struct {
+        uint32_t disable_ack_check:      1;     /*!< Disable ACK check. If this is set false, that means ack check is enabled, the transaction will be stoped and API returns error when nack is detected. */
+    } flags;                                    /*!< I2C device config flags */
 } i2c_device_config_t;
+
+
 
 /**
  * @brief Group of I2C master callbacks, can be used to get status during transaction or doing other small things. But take care potential concurrency issues.

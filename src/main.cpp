@@ -52,6 +52,7 @@ esp_event_loop_args_t event_task_args = {
 /*20240903 re-worked keyboard 'delete' key handling */
 /*20240904 LVGLMsgBox.cpp - re-worked cursor management, in send test area, to improve outgoing character hilighting */
 /*20240924 LVGLMsgBox.cpp - reworked Update_textarea() when 'capping the ta buffer to take in account character width & word breaks*/
+/*20240925 locked down espidf version & i2c_master.h updated i2c_device_config_t definition/structure */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
