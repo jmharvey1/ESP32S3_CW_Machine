@@ -5,12 +5,12 @@ and at 1022, added free(i2c_dev->master_bus->anyc_write_buffer[i2c_dev->master_b
 NOTE: The ESPHomeFlasher does NOT work with the ESP32s3. To flash the esp32s3 directly:
 1. install esptool using this command:
         pip install esptool
-2. copy the following these three files found, in this folder, to a local directory, on your computer:
+2. copy these three files, found in this folder, to a local directory, on your computer:
         1.  bootloader.bin
         2.  partitions.bin
         3.  firmware.bin
 3. open a terminal in the local directory you copied the above files to, and run the following command:
     esptool.py -p /dev/ttyACM0 -b 460800 --before default_reset --after hard_reset --chip esp32s3 write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
 
-For more detail related to installing esptool see:
+For more detail related to installing "esptool", see:
         https://docs.espressif.com/projects/esptool/en/latest/esp32s3/installation.html#installation
