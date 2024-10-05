@@ -47,7 +47,7 @@ resistors 2.2K to 15K (4)
   
 ___
 
-For those who want to bypass the source code, and just "flash" your ESP32s3, follow the instructions found in the [notes.txt file](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/notes.txt)>) and download these 3 files [firmware.bin](https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/firmware.bin) , [bootloader.bin](https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/bootloder.bin), & [partitions.bin](https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/partitions.bin)found at these links.
+For those who want to bypass the source code, and just "flash" your ESP32s3, follow the instructions found in the [notes.txt file](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/notes.txt>) and download these 3 files [firmware.bin](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/firmware.bin>) , [bootloader.bin](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/bootloader.bin>), & [partitions.bin](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/partitions.bin>) found at these links.
   
 ___
 
