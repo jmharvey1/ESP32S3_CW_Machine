@@ -58,6 +58,7 @@ extern TaskHandle_t AdvParserTaskHandle;
 extern SemaphoreHandle_t mutex;//JMH Added
 extern SemaphoreHandle_t ADCread_disp_refr_timer_mutx;
 extern SemaphoreHandle_t DsplUpDt_AdvPrsrTsk_mutx;
+
 extern TaskHandle_t GoertzelTaskHandle;
 extern TaskHandle_t CWDecodeTaskHandle;
 extern TaskHandle_t BLEscanTask_hndl;

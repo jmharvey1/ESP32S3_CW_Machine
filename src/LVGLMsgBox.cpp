@@ -9,6 +9,7 @@
 /*20240903 re-worked keyboard 'delete' key handling */
 /*20240904 re-worked cursor management, in send test area, to improve outgoing character hilighting */
 /*20240924 reworked Update_textarea() when 'capping the ta buffer to take in account the character width*/
+
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "LVGLMsgBox.h"
@@ -838,11 +839,11 @@ void Bld_Settings_scrn(void)
 	}
 	lv_scr_load(scr_2);
 
-	if (scr_1 != NULL)
-	{
-		printf("[APP] Free memory: %d bytes\n", (int)esp_get_free_heap_size());
-		printf("Hide Screen1:\n");
-	}
+	// if (scr_1 != NULL)
+	// {
+	// 	printf("[APP] Free memory: %d bytes\n", (int)esp_get_free_heap_size());
+	// 	printf("Hide Screen1:\n");
+	// }
 }
 
 /*Build GUI */
@@ -1748,7 +1749,13 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  xSemaphoreTake; Sucess\n");
 		/*Test to see if touch sensing can be managed under the normal screen refresh task*/
 		if(!indev_drv.read_timer->paused) printf("indev_drv.read_timer No longer 'PAUSED'\n");
-		lv_indev_read_timer_cb(indev_drv.read_timer);
+		//if (xSemaphoreTake(Touch_mutex, pdMS_TO_TICKS(5)) == pdTRUE) // Most of the time this will be true. But NOT while a BLE connect operation is happening
+		if (Touch_mutex)
+		{
+			lv_indev_read_timer_cb(indev_drv.read_timer);
+			//xSemaphoreGive(Touch_mutex);
+		}
+
 		if (NuToneVal & !setupFlg)
 		{
 

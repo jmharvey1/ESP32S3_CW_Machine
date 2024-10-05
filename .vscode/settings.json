@@ -3,6 +3,7 @@
         "random": "cpp",
         "limits": "cpp",
         "ble_hidh.h": "c",
-        "i2c_types.h": "c"
+        "i2c_types.h": "c",
+        "esp_hidh.h": "c"
     }
 }

@@ -146,6 +146,7 @@ QueueHandle_t RxSig_que;
 SemaphoreHandle_t mutex;
 SemaphoreHandle_t DsplUpDt_AdvPrsrTsk_mutx;
 SemaphoreHandle_t ADCread_disp_refr_timer_mutx;
+bool Touch_mutex = true; //used to navigate touch I2C conflicts during BLE connection
 
 /* the following 2 entries are for diagnostic capture of raw DMA ADC data*/
 #ifdef POSTADC
@@ -660,6 +661,11 @@ void DisplayUpDt(void *param)
       }
       QuequeFulFlg = false;
       //printf("Cur ADC Sample Rate: %d\n", cur_smpl_rate);// just for diagnostic testing
+      bool HeapOK = heap_caps_check_integrity_all(true);
+      if(!HeapOK)
+      {
+        printf("Heap ISSUE\n");
+      }
     } // END if (thread_notification)
   } // end while(1) loop
   /** JMH Added this to ESP32 version to handle random crashing with error,"Task Goertzel Task should not return, Aborting now" */

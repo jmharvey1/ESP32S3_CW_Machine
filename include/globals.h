@@ -9,6 +9,10 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "freertos/queue.h"
 
 
 /*Added here just to get past compile error for references no longer needed for lvgl version of this project*/
@@ -42,6 +46,7 @@
 extern char LogBuf[];
 
 extern bool mutexFLG;//JMH Added
+extern bool Touch_mutex;
 
 
 #endif /* INC_GLOBALS_H_ */

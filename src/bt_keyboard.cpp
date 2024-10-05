@@ -28,6 +28,7 @@
 #include <stdio.h>  //JMH added
 #include <string.h> //JMH added
 #include "esp_hidh_private.h"
+#include "globals.h"
 extern "C"
 {
 #include "btc/btc_ble_storage.h"
@@ -71,6 +72,7 @@ const char BTKeyboard::shift_trans_dict[] =
 static bool Shwgattcb = false;//used for debugging BLE reconnect  
 static bool PairFlg1 = false;
 bool PauseFlg = false;
+bool hidOpnFlg = false;
 static esp_bd_addr_t Prd_bda;
 static esp_ble_addr_type_t Prd_addr_type;
 BTKeyboard *BLE_KyBrd = nullptr;
@@ -107,6 +109,7 @@ struct gattc_profile_inst
   uint16_t char_handle;
   esp_bd_addr_t remote_bda;
 };
+static void esp_ble_hidh_dev_dump(esp_hidh_dev_t *dev, FILE *fp); //JMH ADDED
 static void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
 static void gattc_battery_service_event_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param);
 /* One gatt-based profile one app_id and one gattc_if, this array will store the gattc_if returned by ESP_GATTS_REG_EVT */
@@ -191,6 +194,9 @@ static void gattc_battery_service_event_cb(esp_gattc_cb_event_t event, esp_gatt_
       ESP_LOGE(TAG_evnt, "(battery)read char failed, error status = %x", p_data->read.status);
       break;
     }
+    // else{
+    //   printf("gattc_battery_service_event_cb - ESP_GATTC_READ_CHAR_EVT\n");
+    // }
 // ESP_LOGI(TAG_evnt, "(battery)read char success ");
 #ifdef gatDebug
     ESP_LOGI(TAG_evnt, "p_data->read.value_len %d", p_data->read.value_len);
@@ -202,13 +208,13 @@ static void gattc_battery_service_event_cb(esp_gattc_cb_event_t event, esp_gatt_
       {
 
         /*now make sure we have a NULL terminated string*/
-        int i = 0;
-        while ((char_pointer[i] != 0) && (i < p_data->read.value_len))
-        {
-          i++;
-        }
-        if (i == p_data->read.value_len)
-          char_pointer[p_data->read.value_len] = 0;
+        // int i = 0;
+        // while ((char_pointer[i] != 0) && (i < p_data->read.value_len))
+        // {
+        //   i++;
+        // }
+        // if (i == p_data->read.value_len)
+        //   char_pointer[p_data->read.value_len] = 0;
 #ifdef gatDebug          
         ESP_LOGI(TAG_evnt, "Battery Info: %s", char_pointer);
 #endif
@@ -221,6 +227,7 @@ static void gattc_battery_service_event_cb(esp_gattc_cb_event_t event, esp_gatt_
         ESP_LOGI(TAG_evnt, "Battery level: %d%%", BLE_KyBrd->get_battery_level());
 #endif
       }
+      if(hidOpnFlg) p_data->read.value_len = 0;// added this to prevent ble_hidh.c esp_hidh_gattc_event_handler() from processing ESP_GATTC_READ_CHAR_EVT
     }
 
     break;
@@ -365,6 +372,11 @@ static void gattc_battery_service_event_cb(esp_gattc_cb_event_t event, esp_gatt_
       ESP_LOGE(TAG_evnt, "(battery)read descr failed, error status = %x", p_data->write.status);
       break;
     }
+    // else
+    // {
+    //   printf("gattc_battery_service_event_cb - ESP_GATTC_READ_DESCR_EVT\n");
+
+    // }
     // ESP_LOGI(TAG_evnt, "(battery)read descr success ");
 
     esp_err_t ret_status = esp_ble_gattc_read_char(gattc_if,
@@ -375,6 +387,7 @@ static void gattc_battery_service_event_cb(esp_gattc_cb_event_t event, esp_gatt_
     {
       ESP_LOGE(TAG_evnt, "(battery) esp_ble_gattc_read_char failed, error code = %x", ret_status);
     }
+    if(hidOpnFlg) p_data->read.value_len = 0;// added this to prevent ble_hidh.c esp_hidh_gattc_event_handler() from processing ESP_GATTC_READ_DESCR_EVT
     // else
     // {
     //   ESP_LOGI(TAG_evnt, "(battery) esp_ble_gattc_read_char success ");
@@ -817,6 +830,15 @@ static void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp
 
   /*And finally, if this CB event has not been diverted, treat this event as an HID callback,
   using the espidf default hid callback handler*/
+  //printf("[esp_gattc_cb] Free memory: %d bytes\n", (int)esp_get_free_heap_size());
+  //printf("esp_hidh_gattc_event_handler(event %d, gattc_if %d, param)\n", (int)event, (int)gattc_if);
+  // if(event == 3)
+  // {
+  //   multi_heap_info_t info;
+  //   uint32_t caps = 0;
+  //   heap_caps_get_info( &info, caps);
+  //   heap_caps_print_heap_info(caps);
+  // }
   esp_hidh_gattc_event_handler(event, gattc_if, param);
   #ifndef gatDebug
 
@@ -827,6 +849,28 @@ static void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp
 #endif
 }
 /*END GATT stuff*/
+/*JMH ADDED - copied from ble_hih.c*/
+static void esp_ble_hidh_dev_dump(esp_hidh_dev_t *dev, FILE *fp)
+{
+    printf( "BDA:" ESP_BD_ADDR_STR ", Appearance: 0x%04x, Connection ID: %d\n", ESP_BD_ADDR_HEX(dev->bda), dev->ble.appearance, dev->ble.conn_id);
+    printf( "Name: %s, Manufacturer: %s, Serial Number: %s\n", dev->config.device_name ? dev->config.device_name : "", dev->config.manufacturer_name ? dev->config.manufacturer_name : "", dev->config.serial_number ? dev->config.serial_number : "");
+    printf( "PID: 0x%04x, VID: 0x%04x, VERSION: 0x%04x\n", dev->config.product_id, dev->config.vendor_id, dev->config.version);
+    printf( "Battery: Handle: %u, CCC Handle: %u\n", dev->ble.battery_handle, dev->ble.battery_ccc_handle);
+    printf( "Report Maps: %d\n", dev->config.report_maps_len);
+    for (uint8_t d = 0; d < dev->config.report_maps_len; d++) {
+        printf( "  Report Map Length: %d\n", dev->config.report_maps[d].len);
+        esp_hidh_dev_report_t *report = dev->reports;
+        while (report) {
+            if (report->map_index == d) {
+                printf( "    %8s %7s %6s, ID: %2u, Length: %3u, Permissions: 0x%02x, Handle: %3u, CCC Handle: %3u\n",
+                       esp_hid_usage_str(report->usage), esp_hid_report_type_str(report->report_type), esp_hid_protocol_mode_str(report->protocol_mode),
+                       report->report_id, report->value_len, report->permissions, report->handle, report->ccc_handle);
+            }
+            report = report->next;
+        }
+    }
+
+}
 const char *
 BTKeyboard::ble_addr_type_str(esp_ble_addr_type_t ble_addr_type)
 {
@@ -2354,11 +2398,15 @@ void BTKeyboard::devices_scan(int seconds_wait_time)
       ESP_LOGI(TAG, "SUSPEND GoertzelHandler TASK");
       vTaskSuspend(CWDecodeTaskHandle);
       ESP_LOGI(TAG, "SUSPEND CWDecodeTaskHandle TASK");
+      //xSemaphoreTake(Touch_mutex, portMAX_DELAY); // stop I2C calls to touch sensing
+      Touch_mutex = false; // stop I2C calls to touch sensing
       vTaskDelay(20);
       uint32_t EvntStart = pdTICKS_TO_MS(xTaskGetTickCount());
       printf("START - esp_hidh_dev_open()\n");
       dev_Opnd = esp_hidh_dev_open(cr->bda, cr->transport, cr->ble.addr_type); // Returns immediately w/ BT classic device; But waits for pairing code w/ BLE device
       uint16_t dev_open_intrvl = (uint16_t)(pdTICKS_TO_MS(xTaskGetTickCount()) - EvntStart);
+      //xSemaphoreGive(Touch_mutex); //re-start/enable I2C calls to touch sensing
+      Touch_mutex = true; //re-start/enable I2C calls to touch sensing
       printf("DONE - esp_hidh_dev_open():  intrvl: %d\n", dev_open_intrvl);
       if (dev_Opnd != NULL && !Shwgattcb)
       {
@@ -2371,6 +2419,7 @@ void BTKeyboard::devices_scan(int seconds_wait_time)
         if(lpcnt<60){
         Shwgattcb = false;
         ESP_LOGI(TAG, "hidh_dev_open complete(Nrml)");
+        esp_ble_hidh_dev_dump(dev_Opnd, NULL);
         }
         else
         {
@@ -2455,6 +2504,7 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
       case ESP_HIDH_OPEN_EVENT:
       {
         sprintf(temp, "ESP_HIDH_OPEN_EVENT\n");
+        hidOpnFlg = true;
         if(Shwgattcb) printf(temp);
         if (param->open.status == ESP_OK)
         {
@@ -2804,6 +2854,7 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
         sprintf(temp, " CLOSE: %02x:%02x:%02x:%02x:%02x:%02x", ESP_BD_ADDR_HEX(bda));
         clr = TFT_RED;
         PairFlg1 = false;
+        hidOpnFlg = false;
         int lpcnt = 0;
         while(lpcnt < 40)
         {

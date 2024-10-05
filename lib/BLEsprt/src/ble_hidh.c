@@ -47,7 +47,7 @@ static inline void SEND_CB(void)
 }
 
 static esp_event_loop_handle_t event_loop_handle;
-static uint8_t *s_read_data_val = NULL;
+uint8_t *s_read_data_val = NULL;//JMH removed the 'static' type definition
 static uint16_t s_read_data_len = 0;
 static esp_gatt_status_t s_read_status = ESP_GATT_OK;
 static esp_event_handler_t s_event_callback;
@@ -56,6 +56,7 @@ static esp_gatt_status_t read_char(esp_gatt_if_t gattc_if, uint16_t conn_id, uin
 {
     s_read_data_val = NULL;
     s_read_data_len = 0;
+    //printf("read_char\n");
     if (esp_ble_gattc_read_char(gattc_if, conn_id, handle, auth_req) != ESP_OK) {
         ESP_LOGE(TAG, "read_char failed");
         return ESP_GATT_ERROR;
@@ -72,6 +73,7 @@ static esp_gatt_status_t read_descr(esp_gatt_if_t gattc_if, uint16_t conn_id, ui
 {
     s_read_data_val = NULL;
     s_read_data_len = 0;
+    //printf("read_descr\n");
     if (esp_ble_gattc_read_char_descr(gattc_if, conn_id, handle, auth_req) != ESP_OK) {
         ESP_LOGE(TAG, "esp_ble_gattc_read_char failed");
         return ESP_GATT_ERROR;
@@ -148,6 +150,7 @@ static void read_device_services(esp_gatt_if_t gattc_if, esp_hidh_dev_t *dev)
                                     dev->config.product_id = *((uint16_t *)&rdata[3]);
                                     dev->config.version = *((uint16_t *)&rdata[5]);
                                 }
+                                //printf("ESP_GATT_UUID_PNP_ID - free(rdata)\n");
                                 free(rdata);
                             } else if (cuuid == ESP_GATT_UUID_MANU_NAME) {
                                 if (read_char(gattc_if, dev->ble.conn_id, chandle, ESP_GATT_AUTH_REQ_NO_MITM, &rdata, &rlen) == ESP_GATT_OK && rlen) {
@@ -225,6 +228,7 @@ static void read_device_services(esp_gatt_if_t gattc_if, esp_hidh_dev_t *dev)
                                     if (read_descr(gattc_if, dev->ble.conn_id, dhandle, ESP_GATT_AUTH_REQ_NO_MITM, &rdata, &rlen) == ESP_GATT_OK && rlen) {
                                         report->report_id = rdata[0];
                                         report->report_type = rdata[1];
+                                        //printf("ESP_GATT_UUID_RPT_REF_DESCR - free(rdata)\n");
                                         free(rdata);
                                     }
                                 }
@@ -401,6 +405,7 @@ void esp_hidh_gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gatt
     case ESP_GATTC_READ_CHAR_EVT:
     case ESP_GATTC_READ_DESCR_EVT: {
         dev = esp_hidh_dev_get_by_conn_id(p_data->read.conn_id);
+        
         if (!dev) {
             ESP_LOGE(TAG, "READ received for unknown device");
             break;
@@ -411,10 +416,18 @@ void esp_hidh_gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gatt
         s_read_data_val = NULL;
         if (s_read_status == 0 && p_data->read.value_len > 0) {
             s_read_data_len = p_data->read.value_len;
+            //printf("event %d; s_read_data_len %d;\t", event, s_read_data_len);
             s_read_data_val = (uint8_t *)malloc(s_read_data_len + 1);
             if (s_read_data_val) {
                 memcpy(s_read_data_val, p_data->read.value, s_read_data_len);
                 s_read_data_val[s_read_data_len] = 0;
+                // printf("s_read_data_val: ");
+                // for(int i = 0; i < s_read_data_len; i++)
+                // {
+                //     if(event == ESP_GATTC_READ_CHAR_EVT ) printf("%c", s_read_data_val[i]);
+                //     else printf("%d", s_read_data_val[i]);
+                // }
+                // printf("\n");
             }
         }
         SEND_CB();
@@ -614,7 +627,6 @@ static void esp_ble_hidh_dev_dump(esp_hidh_dev_t *dev, FILE *fp)
             report = report->next;
         }
     }
-
 }
 
 static void esp_ble_hidh_event_handler_wrapper(void *event_handler_arg, esp_event_base_t event_base, int32_t event_id,
@@ -817,7 +829,7 @@ esp_hidh_dev_t *esp_ble_hidh_dev_open(esp_bd_addr_t bda, esp_ble_addr_type_t add
         esp_hidh_event_data_t p = {0};
         p.open.status = ESP_OK;
         p.open.dev = dev;
-         printf("SEND - ESP_HIDH_OPEN_EVENT\n");
+        printf("SEND - ESP_HIDH_OPEN_EVENT\n");
         esp_event_post_to(event_loop_handle, ESP_HIDH_EVENTS, ESP_HIDH_OPEN_EVENT, &p, sizeof(esp_hidh_event_data_t), portMAX_DELAY);
     }
     ESP_LOGI(TAG, "START - attach_report_listener\n");

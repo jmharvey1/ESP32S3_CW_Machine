@@ -16,7 +16,7 @@ Settings Screen:
 </p>  
  
 <p dir="auto">For additional info, see YouTube video:
-    <a href="https://youtu.be/Hb9m60LtSJw" rel="nofollow">https://youtu.be/Hb9m60LtSJw</a></p>
+    <a href="https://youtu.be/xPvPC13VgmA" rel="nofollow">https://youtu.be/xPvPC13VgmA</a></p>
     
     
 ---
@@ -47,12 +47,8 @@ resistors 2.2K to 15K (4)
   
 ___
 
-For those who want to bypass the source code, and just "flash" your ESP32, download the [ESPhomeFlasher](https://github.com/esphome/esphome-flasher/releases) and the [.bin file](https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/firmware.bin) found at these links.
+For those who want to bypass the source code, and just "flash" your ESP32s3, follow the instructions found in the [notes.txt file](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/notes.txt)>) and download these 3 files [firmware.bin](https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/firmware.bin) , [bootloader.bin](https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/bootloder.bin), & [partitions.bin](https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/partitions.bin)found at these links.
   
-Note: For me, using Linux Mint, the ESPhome-Flasher's 'Browse' button did NOT work. But placing the 'firmware.bin' file in the same folder as the flasher app, allowed me to just type the file name,"firmware.bin",
-in the 'Firmware' cell.
-  
-A 2nd tip: Connect the ESP32 to your computer BEFORE launching the ESPhome-Flasher. 
 ___
 
  The Following text/references are 'out of date' and needs work. So, for the moment, ignore.
@@ -64,7 +60,7 @@ A .PDF schematic for the PCB version of this project is [Here](https://github.co
 If you have access to 3D printer, the [MiscFiles](https://github.com/jmharvey1/ESP32BtCWKeyBrd/tree/main/MiscFiles)
  folder contains “.stl” files for a simple case to host your completed project. 
 ___
-Note: The decoder audio input circuit uses the AD senor, jack J8, (GPIO6). Depending on how you elect to link to your audio source (Hardwired or Acoustic couplping) Additional external components will be needed; i.e. bias resistors & capacitor (see below for more detail), or an Amplified condensor microphone. This signal should not exceed 2Vp-p.
+Note: The decoder audio input circuit uses the AD senor, jack J8, (GPIO6). Depending on how you elect to link to your audio source (Hardwired or Acoustic coupling) Additional external components will be needed; i.e. bias resistors & capacitor (see below for more detail), or an Amplified condensor microphone. This signal should not exceed 2Vp-p.
 </p>
 Keying output is done via the UART's' RX pin Header, H3-2, (GPIO44). Note: SW1 needs to be set to route this signal to header H3. "Key Down" state is represented by a 'high' (3.3v) on the TX pin. This signal is not intended to key a transmitter directly.
 </p>
