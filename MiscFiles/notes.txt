@@ -22,7 +22,7 @@ Windows Users have a 2nd flashing option:
 1. Download the espressif Flashing Tool found here:
         https://www.espressif.com/en/support/download/other-tools
 2. Unzip the files downloaded in step1 to a local folder on your computer.
-3. copy these three files, found in this folder, to a local directory, on your computer:
+3. copy these three files, found in this folder, to the local directory created in step2:
         1.  bootloader.bin
         2.  partitions.bin
         3.  firmware.bin
