@@ -48,8 +48,8 @@ resistors 2.2K to 15K (4)
 ___
 
 For those who want to bypass the source code, and just "flash" your ESP32s3, follow the instructions found in the [notes.txt file](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/notes.txt>) and download these 3 files [firmware.bin](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/firmware.bin>) , [bootloader.bin](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/bootloader.bin>), & [partitions.bin](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/partitions.bin>) found in the [MiscFiles](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles>) folder of this repository.
-Windows Users can use the above 3 files and download [espressif's Flash Download Tools](<https://www.espressif.com/en/support/download/other-tools>) 
-  
+
+Windows Users, you can use the above 3 files and download espressif's [Flash_Download_Tools](<https://www.espressif.com/en/support/download/other-tools>)  
 ___
 Note: The decoder audio input circuit uses the AD senor, jack J8, (GPIO6). Depending on how you elect to link to your audio source (Hardwired or Acoustic coupling) Additional external components will be needed; i.e. bias resistors & capacitor (see below for more detail), or an Amplified condensor microphone. This signal should not exceed 2Vp-p.
 </p>
