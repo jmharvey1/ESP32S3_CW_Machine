@@ -2,7 +2,7 @@ in file i2c_master.c added a couple 'free()' statements to counteract the effect
 i.e, @ line 983, added free(i2c_dev->master_bus->anyc_write_buffer[i2c_dev->master_bus->index]);//JMH ADD
 and at 1022, added free(i2c_dev->master_bus->anyc_write_buffer[i2c_dev->master_bus->index]);
 
-NOTE: The ESPHomeFlasher does NOT work with the ESP32s3. To flash the esp32s3 directly:
+NOTE: The ESPHomeFlasher does NOT work with the ESP32s3. To flash the esp32s3 directly, choose the following intstructions that apply to your situation:
 prerequisite: Python must 1st be installed. 
 1. install esptool using this command:
         Linux: pip install esptool
