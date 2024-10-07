@@ -1,8 +1,7 @@
-in file i2c_master.c added a couple 'free()' statements to counteract the effects or repeated heap_caps_calloc() calls which over time were consuming free heap space
-i.e, @ line 983, added free(i2c_dev->master_bus->anyc_write_buffer[i2c_dev->master_bus->index]);//JMH ADD
-and at 1022, added free(i2c_dev->master_bus->anyc_write_buffer[i2c_dev->master_bus->index]);
 
-NOTE: The ESPHomeFlasher does NOT work with the ESP32s3. To flash the esp32s3 directly, choose the following intstructions that apply to your situation:
+NOTE: The ESPHomeFlasher does NOT work with the ESP32s3. To flash the esp32s3 directly, 
+      choose the following intstructions that apply to your situation:
+Method A:
 prerequisite: Python must 1st be installed. 
 1. install esptool using this command:
         Linux: pip install esptool
@@ -18,7 +17,8 @@ prerequisite: Python must 1st be installed.
 For more detail related to installing "esptool", see:
         https://docs.espressif.com/projects/esptool/en/latest/esp32s3/installation.html#installation
 
-Windows Users have a 2nd flashing option:
+Method B:
+Windows Users have a 2nd flashing option.
 1. Download the espressif Flashing Tool found here:
         https://www.espressif.com/en/support/download/other-tools
 2. Unzip the files downloaded in step1 to a local folder on your computer.
@@ -31,5 +31,11 @@ Windows Users have a 2nd flashing option:
               Also make certain the 3 files are hilighted in green, as shown.  
 5. Click the "Start" Button, and observe that the adjacent terminal window generates an output similar to that shown in the image.
 
-Tip: Depending on the state of your ESP32s3, it may be 1st necessary to lock it in 'boot mode' before flashing it.
-     There are 2 small white buttons, at the top of the display. Press & hold the button labeled 'BOOT', while the button labeled 'RESET' is pressed & released. Then release the 'BOOT' button.     
+Tip: Depending on the state of your ESP32s3, it may 1st be necessary, to lock it, in 'boot mode', before flashing it.
+     There are 2 small white buttons, at the top of the display. Press & hold the button labeled 'BOOT', 
+     while the button labeled 'RESET' is pressed & released. Then release the 'BOOT' button.     
+------------------------------------------------------------------------------------------------------
+
+in file i2c_master.c added a couple 'free()' statements to counteract the effects or repeated heap_caps_calloc() calls which over time were consuming free heap space
+i.e, @ line 983, added free(i2c_dev->master_bus->anyc_write_buffer[i2c_dev->master_bus->index]);//JMH ADD
+and at 1022, added free(i2c_dev->master_bus->anyc_write_buffer[i2c_dev->master_bus->index]);
