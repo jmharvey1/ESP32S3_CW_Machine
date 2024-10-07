@@ -47,8 +47,15 @@ resistors 2.2K to 15K (4)
   
 ___
 
-For those who want to bypass the source code, and just "flash" your ESP32s3, follow the instructions found in the [notes.txt file](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/notes.txt>) and download these 3 files [firmware.bin](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/firmware.bin>) , [bootloader.bin](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/bootloader.bin>), & [partitions.bin](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/partitions.bin>) found at these links.
+For those who want to bypass the source code, and just "flash" your ESP32s3, follow the instructions found in the [notes.txt file](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/notes.txt>) and download these 3 files [firmware.bin](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/firmware.bin>) , [bootloader.bin](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/bootloader.bin>), & [partitions.bin](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/partitions.bin>) found in the [MiscFiles](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles>) folder of this repository.
+Windows Users can use the above 3 files and download [espressif's Flash Download Tools](<https://www.espressif.com/en/support/download/other-tools>) 
   
+___
+Note: The decoder audio input circuit uses the AD senor, jack J8, (GPIO6). Depending on how you elect to link to your audio source (Hardwired or Acoustic coupling) Additional external components will be needed; i.e. bias resistors & capacitor (see below for more detail), or an Amplified condensor microphone. This signal should not exceed 2Vp-p.
+</p>
+Keying output is done via the UART's' RX pin Header, H3-2, (GPIO44). Note: SW1 needs to be set to route this signal to header H3. "Key Down" state is represented by a 'high' (3.3v) on the TX pin. This signal is not intended to key a transmitter directly.
+</p>
+To create a hardwired audio interface, a pair of 10K voltage divider reisistors can be serries connected between gnd & the jack's 3.3V pins. Connect the resistor's middle point to J3-3 (AD sensor) pin (GPIO6). Complete the interface with, a 0.1ufd DC blocking Capacitor connected to your external source (the RX's audio/speaker out) to GPIO6. Don't forget to connect the Auido source's ground to J3-2 (Gnd). 
 ___
 
  The Following text/references are 'out of date' and needs work. So, for the moment, ignore.
@@ -58,10 +65,5 @@ A PCB for this project can be ordered from a board manufacturer, like [JLCPCB](h
 A .PDF schematic for the PCB version of this project is [Here](https://github.com/jmharvey1/ESP32BtCWKeyBrd/blob/main/MiscFiles/ESP32-BT-CW-KeyBrd_Schematic.pdf)
   
 If you have access to 3D printer, the [MiscFiles](https://github.com/jmharvey1/ESP32BtCWKeyBrd/tree/main/MiscFiles)
- folder contains “.stl” files for a simple case to host your completed project. 
-___
-Note: The decoder audio input circuit uses the AD senor, jack J8, (GPIO6). Depending on how you elect to link to your audio source (Hardwired or Acoustic coupling) Additional external components will be needed; i.e. bias resistors & capacitor (see below for more detail), or an Amplified condensor microphone. This signal should not exceed 2Vp-p.
-</p>
-Keying output is done via the UART's' RX pin Header, H3-2, (GPIO44). Note: SW1 needs to be set to route this signal to header H3. "Key Down" state is represented by a 'high' (3.3v) on the TX pin. This signal is not intended to key a transmitter directly.
-</p>
-To create a hardwired audio interface, a pair of 10K voltage divider reisistors can be serries connected between gnd & the jack's 3.3V pins. Connect the resistor's middle point to J3-3 (AD sensor) pin (GPIO6). Complete the interface with, a 0.1ufd DC blocking Capacitor connected to your external source (the RX's audio/speaker out) to GPIO6. Don't forget to connect the Auido source's ground to J3-2 (Gnd). 
+ folder contains “.stl” files for a simple case to host your completed project.
+___ 

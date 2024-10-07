@@ -3,14 +3,33 @@ i.e, @ line 983, added free(i2c_dev->master_bus->anyc_write_buffer[i2c_dev->mast
 and at 1022, added free(i2c_dev->master_bus->anyc_write_buffer[i2c_dev->master_bus->index]);
 
 NOTE: The ESPHomeFlasher does NOT work with the ESP32s3. To flash the esp32s3 directly:
+prerequisite: Python must 1st be installed. 
 1. install esptool using this command:
-        pip install esptool
+        Linux: pip install esptool
+        Windows: C:\Users\james\AppData\Local\Programs\Python\Python312\Scripts\pip.exe install esptool
 2. copy these three files, found in this folder, to a local directory, on your computer:
         1.  bootloader.bin
         2.  partitions.bin
         3.  firmware.bin
 3. open a terminal in the local directory you copied the above files to, and run the following command:
-    esptool.py -p /dev/ttyACM0 -b 460800 --before default_reset --after hard_reset --chip esp32s3 write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
+    Linux:   esptool.py -p /dev/ttyACM0 -b 460800 --before default_reset --after hard_reset --chip esp32s3 write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
+    Windows: esptool.exe -p com13 -b 460800 --before default_reset --after hard_reset --chip esp32s3 write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
 
 For more detail related to installing "esptool", see:
         https://docs.espressif.com/projects/esptool/en/latest/esp32s3/installation.html#installation
+
+Windows Users have a 2nd flashing option:
+1. Download the espressif Flashing Tool found here:
+        https://www.espressif.com/en/support/download/other-tools
+2. Unzip the files downloaded in step1 to a local folder on your computer.
+3. copy these three files, found in this folder, to a local directory, on your computer:
+        1.  bootloader.bin
+        2.  partitions.bin
+        3.  firmware.bin
+4. Run/Launch the flash_download_tool_3.9.7.exe, and configure the settings as shown in the FlashToolsSetting.png image, found in this folder.
+        Note: your comm port setting will likely be different from what is shown in the image.
+              Also make certain the 3 files are hilighted in green, as shown.  
+5. Click the "Start" Button, and observe that the adjacent terminal window generates an output similar to that shown in the image.
+
+Tip: Depending on the state of your ESP32s3, it maybe 1st necessary to lock it in 'boot mode' before flashing it.
+     There are 2 small white buttons, at the top of the display. Press & hold the button labeled 'BOOT', while the buttn labeled 'REST' is pressed & released. Then release the 'BOOT' button.     
