@@ -32,4 +32,4 @@ Windows Users have a 2nd flashing option:
 5. Click the "Start" Button, and observe that the adjacent terminal window generates an output similar to that shown in the image.
 
 Tip: Depending on the state of your ESP32s3, it may be 1st necessary to lock it in 'boot mode' before flashing it.
-     There are 2 small white buttons, at the top of the display. Press & hold the button labeled 'BOOT', while the buttn labeled 'REST' is pressed & released. Then release the 'BOOT' button.     
+     There are 2 small white buttons, at the top of the display. Press & hold the button labeled 'BOOT', while the button labeled 'RESET' is pressed & released. Then release the 'BOOT' button.     
