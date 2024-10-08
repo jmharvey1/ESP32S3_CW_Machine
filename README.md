@@ -53,7 +53,7 @@ Windows Users, you can use the above 3 files and download espressif's [Flash_Dow
 ___
 Note: The decoder audio input circuit uses the AD senor, jack J8, (GPIO6). Depending on how you elect to link to your audio source (Hardwired or Acoustic coupling) Additional external components will be needed; i.e. bias resistors & capacitor (see below for more detail), or an Amplified condensor microphone. This signal should not exceed 2Vp-p.
 </p>
-Keying output is done via the UART's' RX pin Header, H3-2, (GPIO44). Note: SW1 needs to be set to route this signal to header H3. "Key Down" state is represented by a 'high' (3.3v) on the TX pin. This signal is not intended to key a transmitter directly.
+Keying output is done via the UART's' RX pin Header, H3-2, (GPIO44). Note: SW1 needs to be set to route this signal to header H3. "Key Down" state is represented by a 'high' (3.3v) on the RX pin. This signal is not intended to key a transmitter directly.
 </p>
 To create a hardwired audio interface, a pair of 10K voltage divider reisistors can be serries connected between gnd & the jack's 3.3V pins. Connect the resistor's middle point to J3-3 (AD sensor) pin (GPIO6). Complete the interface with, a 0.1ufd DC blocking Capacitor connected to your external source (the RX's audio/speaker out) to GPIO6. Don't forget to connect the Auido source's ground to J3-2 (Gnd).
 
