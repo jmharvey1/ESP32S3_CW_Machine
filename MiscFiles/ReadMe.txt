@@ -34,7 +34,8 @@ Special Keys & their functions:
         FF  (Fixed Frequency)
         AF  (Auto-Tune 500 to 900Hz)
 2. Left Ctrl+G: Enable/Disable Debug
-3. Left Ctrl+P:  Plot On/off        
+3. Left Ctrl+P:  Plot On/off
+4. F9: Enable/Disable Scope View        
 
 
 

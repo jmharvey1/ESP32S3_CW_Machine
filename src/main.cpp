@@ -53,6 +53,7 @@ esp_event_loop_args_t event_task_args = {
 /*20240904 LVGLMsgBox.cpp - re-worked cursor management, in send test area, to improve outgoing character hilighting */
 /*20240924 LVGLMsgBox.cpp - reworked Update_textarea() when 'capping the ta buffer to take in account character width & word breaks*/
 /*20240925 locked down espidf version & i2c_master.h updated i2c_device_config_t definition/structure */
+/*20241026 Added 'F9' Scope Screen */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -84,7 +85,7 @@ esp_event_loop_args_t event_task_args = {
 
 #include <string.h> // included to support call to 'memset()'
 /*Uncomment to plot Raw ADC Samples*/
-//#define POSTADC
+// #define POSTADC
 /* the following defines were taken from "hal/adc_hal.h" 
  and are here for help in finding the true ADC sample rate based on a given declared sample frequency*/
 #define ADC_LL_CLKM_DIV_NUM_DEFAULT       15
@@ -122,7 +123,7 @@ char LogBuf[100];
 esp_err_t ret;
 char Title[120];
 bool setupFlg = false;
-//bool EnDsplInt = true;
+bool ScopeFlg = false;
 bool clrbuf = false;
 bool PlotFlg = false;
 bool UrTurn = true;
@@ -131,6 +132,8 @@ bool QuequeFulFlg = false;
 bool mutexFLG =false; // used to manage SPI shared resource
 bool adcON =false;
 bool SkippDotClkISR = false;
+bool ScopeArm = false;
+bool ScopeTrigr = true;
 uint8_t QueFullstate;
 float BiasError = 0;
 int Smplcnt = 0;
@@ -356,7 +359,7 @@ void addSmpl(int k, int i, int *pCntrA)
         }
       }
     }
-    if (NoTnCntr == 200 || (PeriodCntr == 40 && (SmplCNt < 3900))) // 4020
+    if (NoTnCntr == 200 || (PeriodCntr == 40 && (SmplCNt < 3500))) // no higher than 952Hz
     {                                                              /*We processed enough samples; But params are outside a usable frequency; Reset & try again*/
       SmplCNt = 0;
     }
@@ -364,6 +367,7 @@ void addSmpl(int k, int i, int *pCntrA)
     {
       /*if here, we have a usable signal; calculate its frequency*/
       DemodFreq = ((int)PeriodCntr * (int)SAMPLING_RATE) / (int)SmplCNt;
+      freq_int = DemodFreq;
       if (DemodFreq > 450)
       {
         
@@ -383,7 +387,25 @@ void addSmpl(int k, int i, int *pCntrA)
     }
     Oldk = k;
   }
-
+  if (ScopeFlg)
+  {
+    if (!SmplSetRdy && (k < ToneThrsHld))
+      ScopeArm = true;
+    if (!SmplSetRdy && (k > ToneThrsHld))
+      ScopeTrigr = true;
+    if (ScopeTrigr)
+    {
+      if(ui_Chart1_series_1 != NULL) ui_Chart1_series_1->y_points[*pCntrA] = (k / 10);
+      *pCntrA += 1;
+      if (*pCntrA == 700)
+      {
+        *pCntrA = 0;
+        SmplSetRdy = true;
+        ScopeArm = false;
+        ScopeTrigr = false;
+      }
+    }
+  }
   ProcessSample(k, i);
 /* uncomment for diagnostic testing; graph raw ADC samples*/
 #ifdef POSTADC
@@ -450,6 +472,7 @@ void GoertzelHandler(void *param)
       unsigned long Now = EvntStart; //pdTICKS_TO_MS(xTaskGetTickCount());
       if(SmplSetDone){
         BIAS = BIAS + BiasError;
+        bias_int = BIAS;
         //printf("BIAS: %d; error: %f\n", BIAS, BiasError);
         BiasError = 0;
         SmplSetDone = false;
@@ -993,6 +1016,8 @@ extern "C"
 void ProcsKeyEntry(uint8_t keyVal);
 /*Settings screen keybrd entry loop*/
 void SettingsLoop(void);
+/*Scope screen keybrd entry loop*/
+void ScopeLoop(void);
 /*        Display Update timer ISR Template        */
 void DsplTmr_callback(TimerHandle_t xtimer);
 /*        DotClk timer ISR Template                */
@@ -1273,18 +1298,18 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
   /* main CW keyboard loop*/
   while (true)
   {
-   #if 1 // 0 = scan codes retrieval, 1 = augmented ASCII retrieval
+#if 1 // 0 = scan codes retrieval, 1 = augmented ASCII retrieval
     /* note: this loop only completes when there is a key entery from a paired/connected Bluetooth Keyboard */
 
     vTaskDelay(pdMS_TO_TICKS(10)); // give the watchdogtimer a chance to reset
-    //printf("main loop\n");
+    // printf("main loop\n");
     if (setupFlg)
     {
-      //printf("setupFlg: 'true'\n");
+      // printf("setupFlg: 'true'\n");
       /*if true, exit main loop and jump to "settings" screen */
       bool IntSOTstate = CWsndengn.GetSOTflg();
       if (IntSOTstate)
-        CWsndengn.SOTmode();   // do this to stop any outgoing txt that might currently be in progress before switching over to settings screen
+        CWsndengn.SOTmode();    // do this to stop any outgoing txt that might currently be in progress before switching over to settings screen
       lvglmsgbx.SaveSettings(); // save keyboard app's current display configuration; i.e., ringbuffer pointeres, etc. So that when the user closes the setting screen the keyboard app can conitnue fro where it left off
       /* if in decode mode 4, the adc DMA scan was never started*/
       if (ModeCnt != 4)
@@ -1299,9 +1324,8 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
         vTaskDelay(20);
       }
       /*Now ready to jump to "settings" screen */
-      /*TODO for lvgl/waveshare need to work out how to navigate settings screen */
       lvglmsgbx.BldSettingScreen();
-      SettingsLoop();// go here while settings screen is active
+      SettingsLoop(); // go here while settings screen is active
       CWsndengn.RefreshWPM();
       if (IntSOTstate && !CWsndengn.GetSOTflg())
         CWsndengn.SOTmode(); // Send On Type was enabled when we went to 'settings' so re-enable it
@@ -1318,10 +1342,48 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
         vTaskDelay(20);
       }
     }
-
+    if (ScopeFlg)
+    {
+      // printf("setupFlg: 'true'\n");
+      /*if true, exit main loop and jump to "Scope" screen */
+      bool IntSOTstate = CWsndengn.GetSOTflg();
+      if (IntSOTstate)
+        CWsndengn.SOTmode();    // do this to stop any outgoing txt that might currently be in progress before switching over to settings screen
+      lvglmsgbx.SaveSettings(); // save keyboard app's current display configuration; i.e., ringbuffer pointeres, etc. So that when the user closes the setting screen the keyboard app can conitnue fro where it left off
+      /* if in decode mode 4, the adc DMA scan was never started*/
+      // if (ModeCnt != 4)
+      // {
+      //   ESP_ERROR_CHECK(adc_continuous_stop(adc_handle)); // true; user has pressed Ctl+S key, & wants to configure default settings
+      //   adcON = false;
+      //   printf("CASE 1\n");
+      //   vTaskSuspend(GoertzelTaskHandle);
+      //   ESP_LOGI(TAG1, "SUSPEND GoertzelHandler TASK");
+      //   vTaskSuspend(CWDecodeTaskHandle);
+      //   ESP_LOGI(TAG1, "SUSPEND CWDecodeTaskHandle TASK");
+      //   vTaskDelay(20);
+      // }
+      /*Now ready to jump to "Scope" screen */
+      lvglmsgbx.BldScopeScreen();
+      ScopeLoop(); // go here while Scope screen is active
+      CWsndengn.RefreshWPM();
+      if (IntSOTstate && !CWsndengn.GetSOTflg())
+        CWsndengn.SOTmode(); // Send On Type was enabled when we went to 'settings' so re-enable it
+      // if (ModeCnt != 4)
+      // {
+      //   // Cw_Machine_ADC_init(channel, sizeof(channel) / sizeof(adc_channel_t), &adc_handle);
+      //   // ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
+      //   ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
+      //   adcON = true;
+      //   ESP_LOGI(TAG1, "RESUME CWDecodeTaskHandle TASK");
+      //   vTaskResume(CWDecodeTaskHandle);
+      //   ESP_LOGI(TAG1, "RESUME GoertzelHandler TASK");
+      //   vTaskResume(GoertzelTaskHandle);
+      //   vTaskDelay(20);
+      // }
+    }
 
     /*Added this to support 'open' paired BT keyboard event*/
-    
+
     switch (bt_keyboard.Adc_Sw)
     {
     case 1: // need to shut down all other spi activities, so the pending BT event has exclusive access to SPI
@@ -1353,11 +1415,11 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
         if (bt_keyboard.PairFlg && bt_keyboard.inPrgsFlg)
         {
           xTimerStart(DisplayTmr, portMAX_DELAY);
-          //vTaskResume(DsplUpDtTaskHandle);
+          // vTaskResume(DsplUpDtTaskHandle);
           bt_keyboard.PairFlg = false;
           bt_keyboard.inPrgsFlg = false;
           Title[0] = 0xFF;
-          Title[0] = 0x0; 
+          Title[0] = 0x0;
           lvglmsgbx.dispKeyBrdTxt(Title, TFT_ORANGE);
           ESP_LOGI(TAG2, "Pairing Complete; Display ON");
         }
@@ -1389,13 +1451,12 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
       //   printf("; PairFlgFALSE\n");
     }
     if (bt_keyboard.OpnEvntFlg && !bt_keyboard.trapFlg) // this gets set to true when the K380 KB generates corrupt keystroke data
-      key = bt_keyboard.wait_for_ascii_char(false);          // true  // by setting to "true" this task/loop will wait 'forever' for a keyboard key press
+      key = bt_keyboard.wait_for_ascii_char(false);     // true  // by setting to "true" this task/loop will wait 'forever' for a keyboard key press
 
     /*test key entry & process as needed*/
     if (key != 0)
     {
       ProcsKeyEntry(key);
-      
     }
 
 #else
@@ -1414,8 +1475,8 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     //           << +inf.keys[1] << ", "
     //           << +inf.keys[2] << std::endl;
 #endif /* USE_KYBrd*/
-#endif/* if(1||0)*/
-  }/*End while loop*/
+#endif /* if(1||0)*/
+  } /*End while loop*/
 } /*End Main loop*/
 
 /*Timer interrupt ISRs*/
@@ -1487,7 +1548,7 @@ void ProcsKeyEntry(uint8_t keyVal)
 {
   bool addspce = false;
   char SpcChr = char(0x20);
-  //printf("bufChar '%c'; Val %d\n", (char)keyVal, (int)keyVal);
+  //printf("bufChar '%c'; Val_dec %d; Hex: %02x\n", (char)keyVal, (int)keyVal, keyVal);
   if (keyVal == 0x8)
   {                                  //"BACKSpace" key pressed
     int ChrCnt = CWsndengn.Delete(); // test to see if there's an "unsent" character that can be deleted
@@ -1641,6 +1702,11 @@ void ProcsKeyEntry(uint8_t keyVal)
   else if ((keyVal == 0x9C))
   { // Cntrl+"S"
     setupFlg = !setupFlg;
+    return;
+  }
+  else if ((keyVal == 0x89))
+  { // "F9""
+    ScopeFlg = !ScopeFlg;
     return;
   }
   else if ((keyVal == 0x9D))
@@ -1856,6 +1922,64 @@ void SettingsLoop(void)
       lvglmsgbx.ReStrtMainScrn();
     }
   }
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void ScopeLoop(void)
+{
+  int paramPtr = 0;
+  int paramCnt = 9;
+  bool FocusChngd = false;
+  int oldparamPtr = 0;
+  //lvglmsgbx.HiLite_Seltcd_Setting(paramPtr, oldparamPtr); 
+  while (ScopeFlg)
+  {
+    vTaskDelay(pdMS_TO_TICKS(100));
+    //printf("while(ScopeLoop)\n");
+    uint8_t key = bt_keyboard.wait_for_ascii_char(false);
+    if (key == 0x89) //= "F9"
+    {
+      /*user wants to exit Scope screen*/
+      CWsndengn.SetWPM(DFault.WPM);//syncDfltwSettings could have updated/changed the WPM setting so we need to make sure the send engine has the latest
+      ScopeFlg = false;
+    }
+    // else if (key == 0x98)
+    // { // Arrow UP
+    //   key = 0;
+    //   //NtryBoxGrp[paramPtr].KillCsr();
+    //   oldparamPtr = paramPtr;
+    //   paramPtr--;
+    //   FocusChngd = true;
+    // }
+    // else if (key == 0x97)
+    // { // Arrow DOWN
+    //   key = 0;
+    //   //NtryBoxGrp[paramPtr].KillCsr();
+    //   oldparamPtr = paramPtr;
+    //   paramPtr++;
+    //   FocusChngd = true;
+    // }
+    // if (paramPtr == paramCnt)
+    //   paramPtr = 0;
+    // if (paramPtr < 0)
+    //   paramPtr = paramCnt - 1;
+    // if(FocusChngd)
+    // {
+    //   lvglmsgbx.HiLite_Seltcd_Setting(paramPtr, oldparamPtr);
+    //   FocusChngd = false;
+    // }  
+    // else if (key != 0)
+    // {
+    //   lvglmsgbx.KBentry(key, paramPtr);
+    // }
+    // if (!setupFlg)
+    // {
+    //   lvglmsgbx.Exit_Settings(paramPtr);
+    //   lvglmsgbx.ReStrtMainScrn();
+    // }
+  }
+  lvglmsgbx.ReStrtMainScrn();
+  vTaskDelay(pdMS_TO_TICKS(25));
 };
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

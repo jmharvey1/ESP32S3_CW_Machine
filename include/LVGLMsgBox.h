@@ -18,6 +18,9 @@ extern "C" {
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
+/*Added the following for Waveshare & lvgl support*/
+#include <lv_conf.h>
+#include "lvgl.h"
 
 #define TODAY __DATE__
 /*Waveshare 800x480 display & touch specific parameters*/
@@ -82,7 +85,11 @@ extern "C" {
 #define RingBufSz 400
 extern SemaphoreHandle_t lvgl_semaphore;
 extern int MutexLckId;
-
+extern lv_chart_series_t * ui_Chart1_series_1;
+extern int freq_int;
+extern int bias_int;
+extern bool SmplSetRdy;
+extern bool ScopeFlg;
 class LVGLMsgBox
 {
 private:
@@ -200,6 +207,7 @@ public:
 	char GetLastChar(void);
 	void UpdateToneSig(int curval);
 	void BldSettingScreen(void);
+	void BldScopeScreen(void);
 	void ReStrtMainScrn(void);
 	void HiLite_Seltcd_Setting(int paramptr, int oldparamptr);
 	void Exit_Settings(int paramptr);

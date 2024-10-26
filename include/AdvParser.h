@@ -802,7 +802,8 @@ private:
         {"M9O", "MONO", 3, 0}, //754
         {"ANKT", "ANY", 4, 0}, //755
         {"TH9", "THON", 3, 0}, //756
-        {"CLDKT", "CLDY", 5, 0}, //756
+        {"CLDKT", "CLDY", 5, 0}, //757
+        {"M9D", "MOND", 3, 200}, //758 //super sloppy bug
     };
     
     bool AllDah;
