@@ -59,12 +59,15 @@ To create a hardwired audio interface, a pair of 10K voltage divider reisistors 
 
 ___
 
-The Following text/references are 'out of date' and needs work. So, for the moment, ignore.
+For those who have access to 3D printer, these “.stl” files can be used to make a simple free standing case for this project, and may be suitable for other projects using this display.
+  
+[Case Body](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/WaveShareCase.stl>)
 
-A PCB for this project can be ordered from a board manufacturer, like [JLCPCB](https://jlcpcb.com/), using the gerber files found [Here](https://github.com/jmharvey1/ESP32BtCWKeyBrd/blob/main/MiscFiles/ESP32-BT-CW-KeyBrd_2023-03-16.zip).
-  
-A .PDF schematic for the PCB version of this project is [Here](https://github.com/jmharvey1/ESP32BtCWKeyBrd/blob/main/MiscFiles/ESP32-BT-CW-KeyBrd_Schematic.pdf)
-  
-If you have access to 3D printer, the [MiscFiles](https://github.com/jmharvey1/ESP32BtCWKeyBrd/tree/main/MiscFiles)
- folder contains “.stl” files for a simple case to host your completed project.
+[Case Backplate](<https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/WaveShareCase-BackPlate.stl>)
+
+</p>
+Simple Case:
+<p align="center">  
+<img src="https://github.com/jmharvey1/ESP32S3_CW_Machine/blob/master/MiscFiles/3DprintedCase.jpg"  width="60%" height="60%">
+</p>
 ___ 

@@ -321,7 +321,7 @@ void addSmpl(int k, int i, int *pCntrA)
       SmplSetDone = true;
     }
   }
-  const int ToneThrsHld = 100; // minimum usable peak tone value; Anything less is noise
+  const int ToneThrsHld = 100;//100; // minimum usable peak tone value; Anything less is noise
   if (AutoTune)
   {
     /*if we have a usable signal; start counting the number of samples needed capture 40 periods of the incoming tone;
@@ -389,13 +389,14 @@ void addSmpl(int k, int i, int *pCntrA)
   }
   if (ScopeFlg)
   {
-    if (!SmplSetRdy && (k < ToneThrsHld))
+    if (!SmplSetRdy && !ScopeArm && (k < ToneThrsHld))
       ScopeArm = true;
-    if (!SmplSetRdy && (k > ToneThrsHld))
+    if (!SmplSetRdy && ScopeArm && (k > ToneThrsHld))
       ScopeTrigr = true;
     if (ScopeTrigr)
     {
-      if(ui_Chart1_series_1 != NULL) ui_Chart1_series_1->y_points[*pCntrA] = (k / 10);
+      if (ui_Chart1_series_1 != NULL)
+        ui_Chart1_series_1->y_points[*pCntrA] = (k / 10);
       *pCntrA += 1;
       if (*pCntrA == 700)
       {
