@@ -54,6 +54,7 @@ esp_event_loop_args_t event_task_args = {
 /*20240924 LVGLMsgBox.cpp - reworked Update_textarea() when 'capping the ta buffer to take in account character width & word breaks*/
 /*20240925 locked down espidf version & i2c_master.h updated i2c_device_config_t definition/structure */
 /*20241026 Added 'F9' Scope Screen */
+/*20241028 Added IIR tracking filter to ADC processing*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -63,7 +64,7 @@ esp_event_loop_args_t event_task_args = {
 #endif /* USE_KYBrd*/
 #include <esp_log.h>
 #include <iostream>
-
+#include <math.h> // added this for iir support
 #include "esp_system.h"
 #include "esp_event.h"
 #include "driver/gpio.h"
@@ -199,6 +200,19 @@ int DemodFreq = 0;
 int DmodFrqOld = 0;
 bool TstNegFlg = false;
 bool CalGtxlParamFlg = false;
+////////////////////
+/*iir BP Filter delay buckets*/
+float in_z2, in_z1, out_z2, out_z1;
+float in_z3, in_z4, out_z3, out_z4;
+/*iir BP Filter coefficients*/
+float a0 = 0.08599609327133607;
+float a1 = 0.0;
+float a2 = -0.08599609327133607;
+float b0 = 1.0;
+float b1 = -1.309777513510262;
+float b2 = 0.8280078134573279;
+void Calc_IIR_BPFltrCoef(float Fc, float Fs, float Q); 
+////////////////////
 
 LVGLMsgBox lvglmsgbx(StrdTxt);
 //CWSNDENGN CWsndengn(&DotClk_hndl, &tft, &lvglmsgbx);
@@ -321,6 +335,32 @@ void addSmpl(int k, int i, int *pCntrA)
       SmplSetDone = true;
     }
   }
+  /*IIR manual method */
+float decimated = float(k);
+float IIRBPOut =
+    a0 * decimated
+    + a1 * in_z1
+    + a2 * in_z2
+    - b1 * out_z1
+    - b2 * out_z2;
+in_z2 = in_z1;
+in_z1 = decimated;
+out_z2 = out_z1;
+out_z1 = IIRBPOut;
+decimated = IIRBPOut;
+		/*2nd stage */
+// IIRBPOut =
+// 	a0 * decimated
+// 	+ a1 * in_z3
+// 	+ a2 * in_z4
+// 	- b1 * out_z3
+// 	- b2 * out_z4;
+// 	in_z4 = in_z3;
+// in_z3 = decimated;
+// out_z4 = out_z3;
+// out_z3 = IIRBPOut;
+// decimated = IIRBPOut;
+k = (int)decimated;
   const int ToneThrsHld = 100;//100; // minimum usable peak tone value; Anything less is noise
   if (AutoTune)
   {
@@ -377,6 +417,7 @@ void addSmpl(int k, int i, int *pCntrA)
           //sprintf(Title, "Tone: %d\t%d\n", DemodFreq, (int)SmplCNt);
           //printf(Title);
           CalGtxlParamFlg = true;
+          Calc_IIR_BPFltrCoef((float)DemodFreq, SAMPLING_RATE, 3.7071);
           
         }
         DmodFrqOld = DemodFreq;
@@ -1089,6 +1130,7 @@ void app_main()
   mutex = xSemaphoreCreateMutex();
   DsplUpDt_AdvPrsrTsk_mutx =  xSemaphoreCreateMutex();
   ADCread_disp_refr_timer_mutx = xSemaphoreCreateMutex();
+  Calc_IIR_BPFltrCoef(750.0, SAMPLING_RATE, 3.7071);
   /*create DisplayUpDate Task*/
   xTaskCreatePinnedToCore(DisplayUpDt, "DisplayUpDate Task", 8192, NULL, 3, &DsplUpDtTaskHandle, 0);
   vTaskSuspend( DsplUpDtTaskHandle);
@@ -2159,5 +2201,25 @@ uint8_t Write_NVS_Val(const char *key, int value)
   }
   return stat;
 }
+////////////////////////////////////////////////////////////
+void Calc_IIR_BPFltrCoef(float Fc, float Fs, float Q) {
 
+	float K = tan(M_PI * ((Fc) / Fs));//manual method
+	//float K = tan(M_PI * ((Fc*4) /(0.96 * Fs))); // CMSIS-DSP process; Note Decimate factor is 1/2 that of the manual method
+	float norm = 1 / (1 + K / Q + K * K);
+
+	a0 = (K / Q) * norm;
+	a1 = 0;
+	a2 = -a0;
+	b1 = 2 * (K * K - 1) * norm;
+	b2 = (1 - K / Q + K * K) * norm;
+//	Coeffs[0] = Coeffs[5] = +a0;
+//	Coeffs[1] = Coeffs[6] = +a1;
+//	Coeffs[2] = Coeffs[7] = +a2;
+//	Coeffs[3] = Coeffs[8] = -b1;
+//	Coeffs[4] = Coeffs[9] = -b2;
+	/*initialize CMSIS IIR Filter global state structure "S1" */
+//	arm_biquad_cascade_df2T_init_f32(&S1, numStages, Coeffs, State);
+
+}
 
