@@ -55,6 +55,7 @@ esp_event_loop_args_t event_task_args = {
 /*20240925 locked down espidf version & i2c_master.h updated i2c_device_config_t definition/structure */
 /*20241026 Added 'F9' Scope Screen */
 /*20241028 Added IIR tracking filter to ADC processing*/
+/*20241031 Reworked postparsing replace text process/code*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -383,7 +384,8 @@ k = (int)decimated;
       NoTnCntr++; // increment "No Tone Counter"
       if (TstNegFlg)
       { // looking for the signal to go negative
-        if ((k < -ToneThrsHld) && (Oldk >= -ToneThrsHld))
+        //if ((k < -ToneThrsHld) && (Oldk >= -ToneThrsHld))
+        if ((k < -ToneThrsHld))
         {               /*this one just went negative*/
           NoTnCntr = 0; // reset "No Tone Counter" to zero
           TstNegFlg = false;
@@ -391,7 +393,8 @@ k = (int)decimated;
       }
       else
       { //  TstNegFlg = false ; Now looking for the signal to go positve
-        if ((k > ToneThrsHld) && (Oldk <= ToneThrsHld))
+        //if ((k > ToneThrsHld) && (Oldk <= ToneThrsHld))
+        if ((k > ToneThrsHld))
         {               /* this one just went positive*/
           PeriodCntr++; // we've lived one complete cycle of some unknown frequency
           NoTnCntr = 0; // reset "No Tone Counter" to zero
@@ -430,9 +433,9 @@ k = (int)decimated;
   }
   if (ScopeFlg)
   {
-    if (!SmplSetRdy && !ScopeArm && (k < ToneThrsHld))
+    if (!SmplSetRdy && !ScopeArm && (k < 50)) //&& (k < ToneThrsHld/2))
       ScopeArm = true;
-    if (!SmplSetRdy && ScopeArm && (k > ToneThrsHld))
+    if (!SmplSetRdy && ScopeArm && (k > 50))  //&& (k > ToneThrsHld/2)) 
       ScopeTrigr = true;
     if (ScopeTrigr)
     {
@@ -925,54 +928,39 @@ void AdvParserTask(void *param)
         if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
         {
         bool oldDltState = dletechar;
-        // int deletCnt = 0;
-        // char spacemarker = 'Y';
-        // uint8_t LstChr = 0;
         LstChr = lvglmsgbx.GetLastChar();
-        // if (LtrPtr <= 11)
-        // {
-        //   while (LstChr != 0x20)
-        //   {
-        //     vTaskDelay(5 / portTICK_PERIOD_MS);
-        //     LstChr = lvglmsgbx.GetLastChar();
-        //   }
-        // }
-        // else
-        // {
-        //   vTaskDelay(50 / portTICK_PERIOD_MS); // wait long enough for the TFT display to get updated
-        //   LstChr = lvglmsgbx.GetLastChar();     // get the last character posted via the DcodeCW process (To test below for a 'space' [0x20])
-        // }
         // printf("lvglmsgbx.GetLastChar = %d\n", LstChr);// added for testing with lvgl display handler
-        if (LstChr == 0x20) // test to see if a word break space has been applied
+        if (LstChr == 0x20) // test to see if a word break/space has been applied
         {
-          deletCnt++; // number of characters + space to be deleted
+          //deletCnt++; // number of characters + space to be deleted
         }
         else
         {
           spacemarker = 'N';
-          // deletCnt++;
-          /*shift the parsed text buffer one charater right, and put a 'space' at the begining*/
-          NuMsgLen++;
-          advparser.Msgbuf[NuMsgLen + 1] = 0;
-          for (int i = NuMsgLen; i > 0; i--)
+          if (lvglmsgbx.TestRingBufPtrs())
           {
-            advparser.Msgbuf[i] = advparser.Msgbuf[i - 1];
+            /*shift the parsed text buffer one charater right, and put a 'space' at the begining*/
+            NuMsgLen++;
+            advparser.Msgbuf[NuMsgLen + 1] = 0;
+            for (int i = NuMsgLen; i > 0; i--)
+            {
+              advparser.Msgbuf[i] = advparser.Msgbuf[i - 1];
+            }
+            advparser.Msgbuf[0] = 0x20;
           }
-          advparser.Msgbuf[0] = 0x20;
-          // deletCnt = i; // number of characters (No space) to be deleted
-          //  printf("MsgChrCnt[1] = %d\n", i);
         }
         /*Configure DCodeCW.cpp to erase/delete original text*/
         /*Add word break space to post parsed text*/
-        //
+        char RingBufTst = 'T';
+        /*returns true if the 2 buffer pointers are the same*/
         if (!lvglmsgbx.TestRingBufPtrs())
-        {
-          // advparser.Msgbuf[NuMsgLen] = 0x5f;//0x20;
-          // advparser.Msgbuf[NuMsgLen + 1] = 0x0;
+        {//append whatever is being held in the ringbuffer to the end of the new advance parser text string
+          /*most likely a 'space'/0x20*/
           lvglmsgbx.XferRingbuf(advparser.Msgbuf);
+           RingBufTst = 'F';
         }
         else
-        {
+        { //Nothing waiting in ring buffer
           advparser.Msgbuf[NuMsgLen] = 0x20; // 0x5f;//0x20;
           advparser.Msgbuf[NuMsgLen + 1] = 0x0;
         }
@@ -985,6 +973,7 @@ void AdvParserTask(void *param)
             DelStr[i] = 0x8;
           }
           DelStr[deletCnt] = 0x0;
+          /*Now copy the new adparser character string/set to a temp buffer 'tmpbuf'*/
           char tmpbuf[30];
           int ptr = 0;
           while(advparser.Msgbuf[ptr] !=0 && ptr <28)
@@ -993,19 +982,15 @@ void AdvParserTask(void *param)
             ptr++;
           }
           tmpbuf[ptr] = 0;
+          /*reassemble 'Msgbuf' with new adparser character set prefixed with the number of deletes
+           needed to remove the original text*/
           sprintf(advparser.Msgbuf,"%s%s", DelStr, tmpbuf);
-          // ptr = 0;
-          // while(advparser.Msgbuf[ptr] != 0)
-          // {
-          // printf("%d. %d; ", ptr, advparser.Msgbuf[ptr]);
-          // ptr++; 
-          // }
-          // printf("\n");
-          // printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
+          /*for test/debug, show/print the before & after results*/
+          printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; RingBufTst: %c; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, RingBufTst, spacemarker, LstChr);
         }
         //lvglmsgbx.Delete(true, deletCnt);
         
-        if (advparser.Dbug)
+        if(advparser.Dbug)
           printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
         // printf("Pointer ERROR\n");/ printf("No Match @ %d; %d; %d\n", FmtchPtr, LtrHoldr[FmtchPtr], advparser.Msgbuf[FmtchPtr]);
         CptrTxt = false;

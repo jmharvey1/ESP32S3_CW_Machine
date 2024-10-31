@@ -2805,12 +2805,12 @@ void AdvParser::PrintThisChr(void)
 /*Return the current string length of the AdvParser MsgBuf*/
 int AdvParser::GetMsgLen(void)
 {
-    this->StrLength = 0;
-    while (Msgbuf[this->StrLength] != 0)
-    {
-        this->StrLength++;
-    }
-    // this->StrLength--;
+    // this->StrLength = 0;
+    // while (Msgbuf[this->StrLength] != 0)
+    // {
+    //     this->StrLength++;
+    // }
+    this->StrLength = strlen(Msgbuf);
     return this->StrLength;
 };
 //////////////////////////////////////////////////////////////////////////////

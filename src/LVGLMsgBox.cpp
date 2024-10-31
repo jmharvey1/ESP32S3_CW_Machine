@@ -2687,7 +2687,7 @@ bool LVGLMsgBox::TestRingBufPtrs(void)
 };
 void LVGLMsgBox::XferRingbuf(char Bfr[50])
 {
-	/*find end  of Bfr*/
+	/*find end of Buffer*/
 	int i =0;
 	while(Bfr[i] !=0) i++;
 	while(RingbufPntr1 != RingbufPntr2)
