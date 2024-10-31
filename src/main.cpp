@@ -934,6 +934,18 @@ void AdvParserTask(void *param)
         {
           //deletCnt++; // number of characters + space to be deleted
         }
+        else if(LstChr == 68)
+        {
+          spacemarker = '?';
+          /*shift the parsed text buffer one charater right, and put a 'space' at the begining*/
+          NuMsgLen++;
+          advparser.Msgbuf[NuMsgLen + 1] = 0;
+          for (int i = NuMsgLen; i > 0; i--)
+          {
+            advparser.Msgbuf[i] = advparser.Msgbuf[i - 1];
+          }
+          advparser.Msgbuf[0] = 0x20;
+        }
         else
         {
           spacemarker = 'N';
@@ -986,7 +998,7 @@ void AdvParserTask(void *param)
            needed to remove the original text*/
           sprintf(advparser.Msgbuf,"%s%s", DelStr, tmpbuf);
           /*for test/debug, show/print the before & after results*/
-          printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; RingBufTst: %c; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, RingBufTst, spacemarker, LstChr);
+          printf("old txt:%s;  new txt:%s; delete cnt: %d; new txt length: %d; RingBufTst: %c; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, ptr, RingBufTst, spacemarker, LstChr);
         }
         //lvglmsgbx.Delete(true, deletCnt);
         
