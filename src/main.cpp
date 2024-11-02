@@ -920,6 +920,8 @@ void AdvParserTask(void *param)
 
       /*If they don't match, replace displayed text with AdvParser's version*/
       int deletCnt = LtrPtr; // 0; // moved to here to support lvgl debugging
+      int bufcharcnt = 0;
+      char ringbuf[6];
       char spacemarker = 'Y';
       uint8_t LstChr = 0;
       if (!same)
@@ -929,7 +931,7 @@ void AdvParserTask(void *param)
         {
         bool oldDltState = dletechar;
         LstChr = lvglmsgbx.GetLastChar();
-        // printf("lvglmsgbx.GetLastChar = %d\n", LstChr);// added for testing with lvgl display handler
+        // printf("advparser.Msgbuf = %c%s%c\n", '"', advparser.Msgbuf, '"');// added for testing with lvgl display handler
         if (LstChr == 0x20) // test to see if a word break/space has been applied
         {
           //deletCnt++; // number of characters + space to be deleted
@@ -965,19 +967,36 @@ void AdvParserTask(void *param)
         /*Add word break space to post parsed text*/
         char RingBufTst = 'T';
         /*returns true if the 2 buffer pointers are the same*/
+        ringbuf[0] = ringbuf[1]  = ringbuf[2] = ringbuf[3] = 0;
         if (!lvglmsgbx.TestRingBufPtrs())
-        {//append whatever is being held in the ringbuffer to the end of the new advance parser text string
-          /*most likely a 'space'/0x20*/
-          lvglmsgbx.XferRingbuf(advparser.Msgbuf);
-           RingBufTst = 'F';
+        {
+          bufcharcnt = lvglmsgbx.XferRingbuf(ringbuf);
+          RingBufTst = 'F';
         }
-        else
-        { //Nothing waiting in ring buffer
-          advparser.Msgbuf[NuMsgLen] = 0x20; // 0x5f;//0x20;
-          advparser.Msgbuf[NuMsgLen + 1] = 0x0;
-        }
+        // { // append whatever is being held in the ringbuffer to the end of the new advance parser text string
+        //   /*most likely a 'space'/0x20*/
+        //   lvglmsgbx.XferRingbuf(advparser.Msgbuf);
+        //   RingBufTst = 'F';
+        //   /*test/confirm the added character was not the last character in the original text string*/
+        //   int lstCharpos = strlen(advparser.Msgbuf) - 1;
+        //   if ((advparser.Msgbuf[lstCharpos] != LstChr) && LstChr == 0x20 && LstChr == 68)
+        //   {
+        //     advparser.Msgbuf[lstCharpos] = 0x0; // delete the appended character
+        //     RingBufTst = '$';                  //'C' = Corrected
+        //   }
+        // }
+        // else
+        // { //Nothing waiting in ring buffer
+        //   advparser.Msgbuf[NuMsgLen] = 0x20; // 0x5f;//0x20;
+        //   advparser.Msgbuf[NuMsgLen + 1] = 0x0;
+        // }
+        advparser.Msgbuf[NuMsgLen] = 0x20; // 0x5f;//0x20;
+        advparser.Msgbuf[NuMsgLen + 1] = 0x0;
         if(deletCnt>0)
         {
+          /*now test for a mismatch in calculated delete count*/
+          if(bufcharcnt == 2) deletCnt -=1;
+          if(RingBufTst == 'T') deletCnt +=2;
           char DelStr[30];
           if(deletCnt>29) deletCnt = 29;
           for(int i = 0; i < deletCnt; i++)
@@ -985,7 +1004,7 @@ void AdvParserTask(void *param)
             DelStr[i] = 0x8;
           }
           DelStr[deletCnt] = 0x0;
-          /*Now copy the new adparser character string/set to a temp buffer 'tmpbuf'*/
+          /*Now copy the new advparser character string/set to a temp buffer 'tmpbuf'*/
           char tmpbuf[30];
           int ptr = 0;
           while(advparser.Msgbuf[ptr] !=0 && ptr <28)
@@ -998,7 +1017,8 @@ void AdvParserTask(void *param)
            needed to remove the original text*/
           sprintf(advparser.Msgbuf,"%s%s", DelStr, tmpbuf);
           /*for test/debug, show/print the before & after results*/
-          printf("old txt:%s;  new txt:%s; delete cnt: %d; new txt length: %d; RingBufTst: %c; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, ptr, RingBufTst, spacemarker, LstChr);
+          printf("old txt:%s;  new txt:%s; delete cnt: %d; new txt length: %d; RingBufTst=%c; bufcharcnt: %d; ringbuf: %c%s%c; Space Corrected = %c(%d/%c%c%C) \n", advparser.LtrHoldr, tmpbuf, deletCnt, ptr, RingBufTst, bufcharcnt, '"', ringbuf, '"', spacemarker, LstChr, '"', LstChr, '"');
+          //printf("old txt:%s;  new txt:%s; delete cnt: %d; new txt length: %d; Space Corrected = %c(%d/%c%c%C) \n", advparser.LtrHoldr, tmpbuf, deletCnt, ptr, spacemarker, LstChr, '"', LstChr, '"');
         }
         //lvglmsgbx.Delete(true, deletCnt);
         
@@ -1012,7 +1032,7 @@ void AdvParserTask(void *param)
         /*now should be safe resume displayupdate task*/
            xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
         }
-      } // else printf("%s\n", advparser.LtrHoldr);
+      }//else printf("old txt: %s\n", advparser.LtrHoldr);
 
       if (advparser.Dbug)
         printf("%s\n", advparser.LtrHoldr);

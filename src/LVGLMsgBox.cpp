@@ -2685,24 +2685,28 @@ bool LVGLMsgBox::TestRingBufPtrs(void)
 	if(RingbufPntr1 == RingbufPntr2) return true;
 	else return false;
 };
-void LVGLMsgBox::XferRingbuf(char Bfr[50])
+int LVGLMsgBox::XferRingbuf(char Bfr[50])
 {
 	/*find end of Buffer*/
 	int i =0;
-	while(Bfr[i] !=0) i++;
+	//printf("ringbuf content:%c",'"');
+	//while(Bfr[i] !=0) i++;
 	while(RingbufPntr1 != RingbufPntr2)
 	{
 		Bfr[i] = DeCdrRingbufChar[RingbufPntr2];
+		//printf("%c", DeCdrRingbufChar[RingbufPntr2]);
 		i++;
-		Bfr[i] = 0;
-		if(i == 49){// not likely to ever happen
-			Bfr[i-1] = 0;
-			return;
-		} 	
+		//Bfr[i] = 0;
+		//if(i == 49){// not likely to ever happen
+		//	Bfr[i-1] = 0;
+		//	return;
+		//} 	
 		RingbufPntr2++;
 		if(RingbufPntr2 == RingBufSz)
 				RingbufPntr2 = 0;
-	} 
+	}
+	//printf("%c\n",'"');
+	return i; 
 
 };
 /*This executes when the 'Home' button event fires*/

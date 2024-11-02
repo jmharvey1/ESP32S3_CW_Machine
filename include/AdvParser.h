@@ -23,7 +23,7 @@
 #include <stdio.h>
 #define IntrvlBufSize 200
 #define MsgbufSize 50
-#define SrchDictSize 760
+#define SrchDictSize 770
 struct Buckt_t
 {
 	uint16_t Intrvl;
@@ -804,6 +804,10 @@ private:
         {"TH9", "THON", 3, 0}, //756
         {"CLDKT", "CLDY", 5, 0}, //757
         {"M9D", "MOND", 3, 200}, //758 //super sloppy bug
+        {"REAS9", "REASON", 5, 0}, //759
+        {"HTTTUR", "HOUR", 6, 0}, //760
+        {"RTTTUND", "ROUND", 7, 0}, //761
+        {"ATILL", "WILL", 5, 0}, //762
     };
     
     bool AllDah;

@@ -3117,6 +3117,7 @@ void AdvParser::FixClassicErrors(void)
     //char SrchTerm[10];
     //char RplaceTerm[10];
     // printf("MemAddr %#08X; this->Msgbuf: %s \n", (int)&this->Msgbuf, this->Msgbuf);
+    printf("\nthis->Msgbuf: %c%s%c \n", '"', this->Msgbuf, '"');
     int NdxPtr = 0;
     //printf("StrLength: %d; Msgbuf: %s \n", this->StrLength, this->Msgbuf);
     //for (NdxPtr = 0; NdxPtr < this->StrLength - 1; NdxPtr++)
