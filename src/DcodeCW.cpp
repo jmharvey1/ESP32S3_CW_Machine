@@ -1410,8 +1410,8 @@ bool chkChrCmplt(void)
 					//printf("advparser.Dbug = true\n");
 					advparser.Dbug = true;
 				}
-				else
-					advparser.Dbug = false;
+				// else
+				// 	advparser.Dbug = false;
 				/*Sync advparser.wrdbrkFtcr to current wrdbrkFtcr*/
 				advparser.wrdbrkFtcr = wrdbrkFtcr;
 				/*Perpare advparser, by 1st copying current decoder symbol sets into local advparser arrays*/

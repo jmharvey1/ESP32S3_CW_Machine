@@ -77,13 +77,13 @@ void AdvParser::EvalTimeData(void)
 {
     // this->wpm = curWPM;
     KeyDwnBucktPtr = KeyUpBucktPtr = 0; // reset Bucket pntrs
-    bool prntOvrRide = false;
-    bool oldDbugState = false;
     NewSpltVal = false;
     StrLength = 0;
     this->AllDit = false;
     bool DoGlitchChk = false;
-    Dbug = false; //enable for special testing
+    //bool prntOvrRide = false;
+    //bool oldDbugState = false;
+    //Dbug = false; //enable for special testing
     if (this->LstGltchEvnt != 0)
     {
         unsigned long LstGltchIntrvl = pdTICKS_TO_MS(xTaskGetTickCount()) - this->LstGltchEvnt;
@@ -899,10 +899,10 @@ void AdvParser::EvalTimeData(void)
         printf("AdvParse text: %s\n", this->Msgbuf);
         printf("\n--------\n\n");
     }
-    if (prntOvrRide)
-    {
-        this->Dbug = oldDbugState;
-    }
+    // if (prntOvrRide)
+    // {
+    //     this->Dbug = oldDbugState;
+    // }
 };
 /*Sort number array in ascending order*/
 void AdvParser::insertionSort(uint16_t arr[], int n)
@@ -3114,10 +3114,7 @@ void AdvParser::Dcode4Dahs(int n)
 void AdvParser::FixClassicErrors(void)
 {                                             // No longer need to worry about if we have enough decoded characters evaluate the following sloppy strings this->Msgbuf now has enough data, to test for special character combos often found with sloppy sending
     int lstCharPos = (this->StrLength) - 1; // sizeof(this->Msgbuf) - 2;
-    //char SrchTerm[10];
-    //char RplaceTerm[10];
-    // printf("MemAddr %#08X; this->Msgbuf: %s \n", (int)&this->Msgbuf, this->Msgbuf);
-    printf("\nthis->Msgbuf: %c%s%c \n", '"', this->Msgbuf, '"');
+    //printf("\nthis->Msgbuf: %c%s%c \n", '"', this->Msgbuf, '"');
     int NdxPtr = 0;
     //printf("StrLength: %d; Msgbuf: %s \n", this->StrLength, this->Msgbuf);
     //for (NdxPtr = 0; NdxPtr < this->StrLength - 1; NdxPtr++)

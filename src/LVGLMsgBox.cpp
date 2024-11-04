@@ -10,6 +10,7 @@
 /*20240904 re-worked cursor management, in send test area, to improve outgoing character hilighting */
 /*20240924 reworked Update_textarea() when 'capping the ta buffer to take in account the character width*/
 /*20241026 Added 'F9' Scope Screen */
+/*20241104 added 'ScopeActive' flag to better syncronize when its OK to update the 'SCOPE' screen*/
 
 #include <stdio.h>
 #include "sdkconfig.h"
@@ -917,7 +918,7 @@ void Bld_Settings_scrn(void)
 	// }
 }
 
-/*Build GUI */
+/*Build GUI (Main Screen)*/
 void Bld_LVGL_GUI(void)
 {
 	if (scr_1 == NULL){
@@ -1762,7 +1763,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 	bool JstDoIt = true;
 	char bias[24];
 	char freq[24];
-	if(ScopeFlg)
+	if(ScopeActive)
 	{ //ready to refresh "scope" view
 		if (SmplSetRdy)
 		{

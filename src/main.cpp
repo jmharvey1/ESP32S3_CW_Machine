@@ -9,8 +9,10 @@
   Also added this statement, two places, in the same file, 
   free(i2c_dev->master_bus->anyc_write_buffer[i2c_dev->master_bus->index]);
   at lines 984, & 1023.
+
+  Note 2: Update LVGLMsgBox.h file to get the REV DAtE to update on the Main Screen's title line.
 */
-/*Note: When creating a new lvgl/WaveShare LCD/ESP32s3 project, to run menuconfig, & set the following settings:
+/*Note 3: When creating a new lvgl/WaveShare LCD/ESP32s3 project, to run menuconfig, & set the following settings:
 CONFIG_FREERTOS_HZ=1000
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
@@ -56,6 +58,8 @@ esp_event_loop_args_t event_task_args = {
 /*20241026 Added 'F9' Scope Screen */
 /*20241028 Added IIR tracking filter to ADC processing*/
 /*20241031 Reworked postparsing replace text process/code*/
+/*20241103 added direct Linking of Settings Screen Debug setting to advance parser's Dbug property */
+/*20241104 added ScopeActive flag to better syncronize when its OK to update the 'SCOPE' screen*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -126,6 +130,7 @@ esp_err_t ret;
 char Title[120];
 bool setupFlg = false;
 bool ScopeFlg = false;
+bool ScopeActive = false;
 bool clrbuf = false;
 bool PlotFlg = false;
 bool UrTurn = true;
@@ -893,7 +898,6 @@ void AdvParserTask(void *param)
       int NuMsgLen = advparser.GetMsgLen();
       int LtrPtr = advparser.LtrPtr;
       wrdbrkFtcr = advparser.wrdbrkFtcr;
-      // printf("NuMsgLen = %d; LtrPtr %d\n", NuMsgLen, LtrPtr);
       if (NuMsgLen > LtrPtr || NuMsgLen < LtrPtr)
       { // if the advparser test string is longer, then delete the last word printed
         same = false;
@@ -931,7 +935,6 @@ void AdvParserTask(void *param)
         {
         bool oldDltState = dletechar;
         LstChr = lvglmsgbx.GetLastChar();
-        // printf("advparser.Msgbuf = %c%s%c\n", '"', advparser.Msgbuf, '"');// added for testing with lvgl display handler
         if (LstChr == 0x20) // test to see if a word break/space has been applied
         {
           //deletCnt++; // number of characters + space to be deleted
@@ -1017,13 +1020,13 @@ void AdvParserTask(void *param)
            needed to remove the original text*/
           sprintf(advparser.Msgbuf,"%s%s", DelStr, tmpbuf);
           /*for test/debug, show/print the before & after results*/
-          printf("old txt:%s;  new txt:%s; delete cnt: %d; new txt length: %d; RingBufTst=%c; bufcharcnt: %d; ringbuf: %c%s%c; Space Corrected = %c(%d/%c%c%C) \n", advparser.LtrHoldr, tmpbuf, deletCnt, ptr, RingBufTst, bufcharcnt, '"', ringbuf, '"', spacemarker, LstChr, '"', LstChr, '"');
-          //printf("old txt:%s;  new txt:%s; delete cnt: %d; new txt length: %d; Space Corrected = %c(%d/%c%c%C) \n", advparser.LtrHoldr, tmpbuf, deletCnt, ptr, spacemarker, LstChr, '"', LstChr, '"');
+          //printf("old txt:%s;  new txt:%s; delete cnt: %d; new txt length: %d; RingBufTst=%c; bufcharcnt: %d; ringbuf: %c%s%c; Space Corrected = %c(%d/%c%c%C) \n", advparser.LtrHoldr, tmpbuf, deletCnt, ptr, RingBufTst, bufcharcnt, '"', ringbuf, '"', spacemarker, LstChr, '"', LstChr, '"');
         }
         //lvglmsgbx.Delete(true, deletCnt);
         
         if(advparser.Dbug)
           printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
+        // else printf("advparser.Dbug OFF\n");
         // printf("Pointer ERROR\n");/ printf("No Match @ %d; %d; %d\n", FmtchPtr, LtrHoldr[FmtchPtr], advparser.Msgbuf[FmtchPtr]);
         CptrTxt = false;
         lvglmsgbx.dispDeCdrTxt(advparser.Msgbuf, TFT_GREEN); // Added for lvgl; Note: color value is meaningless
@@ -1386,6 +1389,9 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
       /*Now ready to jump to "settings" screen */
       lvglmsgbx.BldSettingScreen();
       SettingsLoop(); // go here while settings screen is active
+      advparser.Dbug = (bool)DFault.DeBug;
+      // if (advparser.Dbug) printf("advparser.Dbug ENABLED\n");
+      // else printf("advparser.Dbug OFF\n");
       CWsndengn.RefreshWPM();
       if (IntSOTstate && !CWsndengn.GetSOTflg())
         CWsndengn.SOTmode(); // Send On Type was enabled when we went to 'settings' so re-enable it
@@ -1991,6 +1997,7 @@ void ScopeLoop(void)
   int paramCnt = 9;
   bool FocusChngd = false;
   int oldparamPtr = 0;
+  ScopeActive = true;
   //lvglmsgbx.HiLite_Seltcd_Setting(paramPtr, oldparamPtr); 
   while (ScopeFlg)
   {
@@ -2001,6 +2008,7 @@ void ScopeLoop(void)
     {
       /*user wants to exit Scope screen*/
       CWsndengn.SetWPM(DFault.WPM);//syncDfltwSettings could have updated/changed the WPM setting so we need to make sure the send engine has the latest
+      ScopeActive = false;
       ScopeFlg = false;
     }
     // else if (key == 0x98)

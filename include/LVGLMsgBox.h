@@ -3,6 +3,7 @@
  *
  *  Created on: Oct 7, 2021
  *      Author: jim
+ * Note: Update this file to get the REV DAtE to update on the Main Screen's title line
  */
 
 #ifndef INC_LVGLMSGBOX_H_
@@ -21,7 +22,6 @@ extern "C" {
 /*Added the following for Waveshare & lvgl support*/
 #include <lv_conf.h>
 #include "lvgl.h"
-
 #define TODAY __DATE__
 /*Waveshare 800x480 display & touch specific parameters*/
 #define LV_TICK_PERIOD_MS (100) //JMH chnaged this from 2 to 100; In this application, this timer does nothing usueful
@@ -90,6 +90,7 @@ extern int freq_int;
 extern int bias_int;
 extern bool SmplSetRdy;
 extern bool ScopeFlg;
+extern bool ScopeActive;
 class LVGLMsgBox
 {
 private:
