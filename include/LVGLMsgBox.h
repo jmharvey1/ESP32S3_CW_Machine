@@ -90,7 +90,55 @@ extern int freq_int;
 extern int bias_int;
 extern bool SmplSetRdy;
 extern bool ScopeFlg;
+extern bool HelpFlg;
 extern bool ScopeActive;
+const char HelpText[] = {"KeyBoard Encoder Notes:\n\
+Special Keys & their functions:\n\
+Keys that send special Morse Characters\n\
+1. \"=\"	<BT>\n\
+2. \"+\"	<KN>\n\
+3. \">\"	<AR>\n\
+4. \"<\"	<AS>\n\
+5. \"%\"	<SK>\n\
+6. All other unassigned keys (i.e. \"{\", \"]\",...) send 6 dits, CW error code\n\n\
+Special Functions:\n\
+1. cntrl+T	Generates continuous key down state. Press \"cntrl+T\" again (or another key) to stop.\n\
+2. Enter [pressed by itself] sends the \"My Call\" memory entry. (see settings screen)\n\
+3. \"delete\" Back space, to delete unsent buffered code.\n\
+4. Right Arrow	Same as F12.\n\
+5. Left Arrow Same as F1.\n\
+6. \"Lshift+Enter\" Send \"F1\" stored text plus Your call sign.\n\
+7. \"Cntrl+Enterv Send \"F1\" stored text.\n\
+8. \"Esc\"   Abort/dump outgoing text\n\ 	
+10. Cntrl+S Go to settings Screen; Press Cntrl+S again to return to normal CW mode.(Note: No CW sent while in the \"settings\"mode); i.e., Default WPM. Call Sign, F2 memory\n\
+11. F1 Save up to ten characters (usually the DX call sign) to be sent when L. Shift (or Cntrl)+enter is pressed, Press F1 again to stop the \"save\"  mode (Note: F1 Active while in \"save\" mode)\n\
+12. F2 Send stored F2 message\n\
+13. F3 Send stored F3 message\n\
+14. F4 Send stored F4 message\n\
+15. F12 suspend outgoing text; Press F12 again to resume sending outgoing text (Note: \"F12 SOT OFF\" while in \"suspend\" mode)\n\
+\n\
+***********************************************************************************\n\
+CW Decoder & other Keys:\n\
+Special Keys & their functions:\n\
+1. Left Ctrl+f: index through select tone tune modes\n\
+        FF  (Fixed Frequency)\n\
+        AF  (Auto-Tune 500 to 900Hz)\n\
+2. Left Ctrl+G: Enable/Disable Debug\n\
+3. Left Ctrl+P:  Plot On/off\n\
+4. F9: Enable/Disable Scope View\n\    
+\n\
+\"F1 Mem\" and \"F1 Active\" enables typed characters to be saved into F1 memory\n\
+\n\
+The \"Enter\" key has 3 \"send\" modes;\n\ 
+1. \"Enter\"       (send your call sign only);\n\ 
+2. \"Shift+Enter\" (Send F1 call sign + your call sign);\n\
+3. \"Ctrl+Enter\"  (Send F1 Call sign only). \n\
+\n\
+Note, if \"F12\" is in the \"SOT ON\" mode, the key presses will also be sent to your Tx (via the uart), allowing you to both return the \"far end\" call, & \"save\" the call, at the same time (for future returns/ \"overs\"). On the other hand, if you dont want to be sending (CW), while loading the F1 memory, press the F12 key, to read \"F12 SOT OFF\". Now this part gets a bit tricky. When you finished loading the F1 memory, press F1 (so it now reads F1 Mem), and while F12 reads \"F12 SOT OFF\", press the \"escape\" key (that will flush the F12 SOT buffer). Then press F12 (to get it back to \"F12 SOT ON\"), and youll have F1 loaded, and ready to go, without actually having sent the \"Far end\" call over the air.\n\
+\n\
+Remember, F1 is different from the other memories, as its intended just for storing \"call signs\" and to be changed \"on the fly\" Also note too, you can clear the F1 memory, just by cycling the F1 key (and not typing anything, while it reads \"F1 Active\")\n\
+"};
+
 class LVGLMsgBox
 {
 private:
@@ -209,6 +257,7 @@ public:
 	void UpdateToneSig(int curval);
 	void BldSettingScreen(void);
 	void BldScopeScreen(void);
+	void BldHelpScreen(void);
 	void ReStrtMainScrn(void);
 	void HiLite_Seltcd_Setting(int paramptr, int oldparamptr);
 	void Exit_Settings(int paramptr);

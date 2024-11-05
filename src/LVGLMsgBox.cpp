@@ -11,7 +11,7 @@
 /*20240924 reworked Update_textarea() when 'capping the ta buffer to take in account the character width*/
 /*20241026 Added 'F9' Scope Screen */
 /*20241104 added 'ScopeActive' flag to better syncronize when its OK to update the 'SCOPE' screen*/
-
+/*20241105 added F1 stored memory contents to main screen & Help Screen */
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "LVGLMsgBox.h"
@@ -53,12 +53,15 @@ i2c_master_bus_handle_t i2c_master_bus_handle = nullptr; // added here for waves
 i2c_master_dev_handle_t Touch_dev_handle = NULL;		 // added here for waveshare touch support
 
 /*GUI Variables*/
+lv_obj_t *win3; //help screen
 lv_obj_t *win2;
 lv_obj_t *win1;
 static lv_obj_t *cont1;
 static lv_obj_t *cont2;
+static lv_obj_t *cont3; //help screen
 lv_obj_t *DecdTxtArea;
 lv_obj_t *SendTxtArea;
+static lv_obj_t *Helpta; //help screen
 static lv_obj_t *MyCallta;
 static lv_obj_t *WPMta;
 static lv_obj_t *MemF2ta;
@@ -76,11 +79,13 @@ lv_obj_t *Dbg_ChkBx;
 lv_obj_t *chkbx_lbl;
 static lv_obj_t *save_btn;
 static lv_obj_t *exit_btn;
+static lv_obj_t *Hexit_btn;
 /*added for scope Sceen*/
 int bias_int = 0;
 int freq_int = 0;
 bool SmplSetRdy = false;
 static lv_obj_t * ui_Scope;
+static lv_obj_t * ui_Help;
 static lv_obj_t * ui_Chart1;
 static lv_obj_t * ui_Label1;
 static lv_obj_t * ui_Label2;
@@ -123,6 +128,7 @@ bool report = false;
 bool Msg2Actv = false;
 int timerID = 0;
 uint8_t OldBat_Lvl = 0;
+void Bld_Help_scrn(void);
 void Bld_Settings_scrn(void);
 void Bld_Scope_scrn(void);
 void Bld_LVGL_GUI(void);
@@ -139,6 +145,23 @@ static void screen1_event_handler(lv_event_t *e)
 	{
 		//printf("Main Screen (sc_1) 'Settings' button click event\n");
 		setupFlg = true;
+	}
+	break;
+
+	default:
+		break;
+	}
+}
+static void HelpBtn_event_handler(lv_event_t *e)
+{
+	const char *TAG1 = "HelpBtn_event_handler";
+	lv_event_code_t code = lv_event_get_code(e);
+	switch (code)
+	{
+	case LV_EVENT_CLICKED:
+	{
+		//printf("Main Screen (sc_1) 'Help' button click event\n");
+		HelpFlg = !HelpFlg;
 	}
 	break;
 
@@ -488,9 +511,22 @@ void lvgl_UpdateToneSig(int curval)
 
 void lvgl_UpdateF1Mem(bool ActvFlg)
 {
-	/*this gets update via dispMsg2(int RxSig). So does not need set/clear semaphore */
+	/*this gets updated via dispMsg2(int RxSig). So does not need set/clear semaphore */
 	if(ActvFlg) lv_label_set_text(F1_Str_lbl, "F1 Active");
-	else lv_label_set_text(F1_Str_lbl, "F1 Mem");
+	else
+	{
+		char msg[25];
+		if(strlen(StrdTxt) == 0)
+		{
+			sprintf(msg, "F1 Mem");
+		}
+		else
+		{
+			sprintf(msg, "F1 (%s)", StrdTxt);
+		} 
+		//lv_label_set_text(F1_Str_lbl, "F1 Mem");
+		lv_label_set_text(F1_Str_lbl, msg);
+	} 
 	return;
 }
 
@@ -684,6 +720,47 @@ void lvgl_HiLite_Seltcd_Param(int paramptr)
 	}
 }
 
+void Bld_Help_scrn(void)
+{
+	if(ui_Help == NULL)
+	{
+		ui_Help = lv_obj_create(NULL);
+		lv_obj_clear_flag(ui_Help, LV_OBJ_FLAG_SCROLLABLE); /// Flags
+		lv_style_reset(&style_btn);
+		lv_style_set_border_width(&style_btn, 1);
+		lv_style_set_border_opa(&style_btn, LV_OPA_100);
+		lv_style_set_border_color(&style_btn, lv_color_black());
+		lv_style_reset(&style_label);
+		lv_style_set_text_font(&style_label, &lv_font_montserrat_14);
+		lv_style_set_text_opa(&style_label, LV_OPA_100);
+		lv_style_set_text_color(&style_label, lv_color_black());
+		if (win3 == NULL)
+			win3 = lv_win_create(ui_Help, title_height);
+		lv_win_add_title(win3, "Help (press 'F9' to exit this screen)");
+		lv_obj_set_size(win3, 800, 480);
+		cont3 = lv_win_get_content(win3);
+		Helpta = lv_textarea_create(cont3);
+		lv_obj_set_size(Helpta, 760, 400); // width & Height
+		lv_obj_set_pos(Helpta, 0, 0);
+		lv_textarea_set_text(Helpta, HelpText);
+		
+	}
+	/*exit button*/
+	Hexit_btn = lv_btn_create(cont3);
+	lv_obj_add_style(Hexit_btn, &style_btn, 0);
+	lv_obj_set_size(Hexit_btn, 100, 30);
+	// lv_obj_align(exit_btn, LV_ALIGN_CENTER, 0, 401);
+	lv_obj_set_pos(Hexit_btn, 340, 401);
+	lv_obj_add_event_cb(Hexit_btn, HelpBtn_event_handler, LV_EVENT_CLICKED, NULL);
+
+	lv_obj_t *Hexit_label = lv_label_create(Hexit_btn);
+	lv_obj_add_style(Hexit_label, &style_label, 0);
+	lv_label_set_text(Hexit_label, "Home");
+	lv_obj_align_to(Hexit_label, Hexit_btn, LV_ALIGN_CENTER, 0, 0);
+	lv_scr_load(ui_Help);
+	lv_textarea_set_cursor_pos(Helpta, 1-strlen(HelpText));//
+}
+
 
 void Bld_Scope_scrn(void)
 {
@@ -773,13 +850,13 @@ void Bld_Settings_scrn(void)
 		cont2 = lv_win_get_content(win2);
 		/*My Call Setting*/
 		lv_obj_t *label = lv_label_create(cont2);
-		lv_obj_set_size(label, 50, 20);
+		lv_obj_set_size(label, 58, 20);
 		lv_obj_set_pos(label, 5, 25);
 		lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP); // LV_LABEL_LONG_CLIP
 		lv_label_set_text(label, "My Call:");
 		MyCallta = lv_textarea_create(cont2);
 		lv_obj_set_size(MyCallta, 100, 20); // width & Height
-		lv_obj_set_pos(MyCallta, 60, 12);
+		lv_obj_set_pos(MyCallta, 65, 12);
 		lv_textarea_set_one_line(MyCallta, true);
 		lv_textarea_set_max_length(MyCallta, 10);
 		lv_textarea_set_text(MyCallta, DFault.MyCall); // DFault.MyCall
@@ -804,13 +881,13 @@ void Bld_Settings_scrn(void)
 
 		/*MemF2 Setting*/
 		lv_obj_t *MemF2_lbl = lv_label_create(cont2);
-		lv_obj_set_size(MemF2_lbl, 50, 20);
+		lv_obj_set_size(MemF2_lbl, 58, 20);
 		lv_obj_set_pos(MemF2_lbl, 0, 70);
 		lv_label_set_long_mode(MemF2_lbl, LV_LABEL_LONG_CLIP); // LV_LABEL_LONG_CLIP
 		lv_label_set_text(MemF2_lbl, "F2 mem:");
 		MemF2ta = lv_textarea_create(cont2);
 		lv_obj_set_size(MemF2ta, 650, 40); // width & Height
-		lv_obj_set_pos(MemF2ta, 60, 55);
+		lv_obj_set_pos(MemF2ta, 65, 55);
 		// lv_textarea_set_one_line(MemF2ta, true);
 		lv_textarea_set_max_length(MemF2ta, 80);
 		lv_textarea_set_text(MemF2ta, DFault.MemF2);
@@ -818,13 +895,13 @@ void Bld_Settings_scrn(void)
 		/*MemF3 Setting*/
 		int row1 = 70 + 45;
 		lv_obj_t *MemF3_lbl = lv_label_create(cont2);
-		lv_obj_set_size(MemF3_lbl, 50, 20);
+		lv_obj_set_size(MemF3_lbl, 58, 20);
 		lv_obj_set_pos(MemF3_lbl, 0, row1);
 		lv_label_set_long_mode(MemF3_lbl, LV_LABEL_LONG_CLIP); // LV_LABEL_LONG_CLIP
 		lv_label_set_text(MemF3_lbl, "F3 mem:");
 		MemF3ta = lv_textarea_create(cont2);
 		lv_obj_set_size(MemF3ta, 650, 40); // width & Height
-		lv_obj_set_pos(MemF3ta, 60, row1 - 15);
+		lv_obj_set_pos(MemF3ta, 65, row1 - 15);
 		// lv_textarea_set_one_line(MemF3ta, true);
 		lv_textarea_set_max_length(MemF3ta, 80);
 		lv_textarea_set_text(MemF3ta, DFault.MemF3);
@@ -832,13 +909,13 @@ void Bld_Settings_scrn(void)
 		/*MemF4 Setting*/
 		int row2 = row1 + 45;
 		lv_obj_t *MemF4_lbl = lv_label_create(cont2);
-		lv_obj_set_size(MemF4_lbl, 50, 20);
+		lv_obj_set_size(MemF4_lbl, 58, 20);
 		lv_obj_set_pos(MemF4_lbl, 0, row2);
 		lv_label_set_long_mode(MemF4_lbl, LV_LABEL_LONG_CLIP); // LV_LABEL_LONG_CLIP
 		lv_label_set_text(MemF4_lbl, "F4 mem:");
 		MemF4ta = lv_textarea_create(cont2);
 		lv_obj_set_size(MemF4ta, 650, 40); // width & Height
-		lv_obj_set_pos(MemF4ta, 60, row2 - 15);
+		lv_obj_set_pos(MemF4ta, 65, row2 - 15);
 		// lv_textarea_set_one_line(MemF4ta, true);
 		lv_textarea_set_max_length(MemF4ta, 80);
 		lv_textarea_set_text(MemF4ta, DFault.MemF4);
@@ -846,13 +923,13 @@ void Bld_Settings_scrn(void)
 		/*MemF5 Setting*/
 		row3 = row2 + 45;
 		lv_obj_t *MemF5_lbl = lv_label_create(cont2);
-		lv_obj_set_size(MemF5_lbl, 50, 20);
+		lv_obj_set_size(MemF5_lbl, 58, 20);
 		lv_obj_set_pos(MemF5_lbl, 0, row3);
 		lv_label_set_long_mode(MemF5_lbl, LV_LABEL_LONG_CLIP); // LV_LABEL_LONG_CLIP
 		lv_label_set_text(MemF5_lbl, "F5 mem:");
 		MemF5ta = lv_textarea_create(cont2);
 		lv_obj_set_size(MemF5ta, 650, 40); // width & Height
-		lv_obj_set_pos(MemF5ta, 60, row3 - 15);
+		lv_obj_set_pos(MemF5ta, 65, row3 - 15);
 		// lv_textarea_set_one_line(MemF5ta, true);
 		lv_textarea_set_max_length(MemF5ta, 80);
 		lv_textarea_set_text(MemF5ta, DFault.MemF5);
@@ -1001,14 +1078,14 @@ void Bld_LVGL_GUI(void)
 		lv_label_set_text(wpm_lbl, "-- WPM");
 
 		F1_Str_lbl = lv_label_create(cont1);
-		lv_obj_set_size(F1_Str_lbl, 80, 20);
+		lv_obj_set_size(F1_Str_lbl, 100, 20);
 		lv_obj_set_pos(F1_Str_lbl, 10, 400);
 		lv_label_set_long_mode(F1_Str_lbl, LV_LABEL_LONG_CLIP);
 		lv_label_set_text(F1_Str_lbl, "F1 Mem");
 
 		F12_SOT_lbl = lv_label_create(cont1);
 		lv_obj_set_size(F12_SOT_lbl, 90, 20);
-		lv_obj_set_pos(F12_SOT_lbl, 100, 400);
+		lv_obj_set_pos(F12_SOT_lbl, 120, 400);
 		lv_label_set_long_mode(F12_SOT_lbl, LV_LABEL_LONG_CLIP);
 		lv_label_set_text(F12_SOT_lbl, "F12 SOT ON");
 
@@ -1029,14 +1106,25 @@ void Bld_LVGL_GUI(void)
 	lv_obj_t *exit_btn = lv_btn_create(scr_1);
 	lv_obj_add_style(exit_btn, &style_btn, 0);
 	lv_obj_set_size(exit_btn, 80, 30);
-	// lv_obj_align(exit_btn, LV_ALIGN_CENTER, 0, 0);
-	lv_obj_set_pos(exit_btn, 360, 440);
+	lv_obj_set_pos(exit_btn, 320, 440);
 	lv_obj_add_event_cb(exit_btn, screen1_event_handler, LV_EVENT_CLICKED, NULL);
 
 	lv_obj_t *exit_btn_label = lv_label_create(exit_btn);
 	lv_obj_add_style(exit_btn_label, &style_label, 0);
 	lv_label_set_text(exit_btn_label, "Settings");
 	lv_obj_align_to(exit_btn_label, exit_btn, LV_ALIGN_CENTER, 0, 0);
+
+	/*Setup 'help' button at bottom of display*/
+	lv_obj_t *help_btn = lv_btn_create(scr_1);
+	lv_obj_add_style(help_btn, &style_btn, 0);
+	lv_obj_set_size(help_btn, 80, 30);
+	lv_obj_set_pos(help_btn, 410, 440);
+	lv_obj_add_event_cb(help_btn, HelpBtn_event_handler, LV_EVENT_CLICKED, NULL);
+
+	lv_obj_t *help_btn_label = lv_label_create(help_btn);
+	lv_obj_add_style(help_btn_label, &style_label, 0);
+	lv_label_set_text(help_btn_label, "Help");
+	lv_obj_align_to(help_btn_label, help_btn, LV_ALIGN_CENTER, 0, 0);
 
 	lv_scr_load(scr_1);
 
@@ -2577,11 +2665,41 @@ void LVGLMsgBox::BldScopeScreen(void)
 			{
 				trycnt = 5;
 				report = true;
-				printf("LVGLMsgBox::BldSettingScreen timed out; MutexLckId = %d; timerID = %d\n", MutexLckId, timerID);
+				printf("LVGLMsgBox::BldScopeScreen timed out; MutexLckId = %d; timerID = %d\n", MutexLckId, timerID);
 			}
 		}
 	}
 	Bld_Scope_scrn();
+	xSemaphoreGive(lvgl_semaphore);
+	MutexLckId = 0;
+};
+void LVGLMsgBox::BldHelpScreen(void)
+{
+	bool tryagn = true;
+	int trycnt = 0;
+	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  xSemaphoreTake;  Start\n");
+	while (tryagn)
+	{
+		if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
+		{
+			MutexLckId = 9;
+			tryagn = false;
+			report = false;
+			bypassMutex = true;
+			Msg2Actv = true;
+		}
+		else
+		{
+			trycnt++;
+			if (trycnt > 5)
+			{
+				trycnt = 5;
+				report = true;
+				printf("LVGLMsgBox::BldHelpScreen timed out; MutexLckId = %d; timerID = %d\n", MutexLckId, timerID);
+			}
+		}
+	}
+	Bld_Help_scrn();
 	xSemaphoreGive(lvgl_semaphore);
 	MutexLckId = 0;
 };

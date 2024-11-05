@@ -60,6 +60,7 @@ esp_event_loop_args_t event_task_args = {
 /*20241031 Reworked postparsing replace text process/code*/
 /*20241103 added direct Linking of Settings Screen Debug setting to advance parser's Dbug property */
 /*20241104 added ScopeActive flag to better syncronize when its OK to update the 'SCOPE' screen*/
+/*20241105 added F1 stored memory contents to main screen & Help Screen */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -130,6 +131,7 @@ esp_err_t ret;
 char Title[120];
 bool setupFlg = false;
 bool ScopeFlg = false;
+bool HelpFlg = false;
 bool ScopeActive = false;
 bool clrbuf = false;
 bool PlotFlg = false;
@@ -1080,6 +1082,7 @@ void ProcsKeyEntry(uint8_t keyVal);
 void SettingsLoop(void);
 /*Scope screen keybrd entry loop*/
 void ScopeLoop(void);
+void HelpLoop(void);
 /*        Display Update timer ISR Template        */
 void DsplTmr_callback(TimerHandle_t xtimer);
 /*        DotClk timer ISR Template                */
@@ -1410,42 +1413,29 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     }
     if (ScopeFlg)
     {
-      // printf("setupFlg: 'true'\n");
-      /*if true, exit main loop and jump to "Scope" screen */
       bool IntSOTstate = CWsndengn.GetSOTflg();
       if (IntSOTstate)
         CWsndengn.SOTmode();    // do this to stop any outgoing txt that might currently be in progress before switching over to settings screen
       lvglmsgbx.SaveSettings(); // save keyboard app's current display configuration; i.e., ringbuffer pointeres, etc. So that when the user closes the setting screen the keyboard app can conitnue fro where it left off
-      /* if in decode mode 4, the adc DMA scan was never started*/
-      // if (ModeCnt != 4)
-      // {
-      //   ESP_ERROR_CHECK(adc_continuous_stop(adc_handle)); // true; user has pressed Ctl+S key, & wants to configure default settings
-      //   adcON = false;
-      //   printf("CASE 1\n");
-      //   vTaskSuspend(GoertzelTaskHandle);
-      //   ESP_LOGI(TAG1, "SUSPEND GoertzelHandler TASK");
-      //   vTaskSuspend(CWDecodeTaskHandle);
-      //   ESP_LOGI(TAG1, "SUSPEND CWDecodeTaskHandle TASK");
-      //   vTaskDelay(20);
-      // }
       /*Now ready to jump to "Scope" screen */
       lvglmsgbx.BldScopeScreen();
       ScopeLoop(); // go here while Scope screen is active
       CWsndengn.RefreshWPM();
       if (IntSOTstate && !CWsndengn.GetSOTflg())
         CWsndengn.SOTmode(); // Send On Type was enabled when we went to 'settings' so re-enable it
-      // if (ModeCnt != 4)
-      // {
-      //   // Cw_Machine_ADC_init(channel, sizeof(channel) / sizeof(adc_channel_t), &adc_handle);
-      //   // ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
-      //   ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
-      //   adcON = true;
-      //   ESP_LOGI(TAG1, "RESUME CWDecodeTaskHandle TASK");
-      //   vTaskResume(CWDecodeTaskHandle);
-      //   ESP_LOGI(TAG1, "RESUME GoertzelHandler TASK");
-      //   vTaskResume(GoertzelTaskHandle);
-      //   vTaskDelay(20);
-      // }
+    }
+    if (HelpFlg)
+    {
+      bool IntSOTstate = CWsndengn.GetSOTflg();
+      if (IntSOTstate)
+        CWsndengn.SOTmode();    // do this to stop any outgoing txt that might currently be in progress before switching over to settings screen
+      lvglmsgbx.SaveSettings(); // save keyboard app's current display configuration; i.e., ringbuffer pointeres, etc. So that when the user closes the setting screen the keyboard app can conitnue fro where it left off
+      /*Now ready to jump to "Scope" screen */
+      lvglmsgbx.BldHelpScreen();
+      HelpLoop(); // go here while Scope screen is active
+      CWsndengn.RefreshWPM();
+      if (IntSOTstate && !CWsndengn.GetSOTflg())
+        CWsndengn.SOTmode(); // Send On Type was enabled when we went to 'settings' so re-enable it
     }
 
     /*Added this to support 'open' paired BT keyboard event*/
@@ -2011,40 +2001,31 @@ void ScopeLoop(void)
       ScopeActive = false;
       ScopeFlg = false;
     }
-    // else if (key == 0x98)
-    // { // Arrow UP
-    //   key = 0;
-    //   //NtryBoxGrp[paramPtr].KillCsr();
-    //   oldparamPtr = paramPtr;
-    //   paramPtr--;
-    //   FocusChngd = true;
-    // }
-    // else if (key == 0x97)
-    // { // Arrow DOWN
-    //   key = 0;
-    //   //NtryBoxGrp[paramPtr].KillCsr();
-    //   oldparamPtr = paramPtr;
-    //   paramPtr++;
-    //   FocusChngd = true;
-    // }
-    // if (paramPtr == paramCnt)
-    //   paramPtr = 0;
-    // if (paramPtr < 0)
-    //   paramPtr = paramCnt - 1;
-    // if(FocusChngd)
-    // {
-    //   lvglmsgbx.HiLite_Seltcd_Setting(paramPtr, oldparamPtr);
-    //   FocusChngd = false;
-    // }  
-    // else if (key != 0)
-    // {
-    //   lvglmsgbx.KBentry(key, paramPtr);
-    // }
-    // if (!setupFlg)
-    // {
-    //   lvglmsgbx.Exit_Settings(paramPtr);
-    //   lvglmsgbx.ReStrtMainScrn();
-    // }
+    
+  }
+  lvglmsgbx.ReStrtMainScrn();
+  vTaskDelay(pdMS_TO_TICKS(25));
+};
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void HelpLoop(void)
+{
+  int paramPtr = 0;
+  int paramCnt = 9;
+  bool FocusChngd = false;
+  int oldparamPtr = 0;
+  ScopeActive = true;
+  while (HelpFlg)
+  {
+    vTaskDelay(pdMS_TO_TICKS(100));
+    //printf("while(ScopeLoop)\n");
+    uint8_t key = bt_keyboard.wait_for_ascii_char(false);
+    if (key == 0x89) //= "F9"
+    {
+      /*user wants to exit Help screen*/
+      CWsndengn.SetWPM(DFault.WPM);//syncDfltwSettings could have updated/changed the WPM setting so we need to make sure the send engine has the latest
+      //ScopeActive = false;
+      HelpFlg = false;
+    }
   }
   lvglmsgbx.ReStrtMainScrn();
   vTaskDelay(pdMS_TO_TICKS(25));

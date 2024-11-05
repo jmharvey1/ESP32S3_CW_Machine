@@ -56,7 +56,7 @@
 
 AdvParser::AdvParser(void) // TFT_eSPI *tft_ptr, char *StrdTxt
 {
-    this->AvgSmblDedSpc = 1200 / 30;
+    //this->AvgSmblDedSpc = 1200 / 30;
     this->DitDahSplitVal = 106;
     this->AvgSmblDedSpc = 45.0;
     this->Bg1SplitPt = 67;
@@ -388,7 +388,8 @@ void AdvParser::EvalTimeData(void)
     for (int i = 0; i < this->KeyUpBucktPtr; i++)
     {
         
-        if (KeyUpBuckts[i].Intrvl < this->DitDahSplitVal)
+        //if (KeyUpBuckts[i].Intrvl < this->DitDahSplitVal)
+        if (KeyUpBuckts[i].Intrvl < 0.63*this->AvgDahVal) //20241104
         {
             EvntCnt += KeyUpBuckts[i].Cnt;
             RuningTotal += KeyUpBuckts[i].Cnt * KeyUpBuckts[i].Intrvl;
@@ -400,8 +401,11 @@ void AdvParser::EvalTimeData(void)
     }
     uint16_t OldIntvrlx2r5 = UnitIntvrlx2r5;
     UnitIntvrlx2r5 = (uint16_t)(2.4 * ((AvgSmblDedSpc + DitIntrvlVal) / 2));
-    if(!this->AllDit) 
+    if(!this->AllDit)
+    { 
+        //Bg1SplitPt = (uint16_t)((float)UnitIntvrlx2r5 * 0.90);
         Bg1SplitPt = (uint16_t)((float)UnitIntvrlx2r5 * 0.726);
+    }
     // this->WrdBrkVal = (uint16_t)(5 * ((AvgSmblDedSpc + DitIntrvlVal) / 2));
     //this->WrdBrkVal = (uint16_t)(6.0 * ((AvgSmblDedSpc + DitIntrvlVal) / 2)); // 20240506 - made wrd break a little longer, to reduce the frequency of un-needed word breaks
     this->WrdBrkVal = (uint16_t)(5.5 * ((AvgSmblDedSpc + DitIntrvlVal) / 2)); // 20240507 - made wrd break a little longer, to reduce the frequency of un-needed word breaks
@@ -1087,7 +1091,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
     if (this->NuSpltVal != 0)
     {
         if (Dbug)
-            printf("\nNuSpltVal: %d; Dit Ndx: %d\n", this->NuSpltVal, lastDitPtr);
+            printf("\nNuSpltVal: %d; Dit Ndx: %d; DitDahSplitVal: %d \n", this->NuSpltVal, lastDitPtr, this->DitDahSplitVal);
         if (DitDahSplitVal == 0)
             DitDahSplitVal = this->NuSpltVal;
         else

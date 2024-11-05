@@ -18,6 +18,7 @@
 #include "../misc/lv_anim.h"
 #include "../misc/lv_txt.h"
 #include "../misc/lv_math.h"
+//#include <stdio.h>
 
 /*********************
  *      DEFINES
@@ -349,6 +350,7 @@ void lv_textarea_set_cursor_pos(lv_obj_t * obj, int32_t pos)
     if((uint32_t)ta->cursor.pos == (uint32_t)pos) return;
 
     uint32_t len = _lv_txt_get_encoded_length(lv_label_get_text(ta->label));
+    //printf("encoded_length: %d; pos:%d\n", (int)len, (int)pos ); 
 
     if(pos < 0) pos = len + pos;
 
