@@ -808,6 +808,8 @@ private:
         {"HTTTUR", "HOUR", 6, 0}, //760
         {"RTTTUND", "ROUND", 7, 0}, //761
         {"ATILL", "WILL", 5, 0}, //762
+        {"ANOINT", "POINT", 6, 0}, //763
+        {"GASTE", "GAVE", 5, 0}, //764
     };
     
     bool AllDah;

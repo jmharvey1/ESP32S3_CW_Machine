@@ -12,6 +12,7 @@
 /*20241026 Added 'F9' Scope Screen */
 /*20241104 added 'ScopeActive' flag to better syncronize when its OK to update the 'SCOPE' screen*/
 /*20241105 added F1 stored memory contents to main screen & Help Screen */
+/*20241112 Added 'F8' Day Night mode per request from Carl (VK5CT)*/
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "LVGLMsgBox.h"
@@ -126,6 +127,7 @@ int KBrdCursorPntr = 0;
 bool TchEvnt = false;
 bool report = false;
 bool Msg2Actv = false;
+bool NiteMode = false;
 int timerID = 0;
 uint8_t OldBat_Lvl = 0;
 void Bld_Help_scrn(void);
@@ -1028,6 +1030,10 @@ void Bld_LVGL_GUI(void)
 	lv_style_set_border_color(&style_btn, lv_color_black());
 
 	lv_style_set_text_font(&TAstyle, &lv_font_montserrat_16);
+	/*style settings for night view */
+	// lv_style_set_bg_color(&TAstyle, lv_palette_main(LV_PALETTE_NONE));
+	// lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
+	/*end night view setup*/
 	lv_style_set_bg_color(&Cursorstyle, lv_palette_main(LV_PALETTE_YELLOW)); // set cursor color
 	// win = lv_win_create(lv_scr_act(), title_height);
 	//if (win1 != NULL) lv_obj_del(win1);
@@ -2700,6 +2706,45 @@ void LVGLMsgBox::BldHelpScreen(void)
 		}
 	}
 	Bld_Help_scrn();
+	xSemaphoreGive(lvgl_semaphore);
+	MutexLckId = 0;
+};
+void LVGLMsgBox::FlipDayNiteMode(void)
+{
+	bool tryagn = true;
+	int trycnt = 0;
+	while (tryagn)
+	{
+		if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
+		{
+			MutexLckId = 9;
+			tryagn = false;
+			report = false;
+			bypassMutex = true;
+			Msg2Actv = true;
+		}
+		else
+		{
+			trycnt++;
+			if (trycnt > 5)
+			{
+				trycnt = 5;
+				report = true;
+				printf("LVGLMsgBox::FlipDayNiteMode timed out; MutexLckId = %d; timerID = %d\n", MutexLckId, timerID);
+			}
+		}
+	}
+	lv_style_reset(&TAstyle);
+	lv_style_set_text_font(&TAstyle, &lv_font_montserrat_16);
+	if (!NiteMode)
+	{
+		/*style settings for night view */
+		lv_style_set_bg_color(&TAstyle, lv_palette_main(LV_PALETTE_NONE));
+		lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
+		/*end night view setup*/
+	}
+	NiteMode = !NiteMode;
+	lv_scr_load(scr_1);
 	xSemaphoreGive(lvgl_semaphore);
 	MutexLckId = 0;
 };

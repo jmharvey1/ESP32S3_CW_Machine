@@ -108,9 +108,9 @@ Special Functions:\n\
 4. Right Arrow	Same as F12.\n\
 5. Left Arrow Same as F1.\n\
 6. \"Lshift+Enter\" Send \"F1\" stored text plus Your call sign.\n\
-7. \"Cntrl+Enterv Send \"F1\" stored text.\n\
+7. \"Cntrl+Enter\" Send \"F1\" stored text.\n\
 8. \"Esc\"   Abort/dump outgoing text\n\ 	
-10. Cntrl+S Go to settings Screen; Press Cntrl+S again to return to normal CW mode.(Note: No CW sent while in the \"settings\"mode); i.e., Default WPM. Call Sign, F2 memory\n\
+10. Cntrl+S Go to settings Screen; Press Cntrl+S again to return to normal CW mode.(Note: No CW sent while in the \"settings\"mode); i.e., Default WPM. Call Sign, F2 memory, F3..., \n\
 11. F1 Save up to ten characters (usually the DX call sign) to be sent when L. Shift (or Cntrl)+enter is pressed, Press F1 again to stop the \"save\"  mode (Note: F1 Active while in \"save\" mode)\n\
 12. F2 Send stored F2 message\n\
 13. F3 Send stored F3 message\n\
@@ -134,7 +134,7 @@ The \"Enter\" key has 3 \"send\" modes;\n\
 2. \"Shift+Enter\" (Send F1 call sign + your call sign);\n\
 3. \"Ctrl+Enter\"  (Send F1 Call sign only). \n\
 \n\
-Note, if \"F12\" is in the \"SOT ON\" mode, the key presses will also be sent to your Tx (via the uart), allowing you to both return the \"far end\" call, & \"save\" the call, at the same time (for future returns/ \"overs\"). On the other hand, if you dont want to be sending (CW), while loading the F1 memory, press the F12 key, to read \"F12 SOT OFF\". Now this part gets a bit tricky. When you finished loading the F1 memory, press F1 (so it now reads F1 Mem), and while F12 reads \"F12 SOT OFF\", press the \"escape\" key (that will flush the F12 SOT buffer). Then press F12 (to get it back to \"F12 SOT ON\"), and youll have F1 loaded, and ready to go, without actually having sent the \"Far end\" call over the air.\n\
+Note, if \"F12\" is in the \"SOT ON\" mode, the key presses will also be sent to your Tx (via the uart), allowing you to both return the \"far end\" call, & \"save\" the call, at the same time (for future returns/ \"overs\"). On the other hand, if you dont want to be sending (CW), while loading the F1 memory, press the F12 key, to read \"F12 SOT OFF\". Now this part gets a bit tricky. When you finished loading the F1 memory, press F1 (so it now reads F1 Mem), and while F12 reads \"F12 SOT OFF\", press the \"escape\" key (this will flush the F12 SOT buffer). Then press F12 (to get it back to \"F12 SOT ON\"), and youll have F1 loaded, and ready to go, without actually having sent the \"Far end\" call over the air.\n\
 \n\
 Remember, F1 is different from the other memories, as its intended just for storing \"call signs\" and to be changed \"on the fly\" Also note too, you can clear the F1 memory, just by cycling the F1 key (and not typing anything, while it reads \"F1 Active\")\n\
 "};
@@ -258,6 +258,7 @@ public:
 	void BldSettingScreen(void);
 	void BldScopeScreen(void);
 	void BldHelpScreen(void);
+	void FlipDayNiteMode(void);
 	void ReStrtMainScrn(void);
 	void HiLite_Seltcd_Setting(int paramptr, int oldparamptr);
 	void Exit_Settings(int paramptr);
