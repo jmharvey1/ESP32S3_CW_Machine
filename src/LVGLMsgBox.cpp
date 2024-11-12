@@ -105,6 +105,7 @@ static lv_style_t style_Slctd_bg;
 static lv_style_t style_Deslctd_bg;
 static lv_style_t style_BtnDeslctd_bg;
 static lv_style_t style_label;
+//static lv_style_t style_win;
 static lv_style_t TAstyle;
 static lv_style_t Cursorstyle;
 static lv_color_t Dflt_bg_clr;
@@ -1000,7 +1001,8 @@ void Bld_Settings_scrn(void)
 /*Build GUI (Main Screen)*/
 void Bld_LVGL_GUI(void)
 {
-	if (scr_1 == NULL){
+	if (scr_1 == NULL)
+	{
 	scr_1 = lv_obj_create(NULL);
 	printf("scr_1 = lv_obj_create(NULL)\n");
 	}
@@ -1008,6 +1010,7 @@ void Bld_LVGL_GUI(void)
 
 	if (!first_run)
 	{
+		//lv_style_init(&style_win);
 		lv_style_init(&TAstyle);
 		lv_style_init(&Cursorstyle);
 		lv_style_init(&style_label);
@@ -1020,6 +1023,7 @@ void Bld_LVGL_GUI(void)
 	/*Part of 2 screen support*/
 	lv_style_reset(&style_btn);
 	lv_style_reset(&style_label);
+	//lv_style_reset(&style_win);
 
 	lv_style_set_text_font(&style_label, &lv_font_montserrat_18);
 	lv_style_set_text_opa(&style_label, LV_OPA_100);
@@ -1031,12 +1035,10 @@ void Bld_LVGL_GUI(void)
 
 	lv_style_set_text_font(&TAstyle, &lv_font_montserrat_16);
 	/*style settings for night view */
-	// lv_style_set_bg_color(&TAstyle, lv_palette_main(LV_PALETTE_NONE));
+	//lv_style_set_bg_color(&style_win, lv_palette_main(LV_PALETTE_NONE));
 	// lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
 	/*end night view setup*/
 	lv_style_set_bg_color(&Cursorstyle, lv_palette_main(LV_PALETTE_YELLOW)); // set cursor color
-	// win = lv_win_create(lv_scr_act(), title_height);
-	//if (win1 != NULL) lv_obj_del(win1);
 	if (win1 == NULL)
 	{
 		char Title[100];
@@ -1045,9 +1047,9 @@ void Bld_LVGL_GUI(void)
 		title_height = 20;
 		win1 = lv_win_create(scr_1, title_height);
 		sprintf(Title, " ESP32s3 CW Machine (%s)", RevDate);
-		//lv_win_add_title(win1, "RX Decoded Text");
 		lv_win_add_title(win1, Title);
 		lv_obj_set_size(win1, 800, 480);
+		//lv_obj_add_style(win1, &style_win, 0);
 		cont1 = lv_win_get_content(win1); /*Content can be added here*/
 
 		bar1 = lv_bar_create(scr_1);
@@ -2734,15 +2736,27 @@ void LVGLMsgBox::FlipDayNiteMode(void)
 			}
 		}
 	}
+	_lv_theme_t *_theme = lv_theme_default_get();
 	lv_style_reset(&TAstyle);
 	lv_style_set_text_font(&TAstyle, &lv_font_montserrat_16);
 	if (!NiteMode)
-	{
-		/*style settings for night view */
+	{/*style settings for night view */
+		_theme = lv_theme_default_init(_theme->disp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
+                                            1, LV_FONT_DEFAULT);
+    
+		
+		//lv_style_set_bg_color(&style_win, lv_palette_main(LV_PALETTE_NONE));
+		//lv_obj_add_style(scr_1, &style_win, 0);
 		lv_style_set_bg_color(&TAstyle, lv_palette_main(LV_PALETTE_NONE));
 		lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
 		/*end night view setup*/
 	}
+	else
+	{
+		_theme = lv_theme_default_init(_theme->disp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
+                                            0, LV_FONT_DEFAULT);
+	}
+
 	NiteMode = !NiteMode;
 	lv_scr_load(scr_1);
 	xSemaphoreGive(lvgl_semaphore);
