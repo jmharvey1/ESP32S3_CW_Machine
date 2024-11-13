@@ -62,6 +62,7 @@ esp_event_loop_args_t event_task_args = {
 /*20241104 added ScopeActive flag to better syncronize when its OK to update the 'SCOPE' screen*/
 /*20241105 added F1 stored memory contents to main screen & Help Screen */
 /*20241112 Added 'F8' Day/Night mode per request from Carl (VK5CT)*/
+/*20241113 reworked Night mode sig strenght bar color*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

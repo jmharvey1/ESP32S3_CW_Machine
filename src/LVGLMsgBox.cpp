@@ -13,6 +13,7 @@
 /*20241104 added 'ScopeActive' flag to better syncronize when its OK to update the 'SCOPE' screen*/
 /*20241105 added F1 stored memory contents to main screen & Help Screen */
 /*20241112 Added 'F8' Day Night mode per request from Carl (VK5CT)*/
+/*20241113 reworked Night mode sig strenght bar color*/
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "LVGLMsgBox.h"
@@ -105,7 +106,7 @@ static lv_style_t style_Slctd_bg;
 static lv_style_t style_Deslctd_bg;
 static lv_style_t style_BtnDeslctd_bg;
 static lv_style_t style_label;
-//static lv_style_t style_win;
+static lv_style_t style_bar;
 static lv_style_t TAstyle;
 static lv_style_t Cursorstyle;
 static lv_color_t Dflt_bg_clr;
@@ -507,7 +508,7 @@ void lvgl_update_Bat_Lvl(uint8_t lvl)
 }
 void lvgl_UpdateToneSig(int curval)
 {
-	/*New approach this gets update via dispMsg2(int RxSig). So no longer needs to set/clear semaphore */
+	/*New approach this gets updated via dispMsg2(int RxSig). So no longer needs to set/clear semaphore */
 	lv_bar_set_value(bar1, (uint32_t)curval, LV_ANIM_OFF);
 	return;
 }
@@ -1004,13 +1005,12 @@ void Bld_LVGL_GUI(void)
 	if (scr_1 == NULL)
 	{
 	scr_1 = lv_obj_create(NULL);
-	printf("scr_1 = lv_obj_create(NULL)\n");
+	//printf("scr_1 = lv_obj_create(NULL)\n");
 	}
-	//lv_scr_load(scr_1);
-
+	
 	if (!first_run)
 	{
-		//lv_style_init(&style_win);
+		lv_style_init(&style_bar);
 		lv_style_init(&TAstyle);
 		lv_style_init(&Cursorstyle);
 		lv_style_init(&style_label);
@@ -1023,7 +1023,7 @@ void Bld_LVGL_GUI(void)
 	/*Part of 2 screen support*/
 	lv_style_reset(&style_btn);
 	lv_style_reset(&style_label);
-	//lv_style_reset(&style_win);
+	if (!NiteMode) lv_style_reset(&style_bar);
 
 	lv_style_set_text_font(&style_label, &lv_font_montserrat_18);
 	lv_style_set_text_opa(&style_label, LV_OPA_100);
@@ -1056,6 +1056,7 @@ void Bld_LVGL_GUI(void)
 		lv_obj_set_size(bar1, 200, 15);
 		lv_obj_set_pos(bar1, 10, 23);
 		lv_bar_set_value(bar1, 10, LV_ANIM_OFF);
+		lv_obj_add_style(bar1, &style_bar, LV_PART_INDICATOR);
 		DecdTxtArea = lv_textarea_create(cont1);
 		SendTxtArea = lv_textarea_create(cont1);
 		lv_obj_set_size(DecdTxtArea, 760, 179); // width & Height
@@ -1133,7 +1134,7 @@ void Bld_LVGL_GUI(void)
 	lv_obj_add_style(help_btn_label, &style_label, 0);
 	lv_label_set_text(help_btn_label, "Help");
 	lv_obj_align_to(help_btn_label, help_btn, LV_ALIGN_CENTER, 0, 0);
-
+	//printf("Bld_LVGL_GUI load(scr_1)\n");
 	lv_scr_load(scr_1);
 
 	if (scr_2 != NULL){
@@ -2580,46 +2581,8 @@ char LVGLMsgBox::GetLastChar(void)
 void LVGLMsgBox::UpdateToneSig(int curval)
 {
 	return;
-	// printf("curval: %d\n",curval);
-	/*moved to GoertzelHandler process/thread*/
-	// if (curval > pksig)
-	// 	pksig = curval;
-	// sigSmplCnt++;
-	// if (sigSmplCnt < 25)
-	// 	return;
-	// sigSmplCnt = 0;
-	// pksigH = (uint32_t)(pksig / 1000); //(pksig/125000)
-	// pksig = 0;
-	// lvgl_UpdateToneSig(curval);
-	// if(pksigH>0) lv_bar_set_value(bar1, pksigH, LV_ANIM_ON);
-
-	// printf("curval: %d\n", curval);
-	//  bool tryagn = true;
-	//  while (tryagn)
-	//  {
-	//  if (pdTRUE == xSemaphoreTake(lvgl_semaphore, pdMS_TO_TICKS(10)))
-	//  {
-	//	lv_bar_set_value(bar1, (uint32_t)curval, LV_ANIM_ON);
-	// 		vTaskDelay(pdMS_TO_TICKS(10));
-	// 		tryagn = false;
-	// }
-	// 	else
-	// 	{
-	// 		printf("lvgl_UpdateToneSig timed out\n");
-	// 		vTaskDelay(pdMS_TO_TICKS(20));
-	// 	}
-	// }
-	// if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 20 / portTICK_PERIOD_MS))
-	// {
-	// 	lv_bar_set_value(bar1, (uint32_t)curval, LV_ANIM_OFF);
-	// 	vTaskDelay(pdMS_TO_TICKS(10));
-	// }
-	// else
-	// {
-	// 	printf("lvgl_UpdateToneSig timed out\n");
-	// 	//vTaskDelay(pdMS_TO_TICKS(20));
-	// }
-	return;
+	
+	//return;
 };
 void LVGLMsgBox::BldSettingScreen(void)
 {
@@ -2738,17 +2701,16 @@ void LVGLMsgBox::FlipDayNiteMode(void)
 	}
 	_lv_theme_t *_theme = lv_theme_default_get();
 	lv_style_reset(&TAstyle);
+	lv_style_reset(&style_bar);
 	lv_style_set_text_font(&TAstyle, &lv_font_montserrat_16);
 	if (!NiteMode)
 	{/*style settings for night view */
 		_theme = lv_theme_default_init(_theme->disp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
                                             1, LV_FONT_DEFAULT);
     
-		
-		//lv_style_set_bg_color(&style_win, lv_palette_main(LV_PALETTE_NONE));
-		//lv_obj_add_style(scr_1, &style_win, 0);
-		lv_style_set_bg_color(&TAstyle, lv_palette_main(LV_PALETTE_NONE));
 		lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
+		lv_style_set_bg_color(&TAstyle, lv_palette_main(LV_PALETTE_NONE));
+		lv_style_set_bg_color(&style_bar, lv_palette_main(LV_PALETTE_DEEP_ORANGE));
 		/*end night view setup*/
 	}
 	else

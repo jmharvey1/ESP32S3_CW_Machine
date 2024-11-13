@@ -810,6 +810,7 @@ private:
         {"ATILL", "WILL", 5, 0}, //762
         {"ANOINT", "POINT", 6, 0}, //763
         {"GASTE", "GAVE", 5, 0}, //764
+        {"PSWER", "ANSWER", 5, 0}, //765
     };
     
     bool AllDah;
