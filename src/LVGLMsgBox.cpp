@@ -1031,7 +1031,7 @@ void Bld_Settings_scrn(void)
 
 		/*Display Mode*/
 		chkbx_lbl1 = lv_textarea_create(cont2);
-		lv_obj_set_size(chkbx_lbl1, 125, 24);
+		lv_obj_set_size(chkbx_lbl1, 145, 24);
 		lv_obj_set_pos(chkbx_lbl1, 390, 21);
 		//lv_textarea_add_text(chkbx_lbl1, "   ");
 		ScrnMode_ChkBx = lv_checkbox_create(cont2);
