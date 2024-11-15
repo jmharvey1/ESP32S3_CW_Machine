@@ -811,6 +811,7 @@ private:
         {"ANOINT", "POINT", 6, 0}, //763
         {"GASTE", "GAVE", 5, 0}, //764
         {"PSWER", "ANSWER", 5, 0}, //765
+        {"SEC9D", "SECOND", 5, 0}, //766
     };
     
     bool AllDah;

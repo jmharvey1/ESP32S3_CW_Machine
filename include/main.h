@@ -34,6 +34,7 @@ struct DF_t
 	float Grtzl_Gain;
 	bool SlwFlg;
 	bool NoisFlg;
+	bool NiteMode;
 	uint16_t Bias;
 };
 

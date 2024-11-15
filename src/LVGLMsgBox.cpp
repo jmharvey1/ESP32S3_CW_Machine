@@ -14,6 +14,7 @@
 /*20241105 added F1 stored memory contents to main screen & Help Screen */
 /*20241112 Added 'F8' Day Night mode per request from Carl (VK5CT)*/
 /*20241113 reworked Night mode sig strenght bar color*/
+/*20241115 Added Night mode to saved settings*/
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "LVGLMsgBox.h"
@@ -79,6 +80,8 @@ lv_obj_t *F1_Str_lbl;
 lv_obj_t *F12_SOT_lbl;
 lv_obj_t *Dbg_ChkBx;
 lv_obj_t *chkbx_lbl;
+lv_obj_t *ScrnMode_ChkBx;
+lv_obj_t *chkbx_lbl1;
 static lv_obj_t *save_btn;
 static lv_obj_t *exit_btn;
 static lv_obj_t *Hexit_btn;
@@ -130,6 +133,7 @@ bool TchEvnt = false;
 bool report = false;
 bool Msg2Actv = false;
 bool NiteMode = false;
+bool NMchkbxVal_evnt = false;
 int timerID = 0;
 uint8_t OldBat_Lvl = 0;
 void Bld_Help_scrn(void);
@@ -138,6 +142,7 @@ void Bld_Scope_scrn(void);
 void Bld_LVGL_GUI(void);
 void Sync_Dflt_Settings(void);
 void SaveUsrVals(void);
+void _FlipDayNiteMode(void);
 
 static void screen1_event_handler(lv_event_t *e)
 {
@@ -236,22 +241,57 @@ static void Debug_chkBx_cb(lv_event_t * e)
 		LV_LOG_USER("LV_EVENT_CLICKED %s: %s", txt, state);
 	}
 }
-/*GUI Text Updater*/
-// int update_text(const char *buf)
-// {
-//     lv_textarea_add_text(DecdTxtArea, buf);
-//     lv_textarea_set_cursor_pos(DecdTxtArea, LV_TEXTAREA_CURSOR_LAST);
-//     vTaskDelay(pdMS_TO_TICKS(15));
-//     /*The following lines are just for debugging*/
-//     int curcnt = 0;
-//     while (buf[curcnt] != 0)
-//     {
-//         curcnt++;
-//     }
-//     ta_charCnt += curcnt;
-//     return ta_charCnt;
-//     //printf("Text Area Char Count: %d\n", ta_charCnt);
-// }
+
+static void NiteMode_chkBx_cb(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * obj = lv_event_get_target(e);
+    if(code == LV_EVENT_VALUE_CHANGED) {
+		NMchkbxVal_evnt = true;
+		const char * txt = lv_checkbox_get_text(obj);
+        const char * state = lv_obj_get_state(obj) & LV_STATE_CHECKED ? "Checked" : "Unchecked";
+		//LV_LOG_USER("LV_EVENT_VALUE_CHANGED %s: %s", txt, state);
+	}
+    if(code == LV_EVENT_CLICKED){// && !NiteMode){
+		const char * txt = lv_checkbox_get_text(obj);
+		if(!NMchkbxVal_evnt){ //we didn't get a change value event, so force a state change
+			if(NiteMode)
+			{
+				lv_obj_clear_state(obj, LV_STATE_CHECKED);
+				printf("Clear Check BOX; NiteMode:%d\n", (int)NiteMode);
+				if(NiteMode) NiteMode = false;
+			}
+			else
+			{
+				lv_obj_add_state(obj, LV_STATE_CHECKED);
+				printf("Set Check BOX; NiteMode:%d\n", (int)NiteMode);
+			}
+		}
+		if(lv_obj_get_state(obj) && NiteMode){
+			lv_obj_clear_state(obj, LV_STATE_CHECKED);
+			NiteMode = false;
+		}
+		else if(lv_obj_get_state(obj) && !NiteMode){
+			//lv_obj_add_state(obj, LV_STATE_CHECKED);
+			NiteMode = true;
+			printf("Step2 NiteMode:%d\n", (int)NiteMode);
+		}
+		else if(!lv_obj_get_state(obj) && NiteMode){
+			lv_obj_add_state(obj, LV_STATE_CHECKED);
+			NiteMode = true;
+			printf("Step3 NiteMode:%d\n", (int)NiteMode);
+		}
+		// else if(!lv_obj_get_state(obj) && NiteMode){
+		// 	//lv_obj_add_state(obj, LV_STATE_CHECKED);
+		// 	NiteMode = false;
+		// }
+		NMchkbxVal_evnt = false;
+        const char * state = lv_obj_get_state(obj) & LV_STATE_CHECKED ? "Checked" : "Unchecked";
+		LV_LOG_USER("LV_EVENT_CLICKED %s: %s; NiteMode:%d", txt, state, (int)NiteMode);
+		if (DFault.NiteMode != NiteMode) _FlipDayNiteMode();
+	}
+	 
+}
 /*Normal entry point for LVGLMsgBox::dispMsg2. The auto updater for decoded text*/
 void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 {
@@ -648,26 +688,30 @@ void lvgl_DeSelct_Param(int paramptr)
 		//printf("deselected Dbg_ChkBx\n");
 		break;
 	case 3:
+		lv_obj_add_style(chkbx_lbl1, &style_Deslctd_bg, 0);
+		//printf("deselected ScrnMode_ChkBx\n");
+		break;	
+	case 4:
 		lv_obj_add_style(MemF2ta, &style_Deslctd_bg, 0);
 		//printf("deselected MemF2ta\n");
 		break;
-	case 4:
+	case 5:
 		lv_obj_add_style(MemF3ta, &style_Deslctd_bg, 0);
 		printf("deselected MemF3ta\n");
 		break;
-	case 5:
+	case 6:
 		lv_obj_add_style(MemF4ta, &style_Deslctd_bg, 0);
 		//printf("deselected MemF4ta\n");
 		break;
-	case 6:
+	case 7:
 		lv_obj_add_style(MemF5ta, &style_Deslctd_bg, 0);
 		//printf("deselected MemF5ta\n");
 		break;
-	case 7:
+	case 8:
 		lv_obj_add_style(save_btn, &style_BtnDeslctd_bg, 0);
 		//printf("deselected save_btn\n");
 		break;
-	case 8:
+	case 9:
 		lv_obj_add_style(exit_btn, &style_BtnDeslctd_bg, 0);
 		//printf("deselected exit_btn\n");
 		break;
@@ -698,26 +742,32 @@ void lvgl_HiLite_Seltcd_Param(int paramptr)
 		break;
 	}
 	case 3:
+	{
+		lv_obj_add_style(chkbx_lbl1, &style_Slctd_bg, 0);
+		//printf("Selected ScrnMode_ChkBx\n\n");
+		break;
+	}
+	case 4:
 		lv_obj_add_style(MemF2ta, &style_Slctd_bg, 0);
 		//printf("Selected MemF2ta\n\n");
 		break;
-	case 4:
+	case 5:
 		lv_obj_add_style(MemF3ta, &style_Slctd_bg, 0);
 		//printf("Selected MemF3ta\n\n");
 		break;
-	case 5:
+	case 6:
 		lv_obj_add_style(MemF4ta, &style_Slctd_bg, 0);
 		//printf("Selected MemF4ta\n\n");
 		break;
-	case 6:
+	case 7:
 		lv_obj_add_style(MemF5ta, &style_Slctd_bg, 0);
 		//printf("Selected MemF5ta\n\n");
 		break;
-	case 7:
+	case 8:
 		lv_obj_add_style(save_btn, &style_Slctd_bg, 0);
 		//printf("Selected save_btn\n\n");
 		break;
-	case 8:
+	case 9:
 		lv_obj_add_style(exit_btn, &style_Slctd_bg, 0);
 		//printf("Selected exit_btn\n\n");
 		break;
@@ -967,20 +1017,33 @@ void Bld_Settings_scrn(void)
 
 		/*Debug Checkbox*/
 		chkbx_lbl = lv_textarea_create(cont2);
-		;
 		lv_obj_set_size(chkbx_lbl, 80, 24);
-		lv_obj_set_pos(chkbx_lbl, 295, 21);
+		lv_obj_set_pos(chkbx_lbl, 285, 21);
 		lv_textarea_add_text(chkbx_lbl, "   ");
 		Dbg_ChkBx = lv_checkbox_create(cont2);
 		lv_checkbox_set_text(Dbg_ChkBx, "DeBug");
 		lv_obj_add_event_cb(Dbg_ChkBx, Debug_chkBx_cb, LV_EVENT_ALL, NULL);
-		lv_obj_set_pos(Dbg_ChkBx, 295, 24);
+		lv_obj_set_pos(Dbg_ChkBx, 285, 24);
 		if (DFault.DeBug)
 			lv_obj_add_state(Dbg_ChkBx, LV_STATE_CHECKED); /*Make the chekbox checked*/
 		else
 			lv_obj_clear_state(Dbg_ChkBx, LV_STATE_CHECKED);
 
-		/*setup for later use deselected backgrounf colors*/
+		/*Display Mode*/
+		chkbx_lbl1 = lv_textarea_create(cont2);
+		lv_obj_set_size(chkbx_lbl1, 125, 24);
+		lv_obj_set_pos(chkbx_lbl1, 390, 21);
+		//lv_textarea_add_text(chkbx_lbl1, "   ");
+		ScrnMode_ChkBx = lv_checkbox_create(cont2);
+		lv_checkbox_set_text(ScrnMode_ChkBx, "Scrn Dark Mode");
+		lv_obj_add_event_cb(ScrnMode_ChkBx, NiteMode_chkBx_cb, LV_EVENT_ALL, NULL);
+		lv_obj_set_pos(ScrnMode_ChkBx, 390, 24);
+		if (DFault.NiteMode)
+			lv_obj_add_state(ScrnMode_ChkBx, LV_STATE_CHECKED); /*Make the chekbox checked*/
+		else
+			lv_obj_clear_state(ScrnMode_ChkBx, LV_STATE_CHECKED);
+
+		/*setup for later use deselected background colors*/
 		/*Need 2 colors because buttons are different from all other fields*/
 		lv_style_reset(&style_Deslctd_bg);
 		lv_style_reset(&style_BtnDeslctd_bg);
@@ -1247,62 +1310,33 @@ static void lvgl_touch_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
 	//printf("vgl_touch_cb\n");
 }
 
-// static void MsgBx_lvgl_port_task(void *arg)
-// {
-// 	static const char *TAG = "lvgl_port_task";
-// 	printf( "%s: Start task\n", TAG);
-// 	ESP_LOGI(TAG, "Start task");
-// 	uint32_t task_delay_ms = MSGBX_LVGL_TASK_MAX_DELAY_MS;
-// 	int trycnt = 0;
-// 	while (1)
-// 	{
-// 		vTaskDelay(pdMS_TO_TICKS(task_delay_ms));
-
-// 		// while(MutexLckId != 0)
-// 		// {
-// 		// 	printf("LVGLMsgBox::port_task; MutexLckId = %d\n", MutexLckId);
-// 		// 	vTaskDelay(pdMS_TO_TICKS(50));
-// 		// }
-// 		if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
-// 		{
-// 			MutexLckId = 4;
-// 			// Lock the mutex due to the LVGL APIs are not thread-safe
-
-// 			// if (MsgBx_lvgl_lock(-1))
-// 			// {
-// 				task_delay_ms = lv_timer_handler();
-// 			// 	MsgBx_lvgl_unlock();
-// 			// }
-// 			trycnt = 0;
-// 			xSemaphoreGive(lvgl_semaphore);
-// 			MutexLckId = 0;
-// 		}
-// 		else
-// 		{
-// 			/*testing shows that a 100ms wait will 'time out' fairly routinely
-// 			So its better to skip an ocassional display refersh than totally lock up
-// 			the program*/
-// 			//printf("MsgBx_lvgl_port_task timed out\n");
-// 			trycnt++;
-// 			if(trycnt>5)
-// 			{
-// 				trycnt = 5;
-// 				//printf("LVGLMsgBox::port_task timed out; MutexLckId = %d\n", MutexLckId);
-// 			}
-// 			task_delay_ms = 50;
-// 		}
-
-// 		if (task_delay_ms > MSGBX_LVGL_TASK_MAX_DELAY_MS)
-// 		{
-// 			task_delay_ms = MSGBX_LVGL_TASK_MAX_DELAY_MS;
-// 		}
-// 		else if (task_delay_ms < MSGBX_LVGL_TASK_MIN_DELAY_MS)
-// 		{
-// 			task_delay_ms = MSGBX_LVGL_TASK_MIN_DELAY_MS;
-// 		}
-// 		// printf("MsgBx_lvgl_port_task delay = %d\n", (int)task_delay_ms);
-// 	}
-// }
+void _FlipDayNiteMode(void)
+{
+	if(DFault.NiteMode == NiteMode) return;// added this test to abort rerunning this code when moving from main screen to settings screen
+	_lv_theme_t *_theme = lv_theme_default_get();
+	lv_style_reset(&TAstyle);
+	lv_style_reset(&style_bar);
+	lv_style_reset(&style_label);
+	lv_style_set_text_font(&TAstyle, &lv_font_montserrat_16);
+	if (NiteMode)
+	{/*style settings for night view */
+		_theme = lv_theme_default_init(_theme->disp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
+                                            1, LV_FONT_DEFAULT);
+    
+		lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
+		//lv_style_set_bg_color(&style_bar, lv_palette_main(LV_PALETTE_DEEP_ORANGE));
+		lv_style_set_bg_color(&style_Deslctd_bg, Dflt_bg_clr);
+		/*end night view setup*/
+	}
+	else
+	{
+		_theme = lv_theme_default_init(_theme->disp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
+                                            0, LV_FONT_DEFAULT);
+		lv_style_set_bg_color(&style_Deslctd_bg, lv_color_white());
+											
+	}
+	DFault.NiteMode = NiteMode;
+};
 
 /**
  * @brief i2c master initialization
@@ -1686,19 +1720,33 @@ void LVGLMsgBox::SettingsKBrdNtry(char Ntry, int paramptr)
 			}
 			// lvgl_Update_setting(Dbg_ChkBx, Ntry);
 			break;
-		case 3:
+		case 3: //user updating the ScrnMode checkbox status
+			if (Ntry == 0x95 || Ntry == 0x96 || Ntry == 0x0d)
+			{
+				//NiteMode = false;
+				lv_res_t res = lv_event_send(ScrnMode_ChkBx, LV_EVENT_CLICKED, NULL);
+				if (res != LV_RES_OK)
+					printf("ScrnMode_ChkBx event processed\n");
+			}
+			else
+			{
+				printf("KeyBrd Ntry: %02x\n", Ntry);
+			}
+			// lvgl_Update_setting(Dbg_ChkBx, Ntry);
+			break;	
+		case 4:
 			lvgl_Update_setting(MemF2ta, Ntry);
 			break;
-		case 4:
+		case 5:
 			lvgl_Update_setting(MemF3ta, Ntry);
 			break;
-		case 5:
+		case 6:
 			lvgl_Update_setting(MemF4ta, Ntry);
 			break;
-		case 6:
+		case 7:
 			lvgl_Update_setting(MemF5ta, Ntry);
 			break;
-		case 7: // save button has focus
+		case 8: // save button has focus
 			if (Ntry == 0x0d)
 			{
 				lv_res_t res = lv_event_send(save_btn, LV_EVENT_CLICKED, NULL);
@@ -1710,7 +1758,7 @@ void LVGLMsgBox::SettingsKBrdNtry(char Ntry, int paramptr)
 				printf("KeyBrd Ntry: %02x\n", Ntry);
 			}
 			break;
-		case 8: // exit button has focus
+		case 9: // exit button has focus
 			if (Ntry == 0x0d) //enter key was hit
 			{
 				lv_res_t res = lv_event_send(exit_btn, LV_EVENT_CLICKED, NULL);
@@ -2593,7 +2641,7 @@ void LVGLMsgBox::BldSettingScreen(void)
 	{
 		if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
 		{
-			MutexLckId = 9;
+			MutexLckId = 19;
 			tryagn = false;
 			report = false;
 			bypassMutex = true;
@@ -2623,7 +2671,7 @@ void LVGLMsgBox::BldScopeScreen(void)
 	{
 		if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
 		{
-			MutexLckId = 9;
+			MutexLckId = 17;
 			tryagn = false;
 			report = false;
 			bypassMutex = true;
@@ -2653,7 +2701,7 @@ void LVGLMsgBox::BldHelpScreen(void)
 	{
 		if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
 		{
-			MutexLckId = 9;
+			MutexLckId = 18;
 			tryagn = false;
 			report = false;
 			bypassMutex = true;
@@ -2682,7 +2730,7 @@ void LVGLMsgBox::FlipDayNiteMode(void)
 	{
 		if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
 		{
-			MutexLckId = 9;
+			MutexLckId = 21;
 			tryagn = false;
 			report = false;
 			bypassMutex = true;
@@ -2699,28 +2747,9 @@ void LVGLMsgBox::FlipDayNiteMode(void)
 			}
 		}
 	}
-	_lv_theme_t *_theme = lv_theme_default_get();
-	lv_style_reset(&TAstyle);
-	lv_style_reset(&style_bar);
-	lv_style_set_text_font(&TAstyle, &lv_font_montserrat_16);
-	if (!NiteMode)
-	{/*style settings for night view */
-		_theme = lv_theme_default_init(_theme->disp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
-                                            1, LV_FONT_DEFAULT);
-    
-		lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
-		lv_style_set_bg_color(&TAstyle, lv_palette_main(LV_PALETTE_NONE));
-		lv_style_set_bg_color(&style_bar, lv_palette_main(LV_PALETTE_DEEP_ORANGE));
-		/*end night view setup*/
-	}
-	else
-	{
-		_theme = lv_theme_default_init(_theme->disp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
-                                            0, LV_FONT_DEFAULT);
-	}
-
-	NiteMode = !NiteMode;
-	lv_scr_load(scr_1);
+	DFault.NiteMode = !NiteMode;//forcing the DFault value to be the opsite of its stored value to force lvglmsgbx.FlipDayNiteMode to update
+  	_FlipDayNiteMode();
+	
 	xSemaphoreGive(lvgl_semaphore);
 	MutexLckId = 0;
 };
@@ -2746,7 +2775,7 @@ void LVGLMsgBox::ReStrtMainScrn(void)
 			{
 				trycnt = 5;
 				report = true;
-				printf("LVGLMsgBox::BldSettingScreen timed out; MutexLckId = %d; timerID = %d\n", MutexLckId, timerID);
+				printf("LVGLMsgBox::ReStrtMainScrn timed out; MutexLckId = %d; timerID = %d\n", MutexLckId, timerID);
 			}
 		}
 	}
@@ -3008,6 +3037,11 @@ void SaveUsrVals(void)
 	Rstat = Write_NVS_Val("DeBug", DFault.DeBug);
 	if (Rstat != 1)
 		GudFlg = false;
+	/* Save current Decoder NiteMode value */
+	DFault.NiteMode = NiteMode;
+	Rstat = Write_NVS_Val("NiteMode", (int)DFault.NiteMode);
+	if (Rstat != 1)
+		GudFlg = false;	
 	/*Save WPM Setting*/	
 	Rstat = Write_NVS_Val("WPM", DFault.WPM);
 	if (Rstat != 1)
@@ -3027,7 +3061,7 @@ void SaveUsrVals(void)
 	/* Save current Decoder NoisFlg value */
 	Rstat = Write_NVS_Val("NoisFlg", (int)DFault.NoisFlg);
 	if (Rstat != 1)
-		GudFlg = false;	
+		GudFlg = false;
 	/* Save current Decoder TARGET_FREQUENCYC value; Note DFault.TRGT_FREQ was last updated in DcodeCW.showSpeed(void)  */
 	Rstat = Write_NVS_Val("TRGT_FREQ", DFault.TRGT_FREQ);
 	if (Rstat != 1)

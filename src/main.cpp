@@ -63,6 +63,7 @@ esp_event_loop_args_t event_task_args = {
 /*20241105 added F1 stored memory contents to main screen & Help Screen */
 /*20241112 Added 'F8' Day/Night mode per request from Carl (VK5CT)*/
 /*20241113 reworked Night mode sig strenght bar color*/
+/*20241115 Added Night mode to saved settings*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -80,7 +81,6 @@ esp_event_loop_args_t event_task_args = {
 #include "soc/soc_caps.h" // included just to have quick access view this file
 ///////////////////////////////
 #include "esp_core_dump.h"
-#include "TxtNtryBox.h"
 /*helper ADC files*/
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -233,7 +233,7 @@ BTKeyboard bt_keyboard(&lvglmsgbx, &DFault);
 #endif /* USE_KYBrd*/
 /*                           */
 //BTKeyboard bt_keyboard(&lvglmsgbx, &DFault);
-TxtNtryBox txtntrybox(&DotClk_hndl);
+//TxtNtryBox txtntrybox(&DotClk_hndl);
 /* coredump crash test code */
 /* typedef struct{
   int a;
@@ -423,13 +423,13 @@ k = (int)decimated;
       if (DemodFreq > 450)
       {
         
-        if (DemodFreq > DmodFrqOld - 2 && DemodFreq < DmodFrqOld + 2)
-        {
-          DemodFreq = (4*DmodFrqOld + DemodFreq)/5;
+        if ((DemodFreq > DmodFrqOld - 2) && (DemodFreq < DmodFrqOld + 2))
+        {/*OK we got essentially the same freq twice in row, so it must be valid*/
+          DmodFrqOld = (4*TARGET_FREQUENCYC + DemodFreq)/5;
           //sprintf(Title, "Tone: %d\t%d\n", DemodFreq, (int)SmplCNt);
           //printf(Title);
           CalGtxlParamFlg = true;
-          Calc_IIR_BPFltrCoef((float)DemodFreq, SAMPLING_RATE, 3.7071);
+          Calc_IIR_BPFltrCoef((float)DmodFrqOld, SAMPLING_RATE, 3.7071);
           
         }
         DmodFrqOld = DemodFreq;
@@ -1260,6 +1260,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     sprintf(DFault.MemF4, "%s", MemF4);
     sprintf(DFault.MemF5, "%s", MemF5);
     DFault.DeBug = DeBug;
+    DFault.NiteMode = NiteMode;
     DFault.WPM = CWsndengn.GetWPM();
     DFault.ModeCnt = ModeCnt;
     DFault.AutoTune = AutoTune;
@@ -1267,6 +1268,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     DFault.Grtzl_Gain = Grtzl_Gain;
     DFault.SlwFlg = SlwFlg;
     DFault.NoisFlg = NoisFlg;
+    
     sprintf(Title, "\n        No stored USER params Found\n   Using FACTORY values until params are\n   'Saved' via the Settings Screen\n");
     lvglmsgbx.dispDeCdrTxt(Title, TFT_ORANGE);
   #if USE_KYBrd
@@ -1276,18 +1278,21 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
   else
   {
     /*found 'mycall' stored setting, go get the other user settings */
+    int strdAT;
     Rstat = Read_NVS_Str("MemF2", DFault.MemF2);
     Rstat = Read_NVS_Str("MemF3", DFault.MemF3);
     Rstat = Read_NVS_Str("MemF4", DFault.MemF4);
     Rstat = Read_NVS_Str("MemF5", DFault.MemF5);
     Rstat = Read_NVS_Val("DeBug", DFault.DeBug);
+    Rstat = Read_NVS_Val("NiteMode", strdAT);
+    DFault.NiteMode = (bool)strdAT;
+    NiteMode = DFault.NiteMode;
     Rstat = Read_NVS_Val("WPM", DFault.WPM);
     Rstat = Read_NVS_Val("ModeCnt", DFault.ModeCnt);
     Rstat = Read_NVS_Val("TRGT_FREQ", DFault.TRGT_FREQ);
     int intGainVal; // uint64_t intGainVal;
     Rstat = Read_NVS_Val("Grtzl_Gain", intGainVal);
     DFault.Grtzl_Gain = (float)intGainVal / 10000000.0;
-    int strdAT;
     Rstat = Read_NVS_Val("AutoTune", strdAT);
     DFault.AutoTune = (bool)strdAT;
     Rstat = Read_NVS_Val("SlwFlg", strdAT);
@@ -1298,11 +1303,13 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     AutoTune = DFault.AutoTune;
     SlwFlg = DFault.SlwFlg;
     NoisFlg = DFault.NoisFlg;
+    NiteMode = DFault.NiteMode;
     ModeCnt = DFault.ModeCnt;
     DeBug = DFault.DeBug;
     TARGET_FREQUENCYC = (float)DFault.TRGT_FREQ;
     Grtzl_Gain = DFault.Grtzl_Gain;
   }
+  lvglmsgbx.FlipDayNiteMode(); //set display to light or dark mode based on stored Dfault setting
   /* Start the Display timer */
   xTimerStart(DisplayTmr, portMAX_DELAY);
   vTaskResume( DsplUpDtTaskHandle);
@@ -1384,18 +1391,22 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
       {
         ESP_ERROR_CHECK(adc_continuous_stop(adc_handle)); // true; user has pressed Ctl+S key, & wants to configure default settings
         adcON = false;
-        printf("CASE 1\n");
+        printf("setupFlg = true\n");
         vTaskSuspend(GoertzelTaskHandle);
         ESP_LOGI(TAG1, "SUSPEND GoertzelHandler TASK");
         vTaskSuspend(CWDecodeTaskHandle);
         ESP_LOGI(TAG1, "SUSPEND CWDecodeTaskHandle TASK");
+        // vTaskSuspend(DsplUpDtTaskHandle);
+        // ESP_LOGI(TAG1, "SUSPEND DsplUpDtTaskHandle TASK");
         vTaskDelay(20);
       }
       /*Now ready to jump to "settings" screen */
       lvglmsgbx.BldSettingScreen();
+      // ESP_LOGI(TAG1, "RESUME DsplUpDtTaskHandle TASK");
+      // vTaskResume(DsplUpDtTaskHandle); 
       SettingsLoop(); // go here while settings screen is active
       advparser.Dbug = (bool)DFault.DeBug;
-      // if (advparser.Dbug) printf("advparser.Dbug ENABLED\n");
+      if (DFault.NiteMode != NiteMode) lvglmsgbx.FlipDayNiteMode();;
       // else printf("advparser.Dbug OFF\n");
       CWsndengn.RefreshWPM();
       if (IntSOTstate && !CWsndengn.GetSOTflg())
@@ -1764,6 +1775,8 @@ void ProcsKeyEntry(uint8_t keyVal)
   }
   else if ((keyVal == 0x88))
   { // "F8"
+    NiteMode = !NiteMode;
+    DFault.NiteMode = NiteMode;
     lvglmsgbx.FlipDayNiteMode();
     return;
   }
@@ -1933,10 +1946,11 @@ void ProcsKeyEntry(uint8_t keyVal)
 void SettingsLoop(void)
 {
   int paramPtr = 0;
-  int paramCnt = 9;
+  int paramCnt = 10;
   bool FocusChngd = false;
   int oldparamPtr = 0;
-  lvglmsgbx.HiLite_Seltcd_Setting(paramPtr, oldparamPtr); 
+  lvglmsgbx.HiLite_Seltcd_Setting(paramPtr, oldparamPtr);
+  
   while (setupFlg)
   {
     vTaskDelay(pdMS_TO_TICKS(100));
@@ -1995,7 +2009,6 @@ void ScopeLoop(void)
   bool FocusChngd = false;
   int oldparamPtr = 0;
   ScopeActive = true;
-  //lvglmsgbx.HiLite_Seltcd_Setting(paramPtr, oldparamPtr); 
   while (ScopeFlg)
   {
     vTaskDelay(pdMS_TO_TICKS(100));

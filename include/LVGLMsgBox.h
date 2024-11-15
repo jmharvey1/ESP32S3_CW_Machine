@@ -92,6 +92,7 @@ extern bool SmplSetRdy;
 extern bool ScopeFlg;
 extern bool HelpFlg;
 extern bool ScopeActive;
+extern bool NiteMode;
 const char HelpText[] = {"KeyBoard Encoder Notes:\n\
 Special Keys & their functions:\n\
 Keys that send special Morse Characters\n\
