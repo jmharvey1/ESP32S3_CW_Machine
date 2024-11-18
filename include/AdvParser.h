@@ -15,7 +15,8 @@
  * 20240502 added entries 527 - 586 to  SrchRplcDict[] 
  * 20240504 expanded SrchRplcDict[] to 634 entries
  * 20240518 expanded SrchRplcDict[] to 682 entries
- * 20240608 expanded SrchRplcDict[] to 731 entries 
+ * 20240608 expanded SrchRplcDict[] to 731 entries
+ * 20241116 expanded SrchRplcDict[] to 769 entries 
  * */
 #ifndef INC_ADVPARSER_H_
 #define INC_ADVPARSER_H_
@@ -731,7 +732,7 @@ private:
         {"G8NG" , "GOING", 4, 0}, //683
         {"ATIFE" , "WIFE", 5, 0}, //684
         {"BUME" , "BUG", 4, 0}, //685
-        {"NMM" , "9", 3, 0}, //686
+        {"NMM" , "NOT", 3, 0}, //686
         {"II" , "ES", 2, 0}, //687
         {"FRTT" , "FRM", 4, 0}, //688
         {"WEOST" , "POST", 5, 0}, //689
@@ -812,6 +813,9 @@ private:
         {"GASTE", "GAVE", 5, 0}, //764
         {"PSWER", "ANSWER", 5, 0}, //765
         {"SEC9D", "SECOND", 5, 0}, //766
+        {"MMTNTH", "MONTH", 6, 0}, //767
+        {"SUMGR", "SUMMER", 5, 0}, //768
+        {"PRACDC", "PRACTIC", 5, 0}, //769
     };
     
     bool AllDah;
@@ -833,6 +837,7 @@ private:
     //int wpm =0; //upated from DcodeCW.cpp through this class method EvalTimeData()
     float DahVarPrcnt;
     float MaxDt2DhRatio;
+    float KeyupVarPrcnt; //added 20241117
     uint16_t TmpUpIntrvls[IntrvlBufSize];
     uint16_t TmpDwnIntrvls[IntrvlBufSize];
     uint16_t DitDahSplitVal;

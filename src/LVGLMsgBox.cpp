@@ -15,6 +15,7 @@
 /*20241112 Added 'F8' Day Night mode per request from Carl (VK5CT)*/
 /*20241113 reworked Night mode sig strenght bar color*/
 /*20241115 Added Night mode to saved settings*/
+
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "LVGLMsgBox.h"
@@ -1318,13 +1319,15 @@ void _FlipDayNiteMode(void)
 	lv_style_reset(&style_bar);
 	lv_style_reset(&style_label);
 	lv_style_set_text_font(&TAstyle, &lv_font_montserrat_16);
+	lv_style_set_text_opa(&style_label, LV_OPA_100);
+	lv_style_set_text_color(&style_label, lv_color_black());
 	if (NiteMode)
 	{/*style settings for night view */
 		_theme = lv_theme_default_init(_theme->disp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
                                             1, LV_FONT_DEFAULT);
     
 		lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
-		//lv_style_set_bg_color(&style_bar, lv_palette_main(LV_PALETTE_DEEP_ORANGE));
+		lv_style_set_bg_color(&style_bar, lv_palette_main(LV_PALETTE_BROWN));
 		lv_style_set_bg_color(&style_Deslctd_bg, Dflt_bg_clr);
 		/*end night view setup*/
 	}

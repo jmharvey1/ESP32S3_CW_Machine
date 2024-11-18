@@ -44,6 +44,7 @@
  * 20240420 added auto word break timing 'wrdbrkFtcr'
  * 20240502 added rules 48 - 55 to  FixClassicErrors()
  * 20240519 Added glitch detection
+ * 20241117 added KeyupVarPrcnt to better recognize keyboard/paddle sent code
  * */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -1746,12 +1747,18 @@ bool AdvParser::PadlRules(int &n)
         BrkFlg = '+';
         return true;
     }
+    if (n > 0 && (TmpUpIntrvls[n] > 1.5 * TmpUpIntrvls[n - 1])) /*added test to reduce decoding 'ON' as a '9'*/
+    {
+        ExitPath[n] = 101;
+        BrkFlg = '+';
+        return true;
+    }
     /*Middle keyup test to see this keyup is twice the length of the one following it,
     If it is then call this one a letter break*/
     // if ((n < TmpUpIntrvlsPtr - 1) && (TmpUpIntrvls[n] > (2.0 * TmpUpIntrvls[n + 1])+8))
     if ((n < TmpUpIntrvlsPtr - 1) && (TmpUpIntrvls[n] > UnitIntvrlx2r5))
     {
-        ExitPath[n] = 101;
+        ExitPath[n] = 102;
         BrkFlg = '+';
         return true;
     }
@@ -1761,23 +1768,23 @@ bool AdvParser::PadlRules(int &n)
         if (TmpUpIntrvls[n] >= Bg1SplitPt)
         {
             BrkFlg = '+';
-            ExitPath[n] = 102;
+            ExitPath[n] = 103;
             return true;
         }
         else
-            ExitPath[n] = 103;
+            ExitPath[n] = 104;
         if (MaxCntKyUpBcktPtr < KeyUpBucktPtr) // safety check, before trying the real test
         {
             // if (TmpUpIntrvls[n] >= DitDahSplitVal)
             if (TmpUpIntrvls[n] >= UnitIntvrlx2r5)
             {
                 BrkFlg = '+';
-                ExitPath[n] = 104;
+                ExitPath[n] = 105;
                 return true;
             }
         }
         else
-            ExitPath[n] = 105;
+            ExitPath[n] = 106;
     }
     else
     {
@@ -1785,11 +1792,11 @@ bool AdvParser::PadlRules(int &n)
         if (TmpUpIntrvls[n] >= UnitIntvrlx2r5)
         {
             BrkFlg = '+';
-            ExitPath[n] = 106;
+            ExitPath[n] = 107;
             return true;
         }
         else
-            ExitPath[n] = 107;
+            ExitPath[n] = 108;
     }
     return false;
 };
@@ -2839,6 +2846,10 @@ int AdvParser::DitDahBugTst(void)
     uint16_t ditDwncnt;
     uint16_t ditInterval = dahInterval = dahDwnInterval = ditDwnInterval = ditDwncnt = MaxdahInterval = 0;
     MindahInterval = 1000;
+    uint16_t MinditInterval =1000;
+    uint16_t MaxditInterval = 0;
+    uint16_t IntrSymbolIntrvl = 0;
+    uint16_t IntrSymbolCnt = 0;
     int stop = TmpUpIntrvlsPtr - 1;
     int WrdBkCnt = 0;
     bool same;
@@ -2846,6 +2857,13 @@ int AdvParser::DitDahBugTst(void)
     this->StrchdDah = false;
     for (int n = 0; n < stop; n++)
     {
+        /*Sum the intersymbol key up times, & count them skipping anything that looks like a letter break*/
+        if(TmpUpIntrvls[n] + 8 < 0.6* UnitIntvrlx2r5){
+            IntrSymbolIntrvl += TmpUpIntrvls[n];
+            IntrSymbolCnt++;
+            if(MaxditInterval < TmpUpIntrvls[n]) MaxditInterval = TmpUpIntrvls[n];
+            if(MinditInterval > TmpUpIntrvls[n]) MinditInterval = TmpUpIntrvls[n];
+        }
         /*Made the define the average dah, less restrictive; because paddle generated dahs should all have the same interval */
         /*ALSO do NOT consider the 1st entry in the symbol set; its interval value may be truncated*/
         if (n > 0 && (TmpDwnIntrvls[n] >= this->DitDahSplitVal))
@@ -2887,6 +2905,13 @@ int AdvParser::DitDahBugTst(void)
         }
         if((float)TmpUpIntrvls[n] > (float)1.3* this->UnitIntvrlx2r5) WrdBkCnt++;
     }
+    this->KeyupVarPrcnt = 0;
+    IntrSymbolIntrvl /= IntrSymbolCnt;
+    int ditDelta = MaxditInterval - MinditInterval;
+    if(ditDelta > 0){
+        this->KeyupVarPrcnt = (float)(MaxditInterval - MinditInterval)/(float)IntrSymbolIntrvl;
+    }
+    //printf("IntrSymbolIntrvl:%d\tditDelta: %d\tKeyupVarPrcnt: %4.2f\n",IntrSymbolIntrvl, ditDelta, this->KeyupVarPrcnt); 
     if (dahDwncnt > 1)
     {
         /*find keydwnbkt with the most dahs*/
@@ -2911,7 +2936,7 @@ int AdvParser::DitDahBugTst(void)
             printf("StrchdDah = true");
         else
             printf("StrchdDah = false");
-        printf("\tWrdBkCnt:%d\n",WrdBkCnt);    
+        printf("\tWrdBkCnt:%d\tKeyupVarPrcnt: %4.2f\n",WrdBkCnt, this->KeyupVarPrcnt);    
     }
     
     if (ditDwncnt == 0 || dahDwncnt == 0) // we have all dits or all dahs -
@@ -2924,7 +2949,7 @@ int AdvParser::DitDahBugTst(void)
     /*Assume paddle/keyboard if a large cluster of dahs fall in one bucket*/
     if(dahDwncnt > 0)
     {
-        if(DahMaxcnt/dahDwncnt >= 0.75)
+        if(DahMaxcnt/dahDwncnt >= 0.75 && (this->KeyupVarPrcnt < 0.30))
         {
             if (Dbug)
                 printf("\nPADDLE EXIT A\n");
@@ -2995,7 +3020,7 @@ int AdvParser::DitDahBugTst(void)
                 return RetrnCD;
         }
         /*  A very simple test for paddle keyboard sent code */
-        if ((dahDwncnt > 1) && ((this->DahVarPrcnt < 0.10)|| (MaxDt2DhRatio < 3.4 && DahVarPrcnt < 0.4)))
+        if ((dahDwncnt > 1) && ((this->DahVarPrcnt < 0.10)|| (MaxDt2DhRatio < 3.4 && DahVarPrcnt < 0.4)) && (this->KeyupVarPrcnt < 0.30))
         {
             // its a paddle or keyboard
             return 0; // paddle/krybrd (70)
@@ -3050,7 +3075,7 @@ int AdvParser::DitDahBugTst(void)
                         return 9;                                   // bug (83)
                     else
                         return 2; // bug (80)
-                else
+                else if((this->KeyupVarPrcnt < 0.30))
                     return 0; // paddle/krybrd (70)
             }
             else

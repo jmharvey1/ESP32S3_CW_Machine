@@ -64,6 +64,7 @@ esp_event_loop_args_t event_task_args = {
 /*20241112 Added 'F8' Day/Night mode per request from Carl (VK5CT)*/
 /*20241113 reworked Night mode sig strenght bar color*/
 /*20241115 Added Night mode to saved settings*/
+/*20241117 added KeyupVarPrcnt AdvParser.cpp, to better recognize keyboard/paddle sent code */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -999,6 +1000,7 @@ void AdvParserTask(void *param)
         // }
         advparser.Msgbuf[NuMsgLen] = 0x20; // 0x5f;//0x20;
         advparser.Msgbuf[NuMsgLen + 1] = 0x0;
+        char tmpbuf[30];
         if(deletCnt>0)
         {
           /*now test for a mismatch in calculated delete count*/
@@ -1012,7 +1014,7 @@ void AdvParserTask(void *param)
           }
           DelStr[deletCnt] = 0x0;
           /*Now copy the new advparser character string/set to a temp buffer 'tmpbuf'*/
-          char tmpbuf[30];
+          //char tmpbuf[30];
           int ptr = 0;
           while(advparser.Msgbuf[ptr] !=0 && ptr <28)
           {
@@ -1029,9 +1031,8 @@ void AdvParserTask(void *param)
         //lvglmsgbx.Delete(true, deletCnt);
         
         if(advparser.Dbug)
-          printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
-        // else printf("advparser.Dbug OFF\n");
-        // printf("Pointer ERROR\n");/ printf("No Match @ %d; %d; %d\n", FmtchPtr, LtrHoldr[FmtchPtr], advparser.Msgbuf[FmtchPtr]);
+          printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
+        
         CptrTxt = false;
         lvglmsgbx.dispDeCdrTxt(advparser.Msgbuf, TFT_GREEN); // Added for lvgl; Note: color value is meaningless
         CptrTxt = true;

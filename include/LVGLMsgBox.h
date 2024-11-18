@@ -126,7 +126,8 @@ Special Keys & their functions:\n\
         AF  (Auto-Tune 500 to 900Hz)\n\
 2. Left Ctrl+G: Enable/Disable Debug\n\
 3. Left Ctrl+P:  Plot On/off\n\
-4. F9: Enable/Disable Scope View\n\    
+4. F8: Light/Dark Display theme\n\
+5. F9: Enable/Disable Scope View\n\    
 \n\
 \"F1 Mem\" and \"F1 Active\" enables typed characters to be saved into F1 memory\n\
 \n\
