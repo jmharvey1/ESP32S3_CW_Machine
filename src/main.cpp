@@ -65,6 +65,7 @@ esp_event_loop_args_t event_task_args = {
 /*20241113 reworked Night mode sig strenght bar color*/
 /*20241115 Added Night mode to saved settings*/
 /*20241117 added KeyupVarPrcnt AdvParser.cpp, to better recognize keyboard/paddle sent code */
+/*20241119 added forced wordbreak based on shift in incoming tone frequency */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -318,6 +319,10 @@ static void Cw_Machine_ADC_init(adc_channel_t *channel, uint8_t channel_num, adc
 //   return true;
 // }
 ////////////////////////////////////////////
+/*Actually handles a number things
+* like calculate current frequency of incoming signal
+* but originally created to simply pass the current ADC sampler to the goertzel tone detector algorythem 
+*/
 void addSmpl(int k, int i, int *pCntrA)
 {
   /*The following is for diagnostic testing; it generates a psuesdo tone input of known freq & magnitude */
@@ -426,6 +431,13 @@ k = (int)decimated;
         
         if ((DemodFreq > DmodFrqOld - 2) && (DemodFreq < DmodFrqOld + 2))
         {/*OK we got essentially the same freq twice in row, so it must be valid*/
+          if((TARGET_FREQUENCYC - DemodFreq) > 15 || (DemodFreq - TARGET_FREQUENCYC ) > 15 )
+          {
+            /*if here, we just had a shift in the incoming tone of more than 15hz, 
+            so assume new 'sender', & force a wordbreak in the decoded text
+            by setting the expected wordbreak time to 0 */
+            wordBrk =0;
+          }
           DmodFrqOld = (4*TARGET_FREQUENCYC + DemodFreq)/5;
           //sprintf(Title, "Tone: %d\t%d\n", DemodFreq, (int)SmplCNt);
           //printf(Title);
