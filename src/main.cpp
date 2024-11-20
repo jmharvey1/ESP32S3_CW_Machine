@@ -66,6 +66,7 @@ esp_event_loop_args_t event_task_args = {
 /*20241115 Added Night mode to saved settings*/
 /*20241117 added KeyupVarPrcnt AdvParser.cpp, to better recognize keyboard/paddle sent code */
 /*20241119 added forced wordbreak based on shift in incoming tone frequency */
+/*20241120 AdvParser.cpp- added new sloppy bug letter break test to rule set & changed DitIntrvlVal calc*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

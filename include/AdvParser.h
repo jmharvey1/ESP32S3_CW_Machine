@@ -16,7 +16,8 @@
  * 20240504 expanded SrchRplcDict[] to 634 entries
  * 20240518 expanded SrchRplcDict[] to 682 entries
  * 20240608 expanded SrchRplcDict[] to 731 entries
- * 20241116 expanded SrchRplcDict[] to 769 entries 
+ * 20241116 expanded SrchRplcDict[] to 769 entries
+ * 20241120 added DitIntrvlPtr & DitIntrvlRingBuf[] to support new method for determining DitIntrvlVal
  * */
 #ifndef INC_ADVPARSER_H_
 #define INC_ADVPARSER_H_
@@ -818,6 +819,8 @@ private:
         {"PRACDC", "PRACTIC", 5, 0}, //769
         {"XRN", "TURN", 3, 0}, //770
         {"PERS9", "PERSON", 5, 0}, //771
+        {"DRWAE", "DRAKE", 5, 0}, //772
+         {"ATAKT", "WAY", 5, 0}, //77* 20241120 added3
     };
     
     bool AllDah;
@@ -842,12 +845,14 @@ private:
     float KeyupVarPrcnt; //added 20241117
     uint16_t TmpUpIntrvls[IntrvlBufSize];
     uint16_t TmpDwnIntrvls[IntrvlBufSize];
+    uint8_t DitIntrvlPtr = 0; //added 20241120
+    uint16_t DitIntrvlRingBuf[6]; //added 20241120
     uint16_t DitDahSplitVal;
     uint16_t AvgDahVal;
     uint16_t NuSpltVal = 0;
     //uint16_t DitIntrvlVal; //used as sanity test/check in 'bug' letterbrk rule set; 20240129 running average of the last 6 dits
     uint16_t WrdBrkVal; // serves in post parser as the value to insert a space in the reconstructed character string
-    unsigned int SymbSet;
+    unsigned int SymbSet; //bit-bucket that holds a collection of 0's & 1's where 1 = a dah & a 0 = a dit; so "C" = 1010
     unsigned int LstLtrBrkCnt = 0;//track the number of keyevents since last letterbreak.
     //uint16_t UnitIntvrlx2r5; //basic universal symbol interval; i.e. a standard dit X 2.4; used in b1 rule set to find letter breaks
     uint16_t Bg1SplitPt; //bug1 rule set dit/dah decision value; derived from UnitIntvrlx2r5

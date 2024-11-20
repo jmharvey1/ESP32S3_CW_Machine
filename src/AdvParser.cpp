@@ -45,6 +45,7 @@
  * 20240502 added rules 48 - 55 to  FixClassicErrors()
  * 20240519 Added glitch detection
  * 20241117 added KeyupVarPrcnt to better recognize keyboard/paddle sent code
+ * 20241120 added new letter break test to sloppy bug rule set & SetSpltPt() changed calc DitIntrvlVal approach by adding ringbuff
  * */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -953,7 +954,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
             break; // exclude/stop comparison when/if the interval exceeds that of a dah interval @ the current WPM
         /*Test if the change interval between these keydwn groups is bigger than anything we've seen before (in this symbol set)*/
         if (arr[i].Intrvl > 34)
-        { /*only consider intevals that represent keying below 35 wpm. Anything faster is likely just noise*/
+        { /*only consider intervals that represent keying below 35 wpm. Anything faster is likely just noise*/
             if (FindFrstNtryPtr)
             {
                 FindFrstNtryPtr = false;
@@ -976,9 +977,20 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                     int LpCntr = 0;
                     while (LpCntr < arr[i].Cnt)
                     {
-                        this->DitIntrvlVal = (uint16_t)((5 * (float)this->DitIntrvlVal) + (float)arr[i].Intrvl) / 6.0;
+                        // this->DitIntrvlVal = (uint16_t)((5 * (float)this->DitIntrvlVal) + (float)arr[i].Intrvl) / 6.0;
+                        //DitIntrvlPtr = 0;
+                        this->DitIntrvlRingBuf[DitIntrvlPtr] = arr[i].Intrvl;
                         LpCntr++;
+                        DitIntrvlPtr++;
+                        if (DitIntrvlPtr == 6)
+                            DitIntrvlPtr = 0;
                     }
+                    this->DitIntrvlVal = 0;//reset DitIntrvlVal
+                    for (int lptr = 0; lptr < 6; lptr++)
+                    {
+                        this->DitIntrvlVal += this->DitIntrvlRingBuf[lptr];
+                    }
+                    this->DitIntrvlVal /= 6;
                 }
                 if (arr[i + 1].Intrvl > 1.5 * arr[i].Intrvl && (arr[i].Cnt > 2))
                 { // 1.7 * arr[i].Intrvl
@@ -1046,13 +1058,28 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         AllDit = AllDah = false;
         if (Dbug)
             printf("Using Alternate Calc NuSpltVal Method: %d\n", this->NuSpltVal);
+        // int LpCntr = 0;
+        // while (LpCntr < arr[lastDitPtr].Cnt)
+        // {
+        //     this->DitIntrvlVal = (uint16_t)((5 * (float)this->DitIntrvlVal) + (float)arr[lastDitPtr].Intrvl) / 6.0;
+        //     LpCntr++;
+        // }
         int LpCntr = 0;
         while (LpCntr < arr[lastDitPtr].Cnt)
         {
-            this->DitIntrvlVal = (uint16_t)((5 * (float)this->DitIntrvlVal) + (float)arr[lastDitPtr].Intrvl) / 6.0;
+            //DitIntrvlPtr = 0;
+            this->DitIntrvlRingBuf[DitIntrvlPtr] = arr[lastDitPtr].Intrvl;
             LpCntr++;
+            DitIntrvlPtr++;
+            if (DitIntrvlPtr == 6)
+                DitIntrvlPtr = 0;
         }
-        // }
+        this->DitIntrvlVal = 0; // reset DitIntrvlVal
+        for (int lptr = 0; lptr < 6; lptr++)
+        {
+            this->DitIntrvlVal += this->DitIntrvlRingBuf[lptr];
+        }
+        this->DitIntrvlVal /= 6;
     }
     // printf("\nlastDitPtr =%d; NuSpltVal =%d; ditVal:%d\n", lastDitPtr, this->NuSpltVal, arr[lastDitPtr].Intrvl);
 
@@ -1197,7 +1224,7 @@ bool AdvParser::SloppyBgRules(int &n)
     uint16_t maxdah = 0;
     uint16_t mindah = KeyDwnBuckts[KeyDwnBucktPtr].Intrvl;
     char ExtSmbl = ' ';
-    if (SymbSet & 1)                                                                                                   // if the current symbol is a dah, do the following tests
+    if (SymbSet & 1) //this entry is a 'Dah'                                                                                                   // if the current symbol is a dah, do the following tests
     {                                                                                                                  /*Current keydwn state represents a dah */
         if (TmpDwnIntrvls[n] >= KeyDwnBuckts[KeyDwnBucktPtr].Intrvl && this->StrchdDah && RunCnt != 0 && SymbSet == 3) // dont consider strected dah on very 1st sybmol
         {
@@ -1250,6 +1277,14 @@ bool AdvParser::SloppyBgRules(int &n)
                     }
                 }
             }
+        }
+        /*before testing for weird runs, check if this Dah is/was followed by a sizable Keyup interval (meaning a letter break)*/
+        /*20241120 added the following test*/
+        if (TmpUpIntrvls[n] > 0.8*UnitIntvrlx2r5)
+        {//it was so exit with letter break code
+            ExitPath[n] = 24;
+            BrkFlg = '+';
+            return true; 
         }
         for (int i = n; i < TmpUpIntrvlsPtr; i++)
         {
