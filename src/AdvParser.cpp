@@ -242,10 +242,32 @@ void AdvParser::EvalTimeData(void)
                         if (Dbug)
                             printf("\t'GLITCH' Entry(Skipped2): TmpDwnIntrvls[%d] %d;  TmpUpIntrvls[%d] %d\n", rScanPtr, TmpDwnIntrvls[rScanPtr], rScanPtr, TmpUpIntrvls[rScanPtr]);
                     }
-                    else if ((ThisElmntIntrvl < 0.72 * AvgElmntIntrvl) || (ThisElmntIntrvl > 1.20 * AvgElmntIntrvl))
+                    else if ((ThisElmntIntrvl < 0.72 * AvgElmntIntrvl) || (ThisElmntIntrvl > 1.20 * AvgElmntIntrvl) )
                     {/*this looks like 'glitch' because its combined time interval is either to big or too small to be part of this data set */
                         if (Dbug)
                             printf("\t'GLITCH' Entry(Deleted): TmpDwnIntrvls[%d] %d;  TmpUpIntrvls[%d] %d\n", rScanPtr, TmpDwnIntrvls[rScanPtr], rScanPtr, TmpUpIntrvls[rScanPtr]);
+                        GLitchFlg = true;
+                        if (rScanPtr > 0)
+                        {
+                            TmpUpIntrvls[rScanPtr - 1] += TmpDwnIntrvls[rScanPtr];
+                            TmpUpIntrvls[rScanPtr - 1] += TmpUpIntrvls[rScanPtr];
+                        }
+                        /*now delete this entry by moving all the following entries forward by one position*/
+                        int strtmv = rScanPtr;
+                        while (strtmv < TmpUpIntrvlsPtr - 1)
+                        {
+                            // printf("Moving Entry: TmpDwnIntrvls[%d] %d\n", strtmv, TmpDwnIntrvls[strtmv]);
+                            TmpDwnIntrvls[strtmv] = TmpDwnIntrvls[strtmv + 1];
+                            TmpUpIntrvls[strtmv] = TmpUpIntrvls[strtmv + 1];
+                            strtmv++;
+                        }
+                        TmpUpIntrvlsPtr--;
+                        rScanPtr--;
+                    }
+                    else if (TmpDwnIntrvls[rScanPtr] < 0.45 * DitIntrvlVal )
+                    {/*this looks like 'glitch' because its too small to be part of this data set */
+                        if (Dbug)
+                            printf("\t'GLITCH' Entry(Deleted) 2small: TmpDwnIntrvls[%d] %d;  TmpUpIntrvls[%d] %d\n", rScanPtr, TmpDwnIntrvls[rScanPtr], rScanPtr, TmpUpIntrvls[rScanPtr]);
                         GLitchFlg = true;
                         if (rScanPtr > 0)
                         {
@@ -2941,7 +2963,7 @@ int AdvParser::DitDahBugTst(void)
         if((float)TmpUpIntrvls[n] > (float)1.3* this->UnitIntvrlx2r5) WrdBkCnt++;
     }
     this->KeyupVarPrcnt = 0;
-    IntrSymbolIntrvl /= IntrSymbolCnt;
+    if(IntrSymbolCnt > 0) IntrSymbolIntrvl /= IntrSymbolCnt;
     int ditDelta = MaxditInterval - MinditInterval;
     if(ditDelta > 0){
         this->KeyupVarPrcnt = (float)(MaxditInterval - MinditInterval)/(float)IntrSymbolIntrvl;
@@ -4244,7 +4266,18 @@ void AdvParser::FixClassicErrors(void)
                         {
                             Test = true; 
                         }
-                        break;                                                                        
+                        break;
+                    case 79: /* RULE(ZD/MID) - this is the 1st in the string or there is at least one character ahead & its NOT an 'S' */
+                        if (NdxPtr> 1 
+                            && this->Msgbuf[NdxPtr - 2] == 'Q'
+                            && this->Msgbuf[NdxPtr - 1] == 'R') //QRZ
+                        { 
+                            Test = false;
+                        } else
+                        {
+                            Test = true; 
+                        }
+                        break;                                                                            
                     default:
                         break;            
                     }

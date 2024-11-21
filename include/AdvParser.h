@@ -452,7 +452,7 @@ private:
         {"THFE", "THERE", 4, 0}, //402
         {"C9S" , "CONS", 3, 0}, //403
         {"LIC" , "LIKE", 3, 17}, //404 rule 17, exact match rule
-        {"ZD" , "MID", 2, 0}, //405
+        {"ZD" , "MID", 2, 79}, //405
         {"AMEAST" , "JUST", 6, 0}, //406
         {"7VT" , "73", 3, 0}, //407
         {"BMQT" , "BOY", 4, 0}, //408
