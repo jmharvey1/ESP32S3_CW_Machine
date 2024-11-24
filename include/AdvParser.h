@@ -787,7 +787,7 @@ private:
         {"5RE", "HERE", 3, 0}, //737
         {"GRPITE", "GRANITE", 5, 0}, //738
         {"KEEAN", "KEEP", 5, 0}, //739
-        {"CEE", "TREE", 3, 0}, //740
+        {"CEE", "TREE", 3, 80}, //740
         {"CTK", "CQ", 3, 0}, //741
         {"BEFTMRE", "BEFORE", 7, 0}, //742
         {"CIP", "TRIP", 3, 17}, //743
@@ -820,7 +820,10 @@ private:
         {"XRN", "TURN", 3, 0}, //770
         {"PERS9", "PERSON", 5, 0}, //771
         {"DRWAE", "DRAKE", 5, 0}, //772
-         {"ATAKT", "WAY", 5, 0}, //77* 20241120 added3
+        {"ATAKT", "WAY", 5, 0}, //773 20241120 added
+        {"WARGR", "WARMER", 5, 0}, //774
+        {"GRPTED", "GRANTED", 6, 0}, //775
+        {"ANION", "PION", 5, 0}, //776
     };
     
     bool AllDah;

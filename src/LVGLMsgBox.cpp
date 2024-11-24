@@ -15,6 +15,7 @@
 /*20241112 Added 'F8' Day Night mode per request from Carl (VK5CT)*/
 /*20241113 reworked Night mode sig strenght bar color*/
 /*20241115 Added Night mode to saved settings*/
+/*20241124 Modified Night mode checkbox color*/
 
 #include <stdio.h>
 #include "sdkconfig.h"
@@ -111,6 +112,7 @@ static lv_style_t style_Deslctd_bg;
 static lv_style_t style_BtnDeslctd_bg;
 static lv_style_t style_label;
 static lv_style_t style_bar;
+static lv_style_t style_chkbx;
 static lv_style_t TAstyle;
 static lv_style_t Cursorstyle;
 static lv_color_t Dflt_bg_clr;
@@ -686,10 +688,12 @@ void lvgl_DeSelct_Param(int paramptr)
 		break;
 	case 2:
 		lv_obj_add_style(chkbx_lbl, &style_Deslctd_bg, 0);
+		lv_obj_add_style(Dbg_ChkBx, &style_chkbx, 0);
 		//printf("deselected Dbg_ChkBx\n");
 		break;
 	case 3:
 		lv_obj_add_style(chkbx_lbl1, &style_Deslctd_bg, 0);
+		lv_obj_add_style(ScrnMode_ChkBx, &style_chkbx, 0);
 		//printf("deselected ScrnMode_ChkBx\n");
 		break;	
 	case 4:
@@ -722,7 +726,7 @@ void lvgl_DeSelct_Param(int paramptr)
 void lvgl_HiLite_Seltcd_Param(int paramptr)
 {
 	//style_Slctd_bg
-	lv_style_reset(&style_Slctd_bg);
+	//lv_style_reset(&style_Slctd_bg);
 	lv_color_t bgclr = lv_palette_main(LV_PALETTE_YELLOW);
 	lv_style_set_bg_color(&style_Slctd_bg, bgclr);
 	
@@ -739,12 +743,14 @@ void lvgl_HiLite_Seltcd_Param(int paramptr)
 	case 2:
 	{
 		lv_obj_add_style(chkbx_lbl, &style_Slctd_bg, 0);
+		lv_obj_add_style(Dbg_ChkBx, &style_chkbx, 0);
 		//printf("Selected Dbg_ChkBx\n\n");
 		break;
 	}
 	case 3:
 	{
 		lv_obj_add_style(chkbx_lbl1, &style_Slctd_bg, 0);
+		lv_obj_add_style(ScrnMode_ChkBx, &style_chkbx, 0);
 		//printf("Selected ScrnMode_ChkBx\n\n");
 		break;
 	}
@@ -1017,10 +1023,12 @@ void Bld_Settings_scrn(void)
 		lv_obj_align_to(save_btn_label, save_btn, LV_ALIGN_CENTER, 0, 0);
 
 		/*Debug Checkbox*/
+		/*the following label is just used for managing highlighting the selected checkbox*/
 		chkbx_lbl = lv_textarea_create(cont2);
 		lv_obj_set_size(chkbx_lbl, 80, 24);
 		lv_obj_set_pos(chkbx_lbl, 285, 21);
-		lv_textarea_add_text(chkbx_lbl, "   ");
+		
+		lv_obj_add_style(chkbx_lbl, &style_chkbx, 0);
 		Dbg_ChkBx = lv_checkbox_create(cont2);
 		lv_checkbox_set_text(Dbg_ChkBx, "DeBug");
 		lv_obj_add_event_cb(Dbg_ChkBx, Debug_chkBx_cb, LV_EVENT_ALL, NULL);
@@ -1031,10 +1039,11 @@ void Bld_Settings_scrn(void)
 			lv_obj_clear_state(Dbg_ChkBx, LV_STATE_CHECKED);
 
 		/*Display Mode*/
+		/*the following label is just used for managing highlighting the selected checkbox*/
 		chkbx_lbl1 = lv_textarea_create(cont2);
 		lv_obj_set_size(chkbx_lbl1, 145, 24);
 		lv_obj_set_pos(chkbx_lbl1, 390, 21);
-		//lv_textarea_add_text(chkbx_lbl1, "   ");
+		
 		ScrnMode_ChkBx = lv_checkbox_create(cont2);
 		lv_checkbox_set_text(ScrnMode_ChkBx, "Scrn Dark Mode");
 		lv_obj_add_event_cb(ScrnMode_ChkBx, NiteMode_chkBx_cb, LV_EVENT_ALL, NULL);
@@ -1318,6 +1327,7 @@ void _FlipDayNiteMode(void)
 	lv_style_reset(&TAstyle);
 	lv_style_reset(&style_bar);
 	lv_style_reset(&style_label);
+	lv_style_reset(&style_chkbx);
 	lv_style_set_text_font(&TAstyle, &lv_font_montserrat_16);
 	lv_style_set_text_opa(&style_label, LV_OPA_100);
 	lv_style_set_text_color(&style_label, lv_color_black());
@@ -1325,10 +1335,12 @@ void _FlipDayNiteMode(void)
 	{/*style settings for night view */
 		_theme = lv_theme_default_init(_theme->disp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
                                             1, LV_FONT_DEFAULT);
-    
+		
 		lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
 		lv_style_set_bg_color(&style_bar, lv_palette_main(LV_PALETTE_BROWN));
 		lv_style_set_bg_color(&style_Deslctd_bg, Dflt_bg_clr);
+		lv_style_set_text_color(&style_Slctd_bg, lv_color_black());
+		lv_style_set_text_color(&style_chkbx, lv_color_black());
 		/*end night view setup*/
 	}
 	else

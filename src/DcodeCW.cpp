@@ -1395,7 +1395,7 @@ bool chkChrCmplt(void)
 					{
 						oneLtrCntr++;
 						if (oneLtrCntr >= 2)
-						{ // had 2 entries in a row that were just one character in lenght; shorten the wordbrk interval
+						{ // had 2 entries in a row that were just one character in length; shorten the wordbrk interval
 							wrdbrkFtcr += 0.15;// = 2.0
 							// LtrHoldr[LtrPtr] = curChar
 							if(DbgWrdBrkFtcr) printf("wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
@@ -1415,11 +1415,20 @@ bool chkChrCmplt(void)
 				/*Sync advparser.wrdbrkFtcr to current wrdbrkFtcr*/
 				advparser.wrdbrkFtcr = wrdbrkFtcr;
 				/*Perpare advparser, by 1st copying current decoder symbol sets into local advparser arrays*/
+#if USE_TST_DATA
+				KeyUpPtr = KeyDwnPtr = testSize;
+				for (int i = 0; i < KeyDwnPtr; i++)
+				{
+					advparser.KeyUpIntrvls[i] = testKeyUp[i];
+					advparser.KeyDwnIntrvls[i] = testKeyDwn[i];
+				}
+#else
 				for (int i = 0; i <= KeyDwnPtr; i++)
 				{
 					advparser.KeyUpIntrvls[i] = KeyUpIntrvls[i];
 					advparser.KeyDwnIntrvls[i] = KeyDwnIntrvls[i];
 				}
+#endif /* USE_TST_DATA*/
 				advparser.KeyUpPtr = KeyUpPtr;
 				advparser.KeyDwnPtr = KeyDwnPtr;
 				advparser.wpm = wpm;
