@@ -2724,11 +2724,11 @@ bool AdvParser::Bug2Rules(int &n)
 ////////////////////////////////////////////////////////
 bool AdvParser::SKRules(int &n)
 {
-    /*Straight key Rules - Originally model form Paddle or Keyboard rules*/
+    /*Straight key Rules - Originally model from Paddle or Keyboard rules*/
     /*Middle keyup test to see this keyup is greater than 'UnitIntvrlx2r5',
     If it is then call this one a letter break*/
     // if (n > 0 && (TmpUpIntrvls[n] > 2.0 * TmpUpIntrvls[n - 1]))
-    if (n > 0 && (TmpUpIntrvls[n] > UnitIntvrlx2r5))
+    if (n > 0 && ((float)TmpUpIntrvls[n] > (float)(0.9* UnitIntvrlx2r5)))//20241125 added the 0.9 factor based on one slow SK sender's spacing 
     {
         ExitPath[n] = 100;
         BrkFlg = '+';

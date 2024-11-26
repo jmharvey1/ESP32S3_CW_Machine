@@ -114,6 +114,7 @@ static lv_style_t style_label;
 static lv_style_t style_bar;
 static lv_style_t style_chkbx;
 static lv_style_t TAstyle;
+static lv_style_t TASettingsStyle;
 static lv_style_t Cursorstyle;
 static lv_color_t Dflt_bg_clr;
 static	bool first_run = false;
@@ -667,19 +668,11 @@ void lvgl_Update_setting(lv_obj_t *TxtArea, char bufChar)
 }
 void lvgl_DeSelct_Param(int paramptr)
 {
-	// lv_style_reset(&style_Deslctd_bg);
-	// lv_style_reset(&style_BtnDeslctd_bg);
-		
-	// lv_color_t Btn_bgclr = lv_palette_main(LV_PALETTE_LIGHT_BLUE);
-	
-	// lv_style_set_bg_color(&style_Deslctd_bg, Dflt_bg_clr);
-	// lv_style_set_bg_color(&style_BtnDeslctd_bg, Btn_bgclr);
-	
-	
 	switch (paramptr)
 	{
 	case 0:
 		lv_obj_add_style(MyCallta, &style_Deslctd_bg, 0);
+		//lv_obj_add_style(MyCallta, &TASettingsStyle, 0);
 		//printf("deselected MyCallta\n");
 		break;
 	case 1:
@@ -887,15 +880,18 @@ void Bld_Settings_scrn(void)
 	{
 		lv_style_init(&style_label);
 		lv_style_init(&style_btn);
+		lv_style_init(&TASettingsStyle);
 		first_run = true;
 	}
 
 	lv_style_reset(&style_btn);
 	lv_style_reset(&style_label);
+	lv_style_reset(&TASettingsStyle);
 
 	lv_style_set_text_font(&style_label, &lv_font_montserrat_14);
 	lv_style_set_text_opa(&style_label, LV_OPA_100);
 	lv_style_set_text_color(&style_label, lv_color_black());
+	lv_style_set_text_color(&TASettingsStyle, lv_color_black());
 
 	if (scr_2 == NULL)
 	{
@@ -920,6 +916,7 @@ void Bld_Settings_scrn(void)
 		lv_obj_set_pos(MyCallta, 65, 12);
 		lv_textarea_set_one_line(MyCallta, true);
 		lv_textarea_set_max_length(MyCallta, 10);
+		lv_obj_add_style(MyCallta, &TASettingsStyle, 0);
 		lv_textarea_set_text(MyCallta, DFault.MyCall); // DFault.MyCall
 		Dflt_bg_clr = lv_obj_get_style_bg_color(MyCallta, LV_PART_MAIN);
 
@@ -1339,6 +1336,8 @@ void _FlipDayNiteMode(void)
 		lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
 		lv_style_set_bg_color(&style_bar, lv_palette_main(LV_PALETTE_BROWN));
 		lv_style_set_bg_color(&style_Deslctd_bg, Dflt_bg_clr);
+		lv_style_set_text_color(&style_Deslctd_bg, lv_color_white());
+		//lv_style_set_text_color(&TASettingsStyle, lv_color_white());// Dflt_bg_clr);
 		lv_style_set_text_color(&style_Slctd_bg, lv_color_black());
 		lv_style_set_text_color(&style_chkbx, lv_color_black());
 		/*end night view setup*/
