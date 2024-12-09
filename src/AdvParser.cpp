@@ -46,6 +46,7 @@
  * 20240519 Added glitch detection
  * 20241117 added KeyupVarPrcnt to better recognize keyboard/paddle sent code
  * 20241120 added new letter break test to sloppy bug rule set & SetSpltPt() changed calc DitIntrvlVal approach by adding ringbuff
+ * 20241209 tweaks to AdvParser::EvalTimeData(void) intended to improve response to changes in sender fist & speed
  * */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -58,12 +59,15 @@
 
 AdvParser::AdvParser(void) // TFT_eSPI *tft_ptr, char *StrdTxt
 {
-    // this->AvgSmblDedSpc = 1200 / 30;
     this->DitDahSplitVal = 106;
     this->AvgSmblDedSpc = 45.0;
     this->Bg1SplitPt = 67;
     this->UnitIntvrlx2r5 = 113;
     this->DitIntrvlVal = 50;
+    for (int lptr = 0; lptr < 6; lptr++)
+    {
+        this->DitIntrvlRingBuf[lptr] = this->DitIntrvlVal;
+    }
     this->BugKey = 0; // paddle rules
     this->AllDit = false;
     this->LstGltchEvnt = 0;
@@ -162,6 +166,59 @@ void AdvParser::EvalTimeData(void)
     }
     /*cleanup by finding the average of the last group*/
     KeyDwnBuckts[KeyDwnBucktPtr].Intrvl = BucktAvg / KeyDwnBuckts[KeyDwnBucktPtr].Cnt;
+    /*Do a quick test/check to determine if a fast recalc of NuSpltVal is feasable
+    If it is do it, because it will allow the post parser to quickly adapt to a speed change
+    Especailly when the current send speed is abrublty decreased */
+    bool calc = false;
+    int BtmPtr = 0;
+    while (KeyDwnBuckts[0].Intrvl < 1200 / 35 && BtmPtr < KeyDwnBucktPtr)
+    {
+        BtmPtr++;
+    }
+    int TopPtr = KeyDwnBucktPtr;
+    while ((KeyDwnBuckts[TopPtr].Intrvl > 900) && (TopPtr > BtmPtr))
+    { // Ignore dah intervals > 4WPM
+        TopPtr--;
+    }
+    // printf("\nTopPtr = %d; BtmPtr = %d\n", TopPtr, BtmPtr);
+    if (TopPtr - BtmPtr >= 1 && ((KeyDwnBuckts[TopPtr].Cnt > 1) || (KeyDwnBuckts[BtmPtr].Cnt > 1)))
+    {
+        calc = true;
+
+        // this->NuSpltVal = KeyDwnBuckts[BtmPtr].Intrvl + (KeyDwnBuckts[TopPtr].Intrvl - KeyDwnBuckts[BtmPtr].Intrvl)/2;
+        // this->DitDahSplitVal = this->NuSpltVal;
+        // this->WrdBrkVal = 4 * KeyDwnBuckts[BtmPtr].Intrvl;
+        // printf("**QUICK A** NuSpltVal = %d; TopPtr = %d; BtmPtr = %d\n", this->NuSpltVal, TopPtr, BtmPtr);
+    }
+    else if (TopPtr - BtmPtr > 1)
+    {   // 2nd try: Look at next group buckets & see if they look creditable
+        /*1st, test by moving up from bottom*/
+
+        if (KeyDwnBuckts[BtmPtr + 1].Cnt > 1 && KeyDwnBuckts[BtmPtr + 1].Intrvl < KeyDwnBuckts[TopPtr].Intrvl / 2)
+        {
+            BtmPtr++;
+            calc = true;
+        }
+        else if (KeyDwnBuckts[TopPtr - 1].Cnt > 1 && KeyDwnBuckts[BtmPtr].Intrvl < KeyDwnBuckts[TopPtr - 1].Intrvl / 2)
+        {
+            TopPtr--;
+            calc = true;
+        }
+        // if(calc){
+        //     this->NuSpltVal = KeyDwnBuckts[BtmPtr].Intrvl + (KeyDwnBuckts[TopPtr].Intrvl - KeyDwnBuckts[BtmPtr].Intrvl)/2;
+        //     this->DitDahSplitVal = this->NuSpltVal;
+        //     this->WrdBrkVal = 4 * KeyDwnBuckts[BtmPtr].Intrvl;
+        //     printf("**QUICK B** NuSpltVal = %d; TopPtr = %d; BtmPtr = %d\n", this->NuSpltVal, TopPtr, BtmPtr);
+        // }
+    }
+    if (calc)
+    {
+        this->NuSpltVal = KeyDwnBuckts[BtmPtr].Intrvl + (KeyDwnBuckts[TopPtr].Intrvl - KeyDwnBuckts[BtmPtr].Intrvl) / 2;
+        this->DitDahSplitVal = this->NuSpltVal;
+        this->WrdBrkVal = 4 * KeyDwnBuckts[BtmPtr].Intrvl;
+        if(this->Bg1SplitPt < 1.1* KeyDwnBuckts[BtmPtr].Intrvl) this->Bg1SplitPt = 1.1 * KeyDwnBuckts[BtmPtr].Intrvl;
+        if(DeBug) printf("\n**QUICK** NuSpltVal = %d; Bg1SplitPt= %d; TopPtr = %d; BtmPtr = %d\n", this->NuSpltVal, this->Bg1SplitPt, TopPtr, BtmPtr);
+    }
     /*Build the Key Up Bucket table*/
     KeyUpBuckts[KeyUpBucktPtr].Intrvl = this->KeyUpIntrvls[0]; // At this point KeyUpBucktPtr = 0
     KeyUpBuckts[KeyUpBucktPtr].Cnt = 1;
@@ -202,12 +259,12 @@ void AdvParser::EvalTimeData(void)
             printf("%d\n", 1 + KeyUpBucktPtr);
         }
         SetSpltPt(KeyDwnBuckts, KeyDwnBucktPtr);
-        if (Dbug)
-        {
-            printf("\nSplitPoint:%3d\tBg1SplitPt:%d\tDitIntrvlVal:%d\t  AvgDahVal:%d\t", DitDahSplitVal, Bg1SplitPt, DitIntrvlVal, AvgDahVal);
-            printf("AvgDedSpc:%0.1f\tUnitIntvrlx2r5:%d\tWrdBrkVal:%d\n", AvgSmblDedSpc, UnitIntvrlx2r5, WrdBrkVal);
-            printf("\nKeyDwnBuckt Cnt: %d\n", KeyDwnBucktPtr + 1);
-        }
+        // if (Dbug)
+        // {
+        //     printf("\nSplitPoint:%3d\tBg1SplitPt:%d\tDitIntrvlVal:%d\t  AvgDahVal:%d\t", DitDahSplitVal, Bg1SplitPt, DitIntrvlVal, AvgDahVal);
+        //     printf("AvgDedSpc:%0.1f\tUnitIntvrlx2r5:%d\tWrdBrkVal:%d\n", AvgSmblDedSpc, UnitIntvrlx2r5, WrdBrkVal);
+        //     printf("\nKeyDwnBuckt Cnt: %d\n", KeyDwnBucktPtr + 1);
+        // }
         /*now rescan the "Keydwn data set and delete those intervals that are less than 0.75 * DitIntrvlVal*/
         int rScanPtr = 0;
         bool GLitchFlg = false;
@@ -381,12 +438,12 @@ void AdvParser::EvalTimeData(void)
                 printf("%d\n", 1 + KeyUpBucktPtr);
             }
             SetSpltPt(KeyDwnBuckts, KeyDwnBucktPtr);
-            if (Dbug)
-            {
-                printf("\nSplitPoint:%3d\tBg1SplitPt:%d\tDitIntrvlVal:%d\t", DitDahSplitVal, Bg1SplitPt, DitIntrvlVal);
-                printf("AvgDedSpc:%0.1f\tUnitIntvrlx2r5:%d\tWrdBrkVal:%d\n", AvgSmblDedSpc, UnitIntvrlx2r5, WrdBrkVal);
-                printf("\nKeyDwnBuckt Cnt: %d\n", KeyDwnBucktPtr + 1);
-            }
+            // if (Dbug)
+            // {
+            //     printf("\nSplitPoint:%3d\tBg1SplitPt:%d\tDitIntrvlVal:%d\t", DitDahSplitVal, Bg1SplitPt, DitIntrvlVal);
+            //     printf("AvgDedSpc:%0.1f\tUnitIntvrlx2r5:%d\tWrdBrkVal:%d\n", AvgSmblDedSpc, UnitIntvrlx2r5, WrdBrkVal);
+            //     printf("\nKeyDwnBuckt Cnt: %d\n", KeyDwnBucktPtr + 1);
+            // }
 
         } // end rinse & repeat
         NewSpltVal = true;
@@ -411,9 +468,9 @@ void AdvParser::EvalTimeData(void)
     int RuningTotal = 0;
     for (int i = 0; i < this->KeyUpBucktPtr; i++)
     {
-
-        // if (KeyUpBuckts[i].Intrvl < this->DitDahSplitVal)
-        if (KeyUpBuckts[i].Intrvl < 0.63 * this->AvgDahVal) // 20241104
+        // printf("\n @@@@ KeyUpBuckts[i].Intrvl %d; this->DitDahSplitVal %d\n",KeyUpBuckts[i].Intrvl, this->DitDahSplitVal);
+        if (KeyUpBuckts[i].Intrvl < this->DitDahSplitVal)// 20241209 went back to this method, after adding quick NuSpltVal test & recalc
+        //if (KeyUpBuckts[i].Intrvl < 0.63 * this->AvgDahVal) // 20241104
         {
             EvntCnt += KeyUpBuckts[i].Cnt;
             RuningTotal += KeyUpBuckts[i].Cnt * KeyUpBuckts[i].Intrvl;
@@ -421,6 +478,7 @@ void AdvParser::EvalTimeData(void)
     }
     if (EvntCnt > 0)
     {
+        // printf(" RuningTotal %d; EvntCnt %d\n",RuningTotal, EvntCnt);
         this->AvgSmblDedSpc = (uint16_t)RuningTotal / EvntCnt;
     }
     uint16_t OldIntvrlx2r5 = UnitIntvrlx2r5;
@@ -428,11 +486,16 @@ void AdvParser::EvalTimeData(void)
     if (!this->AllDit)
     {
         // Bg1SplitPt = (uint16_t)((float)UnitIntvrlx2r5 * 0.90);
+        //printf("\n ^^^^^^UnitIntvrlx2r5 = %d\n", UnitIntvrlx2r5);
         Bg1SplitPt = (uint16_t)((float)UnitIntvrlx2r5 * 0.726);
     }
-    // this->WrdBrkVal = (uint16_t)(5 * ((AvgSmblDedSpc + DitIntrvlVal) / 2));
-    // this->WrdBrkVal = (uint16_t)(6.0 * ((AvgSmblDedSpc + DitIntrvlVal) / 2)); // 20240506 - made wrd break a little longer, to reduce the frequency of un-needed word breaks
     this->WrdBrkVal = (uint16_t)(5.5 * ((AvgSmblDedSpc + DitIntrvlVal) / 2)); // 20240507 - made wrd break a little longer, to reduce the frequency of un-needed word breaks
+    if (Dbug)
+    {
+        printf("\nSplitPoint:%3d\tBg1SplitPt:%d\tDitIntrvlVal:%d\t  AvgDahVal:%d\t", DitDahSplitVal, Bg1SplitPt, DitIntrvlVal, AvgDahVal);
+        printf("AvgDedSpc:%0.1f\tUnitIntvrlx2r5:%d\tWrdBrkVal:%d\n", AvgSmblDedSpc, UnitIntvrlx2r5, WrdBrkVal);
+        printf("\nKeyDwnBuckt Cnt: %d\n", KeyDwnBucktPtr + 1);
+    }
     /*OK; before we can build a text string*/
     /*Need to 1st, decide which parsing rule set to use*/
     // if (Dbug)
@@ -469,12 +532,7 @@ void AdvParser::EvalTimeData(void)
             BugKey = 3;
             bgPdlCd = 60;
         }
-        // else if(KeyDwnBucktPtr >= 2 && KeyUpBucktPtr >= 4)
-        // { //Sloppy Bug
-        //     BugKey = 6;
-        //     bgPdlCd = 40;
-        //     this->WrdBrkVal = (uint16_t) 3.0 * this->UnitIntvrlx2r5;
-        // }
+        
         else
         {
             /*the following test chooses between paddle or bug*/
@@ -541,13 +599,11 @@ void AdvParser::EvalTimeData(void)
                 // printf("sloppy bug\n");
                 BugKey = 6;
                 bgPdlCd = 40;
-                // this->WrdBrkVal = (uint16_t)3.0 * this->UnitIntvrlx2r5;// 20240506 commented out,, based on W5LNI_Super_Sloppy_20240501.mp3 recording
                 break;
             case 11: // use only for testing
                 // Cootie Type 2
                 BugKey = 3;
                 bgPdlCd = 60;
-                // this->WrdBrkVal = (uint16_t)3.0 * this->UnitIntvrlx2r5;
                 break;
             case 12:
                 /* its a bug */
@@ -972,17 +1028,18 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
     int FrstNtryPtr = 0;
     bool FindFrstNtryPtr = true;
     int MaxDitPtr = 0;
-    int MaxDitCnt, DahCnt;
+    int MaxDahPtr = 0;
+    int MaxDitCnt, DahCnt, MaxDahCnt;
     uint16_t MaxIntrval = (3 * (1500 / wpm)); // set the max interval to that of a dah @ 0.8*WPM
     uint16_t MaxDelta = 0;
-    MaxDitCnt = DahCnt = 0;
+    MaxDahCnt = MaxDitCnt = DahCnt = 0;
     // if (Dbug) printf("\nSetSpltPt() - ");
     for (i = 0; i < n; i++)
     {
 
-        if ((arr[i + 1].Intrvl > MaxIntrval))
+        if ((arr[i].Intrvl > MaxIntrval))
         {
-            //printf("EXIT1; i=%d \n", i);
+            // printf("EXIT1; i=%d \n", i);
             break; // exclude/stop comparison when/if the interval exceeds that of a dah interval @ the current WPM
         }
 
@@ -1000,12 +1057,13 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                 Because, for bugs, the last one is likely an exaggerated daH */
                 if (n > 2 && i + 1 == n && arr[i + 1].Cnt == 1 && !AllDit)
                 {
-                    //printf("EXIT2; i=%d \n", i);
+                    // printf("EXIT2; i=%d \n", i);
                     break;
                 }
                 MaxDelta = arr[i + 1].Intrvl - arr[i].Intrvl;
+                // printf("Path A\n");
                 this->NuSpltVal = arr[i].Intrvl + (MaxDelta) / 2;
-                //printf("NuSpltVal:%d; i:%d; n:%d; MaxIntrval:%d\n", this->NuSpltVal, i, n, MaxIntrval);
+                // printf("NuSpltVal:%d; i=%d; n=%d; MaxIntrval:%d\n", this->NuSpltVal, i, n, MaxIntrval);
                 lastDitPtr = i;
 
                 /*now Update/recalculate the running average dit interval value (based on the last six dit intervals)*/
@@ -1030,17 +1088,23 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                     }
                     this->DitIntrvlVal /= 6;
                 }
-                if (arr[i + 1].Intrvl > 1.5 * arr[i].Intrvl && (arr[i].Cnt > 2))
-                { // 1.7 * arr[i].Intrvl
-                    // if (Dbug) printf("SpltCalc = false\n");
+                if (arr[i + 1].Intrvl > 1.5 * arr[i].Intrvl && (arr[i].Cnt > 2) && i > 0)
+                { //1.5 * arr[i].Intrvl // 1.7 * arr[i].Intrvl
+                    if (Dbug) printf("SpltCalc = false\n");
                     SpltCalc = false; // found an abrupt increase in keydown interval; likely reprents the dit/dah boundry, so look no further
                 }
             }
             /*Collect data for an alternative derivation of NuSpltVal, by identifying the bucket with the most dits*/
-            if (arr[i].Cnt > MaxDitCnt && (arr[i].Intrvl < this->NuSpltVal))
+            if (arr[i].Cnt >= MaxDitCnt && (arr[i].Intrvl < this->NuSpltVal))
             {
                 MaxDitPtr = i;
                 MaxDitCnt = arr[i].Cnt;
+            }
+            /*Collect data for an alternative derivation of NuSpltVal, by identifying the bucket with the most dahs*/
+            if (arr[n-i].Cnt >= MaxDahCnt && (arr[n-i].Intrvl > this->NuSpltVal) && AllDah)
+            {
+                MaxDahPtr = n-i;
+                MaxDahCnt = arr[n-i].Cnt;
             }
         }
         int RightIndxPtr = n - i;
@@ -1048,7 +1112,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
             RightIndxPtr = (n - 1) - i; // if its been a bug type key don't consider the last bucket, because it could contain exagerated dahs
         if (RightIndxPtr < 1)
             RightIndxPtr = 1;
-        // printf("arr[%d].Intrvl: %d;  arr[%d].Intrvl: %d; DitDahSplitVal: %d; n: %d\n", i, arr[i].Intrvl, RightIndxPtr, arr[RightIndxPtr].Intrvl, DitDahSplitVal, n);
+        //printf("arr[%d].Intrvl: %d;  arr[%d].Intrvl: %d; DitDahSplitVal: %d; n: %d\n", i, arr[i].Intrvl, RightIndxPtr, arr[RightIndxPtr].Intrvl, DitDahSplitVal, n);
         if ((arr[RightIndxPtr].Intrvl < DitDahSplitVal))
             AllDah = false;
         if ((arr[i].Intrvl > DitDahSplitVal))
@@ -1058,14 +1122,15 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         {
             if (lastDitPtr + 1 >= n - i)
             {
-                //printf("EXIT3; i=%d \n", i);
+                // printf("EXIT3; i=%d \n", i);
                 break;
             }
         }
         /*check if the interval is a dit at less than 35wpm*/
         if ((arr[i].Intrvl > 34) && (arr[i + 1].Intrvl > (1.45 * arr[i].Intrvl)) && arr[i].Cnt > 3)
         {
-            if ((arr[i + 1].Intrvl < (1.6 * arr[i].Intrvl)) && (arr[i + 1].Cnt >= arr[i].Cnt))
+            if ((arr[i + 1].Intrvl < (1.75 * arr[i].Intrvl)) && (arr[i + 1].Cnt >= arr[i].Cnt))
+            //if ((arr[i + 1].Intrvl < (1.6 * arr[i].Intrvl)) && ((arr[i + 1].Intrvl < (arr[n].Intrvl/2.5))))
             {
                 // keep going, because the next bucket has even more (or just as many) dits than the current
                 if (Dbug)
@@ -1074,7 +1139,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
             // if (Dbug) printf("BREAK\n");
             else
             {
-                //printf("EXIT4; i=%d \n", i);
+                // printf("EXIT4; i=%d \n", i);
                 break; // since we are working our way up the interval sequence, its appears that we have a cluster of dits & the next step up (because the gap is > 1.45 x this cluster) should be treated as a 'dah'. So its safe to quit looking
             }
         }
@@ -1100,22 +1165,24 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
     // printf("MaxDitCnt %d; MaxDitPtr %d; lastDitPtr %d\n", MaxDitCnt, MaxDitPtr, lastDitPtr);
     if (MaxDitCnt >= 5)
     { // && MaxDitPtr > lastDitPtr
-        uint16_t WghtdDit = (1.5 * arr[MaxDitPtr].Intrvl);
-        // printf("WghtdDit %d; NuSpltVal %d\n", WghtdDit, NuSpltVal);
-        //  if(WghtdDit > NuSpltVal)
-        //  {
-
+        if(MaxDahCnt >= 3) //20241207 added 
+        {
+            if (Dbug)
+                printf("Using Alternate Calc NuSpltVal Method A; Old NuSpltVal: %d; MaxDahPtr: %d; MaxDitPtr: %d\n", this->NuSpltVal, MaxDahPtr, MaxDitPtr);
+            this->NuSpltVal = arr[MaxDitPtr].Intrvl + (arr[MaxDahPtr].Intrvl - arr[MaxDitPtr].Intrvl)/2;
+        }
+        else
+        {
+        uint16_t WghtdDit = (1.6 * arr[MaxDitPtr].Intrvl);//20241126 changed from 1.5 to 1.6
+        if (Dbug)
+            printf("Using Alternate Calc NuSpltVal Method B: %d\n", this->NuSpltVal);
+        
         this->NuSpltVal = WghtdDit;
+        }
+        //printf("\nMaxDitPtr =%d; NuSpltVal =%d; ditVal:%d\n", MaxDitPtr, this->NuSpltVal, arr[lastDitPtr].Intrvl);
         lastDitPtr = MaxDitPtr;
         AllDit = AllDah = false;
-        if (Dbug)
-            printf("Using Alternate Calc NuSpltVal Method: %d\n", this->NuSpltVal);
-        // int LpCntr = 0;
-        // while (LpCntr < arr[lastDitPtr].Cnt)
-        // {
-        //     this->DitIntrvlVal = (uint16_t)((5 * (float)this->DitIntrvlVal) + (float)arr[lastDitPtr].Intrvl) / 6.0;
-        //     LpCntr++;
-        // }
+        
         int LpCntr = 0;
         while (LpCntr < arr[lastDitPtr].Cnt)
         {
@@ -1149,7 +1216,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         else
         {
             /*Special situation - We appear to have just a set of dits, but the current splitval is less than the longest
-            interval in this set of dits. So to keep from calling one of the keydwon times a dah force the splitval
+            interval in this set of dits. So to keep from calling one of the keydown times a dah force the splitval
             to longer than anything in the symbol set*/
             if (AllDit && arr[n].Intrvl * 1.1 > DitDahSplitVal)
             {
@@ -1177,13 +1244,17 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         if (Dbug)
             printf("\nNuSpltVal: %d; Dit Ndx: %d; DitDahSplitVal: %d \n", this->NuSpltVal, lastDitPtr, this->DitDahSplitVal);
         if (DitDahSplitVal == 0)
+        {
+            //printf("Path A\n");
             DitDahSplitVal = this->NuSpltVal;
+        }
         else
         {
             if (!AllDit || !AllDah)
             {
                 if (this->LtrPtr == 1)
                 {
+                    //printf("Path B\n");
                     DitDahSplitVal = this->NuSpltVal;
                 }
                 else
@@ -1191,12 +1262,23 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                     /*New Method for weighting the NuSpltVal against previous DitDahSplitVal*/
                     /*Bottom line, if this word symbol set has more than 30 elements forget the old split value & use the one just found*/
                     /*if less than 30, weight/avg the new result proportionally to the last 30*/
-                    if (TmpUpIntrvlsPtr >= 30)
+                    // if (TmpUpIntrvlsPtr >= 30)
+                    //     DitDahSplitVal = this->NuSpltVal;
+                    // else
+                    // {
+                    //     int OldWght = 30 - TmpUpIntrvlsPtr;
+                    //     DitDahSplitVal = ((OldWght * DitDahSplitVal) + (TmpUpIntrvlsPtr * this->NuSpltVal)) / 30;
+                    // }
+                    if (TmpUpIntrvlsPtr >= 10)
+                    {
+                        //printf("Path C\n");
                         DitDahSplitVal = this->NuSpltVal;
+                    }
                     else
                     {
-                        int OldWght = 30 - TmpUpIntrvlsPtr;
-                        DitDahSplitVal = ((OldWght * DitDahSplitVal) + (TmpUpIntrvlsPtr * this->NuSpltVal)) / 30;
+                        //printf("Path D\n");
+                        int OldWght = 10 - TmpUpIntrvlsPtr;
+                        DitDahSplitVal = ((OldWght * DitDahSplitVal) + (TmpUpIntrvlsPtr * this->NuSpltVal)) / 10;
                     }
                 }
             }
@@ -1211,7 +1293,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
     /*20240609 Calc avg dah interval for this data set*/
     DahCnt = 0;
     int RuningTotal = 0;
-    for (i = 0; i < n; i++)
+    for (i = 0; i <= n; i++)
     {
 
         if (arr[i].Intrvl > this->DitDahSplitVal)
@@ -1326,7 +1408,7 @@ bool AdvParser::SloppyBgRules(int &n)
                     return true;
                 }
                 /*Alternate test for "O"; Look at next keydown event, & if it too is a dah,
-                but its keyup is substasntually shorter than the current keyup intervsal,
+                but its keyup is substasntually shorter than the current keyup interval,
                 then treat this keyup as a letterbreak*/
                 if (n + 3 <= TmpUpIntrvlsPtr)
                 { /*there are enough time intervals to make this test */
@@ -1949,6 +2031,7 @@ bool AdvParser::PadlRules(int &n)
         {
             BrkFlg = '+';
             ExitPath[n] = 104;
+            // printf("\n**** Bg1SplitPt= %d\n", this->Bg1SplitPt);
             return true;
         }
         else
@@ -2418,12 +2501,18 @@ bool AdvParser::Bug2Rules(int &n)
             {                                     /*Looks like we have a letterbreak signal, but need to check further*/
                 if (i + 1 <= TmpUpIntrvlsPtr)
                 { // more key states follow this one
-                    if (TmpDwnIntrvls[i + 1] > UnitIntvrlx2r5)
+                   if (TmpDwnIntrvls[i + 1] > UnitIntvrlx2r5)
                     { /*the next keydown in this group is also a dah*/
                         if (TmpUpIntrvls[i + 1] < Bg1SplitPt)
                         { /*but its shorter, or has no letterbreak */
                             if (this->Dbug)
-                                printf("EXIT A\t");
+                                printf("EXIT A; i = %d\t", i);
+                            ExtSmbl = '$';
+                            break; // quit, Looks like a clear intention to signal a letterbreak
+                        }else if(TmpUpIntrvls[i] > TmpDwnIntrvls[i])
+                        {
+                            if (this->Dbug)
+                                printf("EXIT B; i = %d; n = %d\t", i, n);
                             ExtSmbl = '$';
                             break; // quit, Looks like a clear intention to signal a letterbreak
                         }
@@ -2431,7 +2520,7 @@ bool AdvParser::Bug2Rules(int &n)
                     else
                     {
                         if (this->Dbug)
-                            printf("EXIT B\t");
+                            printf("EXIT C; i = %d; n = %d\t", i, n);
                         ExtSmbl = '$';
                         break; // quit, Looks like a clear intention to signal a letterbreak
                     }
@@ -2439,7 +2528,7 @@ bool AdvParser::Bug2Rules(int &n)
                 else
                 { // no more key states to consider, so can exit with letterbreak
                     if (this->Dbug)
-                        printf("EXIT C\t");
+                        printf("EXIT D; i = %d\t", i);
                     ExtSmbl = '$';
                     break; // quit, Looks like a clear intention to signal a letterbreak
                 }
@@ -2725,10 +2814,68 @@ bool AdvParser::Bug2Rules(int &n)
 bool AdvParser::SKRules(int &n)
 {
     /*Straight key Rules - Originally model from Paddle or Keyboard rules*/
+    /*new - quick test for the letter "O"*/
+    /*Lead off by a quick test/check for an 'O'*/
+    if (n + 2 <= TmpUpIntrvlsPtr)
+    { /*We have enough keydown intervals to test for an 'O'*/
+        if (TmpDwnIntrvls[n] >= DitDahSplitVal && TmpDwnIntrvls[n + 1] >= DitDahSplitVal && TmpDwnIntrvls[n + 2] >= DitDahSplitVal)
+        { /*We have 3 consectutive dahs*/
+            /*But 1st, make sure the middle dah is NOT followed by a letter break*/
+            if (TmpUpIntrvls[n + 1] > this->UnitIntvrlx2r5)
+            { // Yes, middle dah has a letter break
+                n++;
+                SymbSet = SymbSet << 1; // append a new bit to the symbolset & default it to a 'Dit'
+                SymbSet += 1;
+                if (this->Dbug)
+                {
+                    printf("\n%2d. Dwn: %3d\tUp: %3d\t", n, TmpDwnIntrvls[n], TmpUpIntrvls[n]);
+                }
+                ExitPath[n] = 33;
+                BrkFlg = '+';
+                return true;
+            }
+            /*Now make sure the last dah is the best letter break*/
+            uint16_t ThrdCombo = TmpDwnIntrvls[n + 2] + TmpUpIntrvls[n + 2];
+            if (ThrdCombo >= 2.5 * this->UnitIntvrlx2r5 && (ThrdCombo) > (TmpDwnIntrvls[n + 1] + TmpUpIntrvls[n + 1]) && (ThrdCombo) > (TmpDwnIntrvls[n] + TmpUpIntrvls[n]) && (TmpUpIntrvls[n + 2] > 1.5 * this->AvgSmblDedSpc)) // make sure that the last dah in this series is terminated with something close to a letter break
+            {
+                /*We have a clear letterbreak; So advance 'n' pointer & build/pack the symbol set with dahs*/
+                int STOP = n + 2;
+                while (n < STOP)
+                {
+                    n++;
+                    SymbSet = SymbSet << 1; // append a new bit to the symbolset & default it to a 'Dit'
+                    SymbSet += 1;
+                }
+                ExitPath[n] = 24;
+                BrkFlg = '+';
+                return true;
+            }
+            /*Alternate test for "O"; Look at next keydown event, & if it too is a dah,
+            but its keyup is substasntually shorter than the current keyup interval,
+            then treat this keyup as a letterbreak*/
+            if (n + 3 <= TmpUpIntrvlsPtr)
+            { /*there are enough time intervals to make this test */
+                uint16_t ThrdCombo = TmpDwnIntrvls[n + 2] + TmpUpIntrvls[n + 2];
+                if (TmpDwnIntrvls[n + 3] >= this->DitDahSplitVal && TmpUpIntrvls[n + 2] >= 1.8 * TmpUpIntrvls[n + 3] && ThrdCombo > 2.4 * this->UnitIntvrlx2r5) //&& TmpUpIntrvls[n + 2] > this->DitDahSplitVal
+                {
+                    int STOP = n + 2;
+                    while (n < STOP)
+                    {
+                        n++;
+                        SymbSet = SymbSet << 1; // append a new bit to the symbolset & default it to a 'Dit'
+                        SymbSet += 1;
+                    }
+                    ExitPath[n] = 26;
+                    BrkFlg = '+';
+                    return true;
+                }
+            }
+        }
+    }
     /*Middle keyup test to see this keyup is greater than 'UnitIntvrlx2r5',
     If it is then call this one a letter break*/
     // if (n > 0 && (TmpUpIntrvls[n] > 2.0 * TmpUpIntrvls[n - 1]))
-    if (n > 0 && ((float)TmpUpIntrvls[n] > (float)(0.9* UnitIntvrlx2r5)))//20241125 added the 0.9 factor based on one slow SK sender's spacing 
+    if (n > 0 && ((float)TmpUpIntrvls[n] > (float)(0.9 * UnitIntvrlx2r5))) // 20241125 added the 0.9 factor based on one slow SK sender's spacing
     {
         ExitPath[n] = 100;
         BrkFlg = '+';
@@ -2737,7 +2884,7 @@ bool AdvParser::SKRules(int &n)
     /*Middle keyup test to see this keyup is twice the length of the one following it,
     If it is then call this one a letter break*/
     // if ((n < TmpUpIntrvlsPtr - 1) && (TmpUpIntrvls[n] > (2.0 * TmpUpIntrvls[n + 1]) + 8))
-    if ((n < TmpUpIntrvlsPtr - 1) && (TmpUpIntrvls[n] > (2.0 * this->AvgSmblDedSpc))) // 20240609 new check for middle letter brk
+    if ((n < TmpUpIntrvlsPtr - 1) && (TmpUpIntrvls[n] > (2.0 * this->AvgSmblDedSpc)) && (TmpUpIntrvls[n] > TmpDwnIntrvls[n])) // 20241205 added keyup interval > than Key down time // 20240609 new check for middle letter brk
     {
         ExitPath[n] = 101;
         BrkFlg = '+';
@@ -3030,7 +3177,10 @@ int AdvParser::DitDahBugTst(void)
     uint16_t MaxditInterval = 0;
     uint16_t IntrSymbolIntrvl = 0;
     uint16_t IntrSymbolCnt = 0;
-    int stop = TmpUpIntrvlsPtr - 1;
+    uint16_t Maxdit = 0;
+    uint16_t Mindit = 1000;
+    /*modified the following to ensure last keydown event is treated as part of the symbol set*/
+    int stop = TmpUpIntrvlsPtr;//TmpUpIntrvlsPtr - 1;
     int WrdBkCnt = 0;
     bool same;
     this->DahVarPrcnt = 0.0;
@@ -3064,6 +3214,10 @@ int AdvParser::DitDahBugTst(void)
         {
             ditDwnInterval += TmpDwnIntrvls[n];
             ditDwncnt++;
+            if (TmpDwnIntrvls[n] > Maxdit)
+                Maxdit = TmpDwnIntrvls[n];
+            if (TmpDwnIntrvls[n] < Mindit)
+                Mindit = TmpDwnIntrvls[n];
         }
 
         /*Sum the KeyUp numbers for any non letter-break terminated dahs*/
@@ -3108,7 +3262,7 @@ int AdvParser::DitDahBugTst(void)
                 DahMaxcnt = KeyDwnBuckts[ptr].Cnt; // used later to determine fist/key type
             }
         }
-        // printf("\tMindahInterval: %d\tMaxdahInterval: %d;\tDitDahSplitVal %d\n", MindahInterval, MaxdahInterval, this->DitDahSplitVal);
+        //printf("\tMindahInterval: %d\tMaxdahInterval: %d;\tDitDahSplitVal: %d\tstop: %d\n", MindahInterval, MaxdahInterval, this->DitDahSplitVal, stop);
         DahVariance = MaxdahInterval - MindahInterval;
         this->DahVarPrcnt = (float)DahVariance / (float)MindahInterval;          // used later to determine if sender is using streched dahs as a way of signaling letter breaks
         this->MaxDt2DhRatio = (float)MaxdahInterval / (float)this->DitIntrvlVal; // used later
@@ -3171,6 +3325,8 @@ int AdvParser::DitDahBugTst(void)
         // printf("ditDwncnt: %d; \tGudDitCnt: %d; ditDwnInterval: %d; Delta: %d Score: %0.1f\n", ditDwncnt, GudDitCnt, ditDwnInterval, Delta, Score);
         if (Score <= 0.70)
         {
+            if (Dbug)
+                    printf("STRAIGHT KEY EXIT A\n");
             return 7; // straight key; (50)
         }
         /* 1st, test for Sloppy Bug */
@@ -3223,6 +3379,26 @@ int AdvParser::DitDahBugTst(void)
             if (Dbug)
                 printf("\nSLOPPY EXIT C dahDwncnt %d; DahVarPrcnt %4.2f\n", dahDwncnt, this->DahVarPrcnt);
             return 10; // Sloppy Bug (40)
+        }
+    }
+    else
+    { //small dit count
+        if (Dbug) printf("small dit count \n");
+        if (ditDwncnt > 0)
+        {
+            int DitVarnc = Maxdit - Mindit;
+            if (DitVarnc > 25)
+            {
+                if (Dbug)
+                    printf("STRAIGHT KEY EXIT B; DitVarnc %d\n", DitVarnc);
+                return 7; // straight key; (50)
+            }
+            // else printf("DitVarnc = %d; ditDwncnt = %d \n", DitVarnc, ditDwncnt);
+        }
+        else
+        {
+            if (Dbug)
+                printf("ditDwncnt = 0 \n");
         }
     }
     /*Test/check for electronic keys by constant dah intervals*/
