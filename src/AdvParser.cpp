@@ -78,7 +78,6 @@ AdvParser::AdvParser(void) // TFT_eSPI *tft_ptr, char *StrdTxt
     // ToneColor = 0;
 };
 /*Main entry point to post process the key time intervals used to create the current word*/
-// void AdvParser::EvalTimeData(uint16_t KeyUpIntrvls[IntrvlBufSize], uint16_t KeyDwnIntrvls[IntrvlBufSize], int KeyUpPtr, int KeyDwnPtr, int curWPM)
 void AdvParser::EvalTimeData(void)
 {
     // this->wpm = curWPM;

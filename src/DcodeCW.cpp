@@ -222,6 +222,7 @@ SemaphoreHandle_t DeCodeVal_mutex;
 bool blocked = false;
 bool AbrtFlg = false;
 bool KEISRwaiting = false;
+bool LckHiSpd = false; //20241209 added to support ensuring decoder is configure for paddle/keyboard for speeds in excees of 36WPM
 // SerialClass Serial;
 //  End of CW Decoder Global Variables
 
@@ -1440,9 +1441,17 @@ bool chkChrCmplt(void)
 				//printf("chkChrCmplt Started AdvParser Task\n");
 				/*now we can start/resart the post parsing process */
 				vTaskResume(AdvParserTaskHandle);
+				LckHiSpd = false;
 			}
 			else if (wpm >= 36)
 			{
+				/*20241209 added the following 2 lines*/
+				if(!LckHiSpd){
+				ModeCnt = 0;
+				SetModFlgs(ModeCnt); //Force paddle/keyboard // DcodeCW.cpp routine; Update DcodeCW.cpp timing settings & ultimately update display status line
+    			CurMdStng(ModeCnt);
+				LckHiSpd = true;
+				}
 				if (LtrPtr == 1)
 				{
 					/*Only one letter in this word; */
