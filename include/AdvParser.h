@@ -824,6 +824,7 @@ private:
         {"WARGR", "WARMER", 5, 0}, //774
         {"GRPTED", "GRANTED", 6, 0}, //775
         {"ANION", "PION", 5, 0}, //776
+        {"AQN", "AMP", 3, 200}, //776
     };
     
     bool AllDah;

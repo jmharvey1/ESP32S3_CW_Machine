@@ -47,6 +47,7 @@
  * 20241117 added KeyupVarPrcnt to better recognize keyboard/paddle sent code
  * 20241120 added new letter break test to sloppy bug rule set & SetSpltPt() changed calc DitIntrvlVal approach by adding ringbuff
  * 20241209 tweaks to AdvParser::EvalTimeData(void) intended to improve response to changes in sender fist & speed
+ * 20241209 more tweaks to AdvParser.cpp to mainly to improve sloppy bug (B3) fist decoding
  * */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -213,6 +214,7 @@ void AdvParser::EvalTimeData(void)
     if (calc)
     {
         this->NuSpltVal = KeyDwnBuckts[BtmPtr].Intrvl + (KeyDwnBuckts[TopPtr].Intrvl - KeyDwnBuckts[BtmPtr].Intrvl) / 2;
+        this->NuSpltVal *= 0.95;//20241210 added based on k9vp bug mp3 test recording
         this->DitDahSplitVal = this->NuSpltVal;
         this->WrdBrkVal = 4 * KeyDwnBuckts[BtmPtr].Intrvl;
         if(this->Bg1SplitPt < 1.1* KeyDwnBuckts[BtmPtr].Intrvl) this->Bg1SplitPt = 1.1 * KeyDwnBuckts[BtmPtr].Intrvl;
@@ -1038,7 +1040,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
 
         if ((arr[i].Intrvl > MaxIntrval))
         {
-            // printf("EXIT1; i=%d \n", i);
+            if (Dbug) printf("EXIT1; i=%d \n", i);
             break; // exclude/stop comparison when/if the interval exceeds that of a dah interval @ the current WPM
         }
 
@@ -1056,14 +1058,19 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                 Because, for bugs, the last one is likely an exaggerated daH */
                 if (n > 2 && i + 1 == n && arr[i + 1].Cnt == 1 && !AllDit)
                 {
-                    // printf("EXIT2; i=%d \n", i);
+                    if (Dbug)  printf("EXIT2; i=%d \n", i);
                     break;
                 }
                 MaxDelta = arr[i + 1].Intrvl - arr[i].Intrvl;
-                // printf("Path A\n");
+               
                 this->NuSpltVal = arr[i].Intrvl + (MaxDelta) / 2;
-                // printf("NuSpltVal:%d; i=%d; n=%d; MaxIntrval:%d\n", this->NuSpltVal, i, n, MaxIntrval);
+                if (Dbug) printf("Path A - NuSpltVal:%d; i=%d; n=%d; MaxIntrval:%d\n", this->NuSpltVal, i, n, MaxIntrval);
                 lastDitPtr = i;
+                if((i+1 <= n) && (arr[i+1].Intrvl > 2*arr[i].Intrvl))
+                {
+                 if (Dbug)  printf("EXIT5; i=%d \n", i);
+                 break;   
+                }
 
                 /*now Update/recalculate the running average dit interval value (based on the last six dit intervals)*/
                 if (arr[i].Intrvl <= DitDahSplitVal)
@@ -1121,7 +1128,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         {
             if (lastDitPtr + 1 >= n - i)
             {
-                // printf("EXIT3; i=%d \n", i);
+                if (Dbug) printf("EXIT3; i=%d \n", i);
                 break;
             }
         }
@@ -1138,7 +1145,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
             // if (Dbug) printf("BREAK\n");
             else
             {
-                // printf("EXIT4; i=%d \n", i);
+                if (Dbug) printf("EXIT4; i=%d \n", i);
                 break; // since we are working our way up the interval sequence, its appears that we have a cluster of dits & the next step up (because the gap is > 1.45 x this cluster) should be treated as a 'dah'. So its safe to quit looking
             }
         }
@@ -1166,9 +1173,12 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
     { // && MaxDitPtr > lastDitPtr
         if(MaxDahCnt >= 3) //20241207 added 
         {
-            if (Dbug)
-                printf("Using Alternate Calc NuSpltVal Method A; Old NuSpltVal: %d; MaxDahPtr: %d; MaxDitPtr: %d\n", this->NuSpltVal, MaxDahPtr, MaxDitPtr);
+            uint16_t oldSpltVal = this->NuSpltVal;
             this->NuSpltVal = arr[MaxDitPtr].Intrvl + (arr[MaxDahPtr].Intrvl - arr[MaxDitPtr].Intrvl)/2;
+            this->NuSpltVal *= 0.95;//20241210 added based on k9vp bug mp3 test recording
+            if (Dbug)
+                printf("Using Alternate Calc NuSpltVal Method A; Old NuSpltVal: %d; NuSpltVal: %d;; MaxDahPtr: %d; MaxDitPtr: %d\n", oldSpltVal, this->NuSpltVal, MaxDahPtr, MaxDitPtr);
+
         }
         else
         {
@@ -1377,7 +1387,7 @@ bool AdvParser::SloppyBgRules(int &n)
             if (TmpDwnIntrvls[n] >= DitDahSplitVal && TmpDwnIntrvls[n + 1] >= DitDahSplitVal && TmpDwnIntrvls[n + 2] >= DitDahSplitVal)
             { /*We have 3 consectutive dahs*/
                 /*But 1st, make sure the middle dah is NOT followed by a letter break*/
-                if(TmpUpIntrvls[n + 1]> this->UnitIntvrlx2r5)
+                if(TmpUpIntrvls[n + 1]> 1.1* this->UnitIntvrlx2r5)
                 { // Yes, middle dah has a letter break
                     n++;
                     SymbSet = SymbSet << 1; // append a new bit to the symbolset & default it to a 'Dit'
@@ -1431,7 +1441,9 @@ bool AdvParser::SloppyBgRules(int &n)
         //if(n==22 || n==23)printf("n: %d;\t RunCnt: %d\n", n, RunCnt);
         /*before testing for weird runs, check if this Dah is/was followed by a sizable Keyup interval (meaning a letter break)*/
         /*20241120 added the following test*/
-        if (TmpUpIntrvls[n] > 0.8 * UnitIntvrlx2r5)
+        //if (TmpUpIntrvls[n] > 0.8 * UnitIntvrlx2r5)
+        if (TmpUpIntrvls[n] > 0.92 * UnitIntvrlx2r5) //20241209 moved the ratio up based on k9vp sending 'twins' & it it decodind as 'TATINS'
+        if (TmpUpIntrvls[n] > 1.11 * UnitIntvrlx2r5) //20241211 moved the ratio up based on k9vp sending 'twins' & it decodind as 'TATINS'
         { // it was, so exit with letter break code
             if (n < (this->KeyDwnPtr - 1))
             { // there are more keydwn events following this event; So check to make sure this set is NOT part of a "Y"
@@ -1628,6 +1640,13 @@ bool AdvParser::SloppyBgRules(int &n)
                 n++;
                 SymbSet = SymbSet << 1; // append a new bit to the symbolset & default it to a 'Dit'
                 SymbSet += 1;
+            }
+            if ((TmpUpIntrvls[n] < this->UnitIntvrlx2r5) && (n < (this->KeyDwnPtr - 1)))
+            { /*we had a run of dahs, But last dah keyup event doesn't seem to signify a letter break, and there are more events to test*/
+                // printf("B RunCnt %d; n %d; ExtSmbl %c\t", RunCnt, n, ExtSmbl);
+                ExitPath[n] = 31;
+                BrkFlg = '~';
+                return false;
             }
             ExitPath[n] = 2;
             BrkFlg = '+';

@@ -41,25 +41,35 @@ extern bool CptrTxt;
 extern unsigned long SmpIntrl;
 extern struct DF_t DFault;
 #define USE_TST_DATA 0  //set to 1, if debug with testKeyDwn & testKeyUp data is desired
-#define testSize 7 /*set this value to match the size of testKeyDwn & testKeyUp datasets/arrays*/
+#define testSize 12 /*set this value to match the size of testKeyDwn & testKeyUp datasets/arrays*/
 /*Use copy and paste of advanceparser debug serial output, to populate the 2 following arrays*/
 static uint16_t testKeyDwn[testSize]={
-67,
+66,
+152,
+257,
 61,
-253,
+52,
+257,
+61,
 52,
 61,
-85,
-100
+248,
+52,
+52
 };
 static uint16_t testKeyUp[testSize]={
-61,
-61,
-195,
-56,
-57,
-190,
-459
+37,
+90,
+224,
+281,
+52,
+28,
+28,
+152,
+42,
+37,
+28,
+320
 };
 
 
