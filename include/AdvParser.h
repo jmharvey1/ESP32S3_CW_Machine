@@ -784,7 +784,7 @@ private:
         {"THEKT", "THEY", 5, 0}, //734
         {"6OSE", "THOSE", 4, 0}, //735
         {"CHPCE", "CHANCE", 5, 0}, //736
-        {"5RE", "HERE", 3, 0}, //737
+        {"5RE", "HERE", 3, 81}, //737
         {"GRPITE", "GRANITE", 5, 0}, //738
         {"KEEAN", "KEEP", 5, 0}, //739
         {"CEE", "TREE", 3, 80}, //740
@@ -850,6 +850,7 @@ private:
     uint16_t TmpUpIntrvls[IntrvlBufSize];
     uint16_t TmpDwnIntrvls[IntrvlBufSize];
     uint8_t DitIntrvlPtr = 0; //added 20241120
+    uint8_t bgPdlCd = 0; //moved here 20241210 to allow previous bgPdlCd val to used in next data set
     uint16_t DitIntrvlRingBuf[6]; //added 20241120
     uint16_t DitDahSplitVal;
     uint16_t AvgDahVal;

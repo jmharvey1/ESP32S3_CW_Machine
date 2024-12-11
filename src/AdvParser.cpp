@@ -211,7 +211,7 @@ void AdvParser::EvalTimeData(void)
         //     printf("**QUICK B** NuSpltVal = %d; TopPtr = %d; BtmPtr = %d\n", this->NuSpltVal, TopPtr, BtmPtr);
         // }
     }
-    if (calc)
+    if (calc && (KeyDwnBuckts[TopPtr].Intrvl > 2* KeyDwnBuckts[BtmPtr].Intrvl))
     {
         this->NuSpltVal = KeyDwnBuckts[BtmPtr].Intrvl + (KeyDwnBuckts[TopPtr].Intrvl - KeyDwnBuckts[BtmPtr].Intrvl) / 2;
         this->NuSpltVal *= 0.95;//20241210 added based on k9vp bug mp3 test recording
@@ -505,7 +505,7 @@ void AdvParser::EvalTimeData(void)
     //     printf("\nKeyDwnBuckt Cnt: %d ", KeyDwnBucktPtr + 1);
     // }
     // printf("KeyDwnBuckt Cnt: %d\tKeyUpBuckt Cnt: %d \n", KeyDwnBucktPtr, KeyUpBucktPtr);
-    uint8_t bgPdlCd = 0;
+    bgPdlCd = 0;
     if ((UnitIntvrlx2r5 >= OldIntvrlx2r5 - 5) && (UnitIntvrlx2r5 <= OldIntvrlx2r5 + 5) && (TmpUpIntrvlsPtr <= 7))
     {
         // propbablly not enough data to make a good decision; So stick with the old key type
@@ -1066,7 +1066,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                 this->NuSpltVal = arr[i].Intrvl + (MaxDelta) / 2;
                 if (Dbug) printf("Path A - NuSpltVal:%d; i=%d; n=%d; MaxIntrval:%d\n", this->NuSpltVal, i, n, MaxIntrval);
                 lastDitPtr = i;
-                if((i+1 <= n) && (arr[i+1].Intrvl > 2*arr[i].Intrvl))
+                if((i+1 <= n) && (arr[i+1].Intrvl > (2 * arr[i].Intrvl))) //1.8*arr[i].Intrvl
                 {
                  if (Dbug)  printf("EXIT5; i=%d \n", i);
                  break;   
@@ -1175,10 +1175,14 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         {
             uint16_t oldSpltVal = this->NuSpltVal;
             this->NuSpltVal = arr[MaxDitPtr].Intrvl + (arr[MaxDahPtr].Intrvl - arr[MaxDitPtr].Intrvl)/2;
-            this->NuSpltVal *= 0.95;//20241210 added based on k9vp bug mp3 test recording
-            if (Dbug)
-                printf("Using Alternate Calc NuSpltVal Method A; Old NuSpltVal: %d; NuSpltVal: %d;; MaxDahPtr: %d; MaxDitPtr: %d\n", oldSpltVal, this->NuSpltVal, MaxDahPtr, MaxDitPtr);
-
+            /*don't make the following correct if we have been working with a straight key fist*/
+            if(this-> bgPdlCd != 50) this->NuSpltVal *= 0.95;//20241210 added based on k9vp bug mp3 test recording
+            if (Dbug){
+                char Keymode = 'S';
+                if(this-> bgPdlCd != 50) Keymode = ' '; 
+                
+                printf("Using Alternate Calc NuSpltVal Method A%c; Old NuSpltVal: %d; NuSpltVal: %d; MaxDahPtr: %d; MaxDitPtr: %d\n", Keymode, oldSpltVal, this->NuSpltVal, MaxDahPtr, MaxDitPtr);
+            }
         }
         else
         {
@@ -1381,8 +1385,8 @@ bool AdvParser::SloppyBgRules(int &n)
             BrkFlg = '+';
             return true;
         }
-        /*Lead off by a quick test/check for an 'O'*/
-        if (n + 2 <= TmpUpIntrvlsPtr)
+        /*Lead off by a quick test/check for an 'O'; Note: 'TmpUpIntrvlsPtr' is the total array size, not an index pointer*/
+        if (n + 2 < TmpUpIntrvlsPtr)
         { /*We have enough keydown intervals to test for an 'O'*/
             if (TmpDwnIntrvls[n] >= DitDahSplitVal && TmpDwnIntrvls[n + 1] >= DitDahSplitVal && TmpDwnIntrvls[n + 2] >= DitDahSplitVal)
             { /*We have 3 consectutive dahs*/
@@ -1394,7 +1398,7 @@ bool AdvParser::SloppyBgRules(int &n)
                     SymbSet += 1;
                     if (this->Dbug)
                     {
-                        printf("\n%2d. Dwn: %3d\tUp: %3d\t", n, TmpDwnIntrvls[n], TmpUpIntrvls[n]);
+                        printf("\n%2d. Dwn: %3d\tUp: %3d", n, TmpDwnIntrvls[n], TmpUpIntrvls[n]);
                     }
                     ExitPath[n] = 33;
                     BrkFlg = '+';
@@ -1675,7 +1679,7 @@ bool AdvParser::SloppyBgRules(int &n)
             return false;
         }
         // else if (RunCnt > 1 && maxdah > 0 && (mindahIndx == maxdahIndx) && (TmpUpIntrvls[maxdahIndx] > TmpDwnIntrvls[maxdahIndx]))
-        else if (RunCnt > 0 && ExtSmbl == '$' && n == maxdahIndx)
+        else if (RunCnt > 1 && ExtSmbl == '$' && n == maxdahIndx)
         { // the 1st dah seems to be a letter break
             ExitPath[n] = 23;
             BrkFlg = '+';
@@ -2014,7 +2018,7 @@ bool AdvParser::PadlRules(int &n)
                 ExitPath[n] = 110;
                 return false;
             }
-            else if(TmpUpIntrvls[n] < 1.5 * AvgSmblDedSpc)
+            else if(TmpUpIntrvls[n] < 1.75 * AvgSmblDedSpc) //< 1.5 * AvgSmblDedSpc
             {
                 ExitPath[n] = 111;
                 return false;
@@ -4512,7 +4516,17 @@ void AdvParser::FixClassicErrors(void)
                         {
                             Test = true;
                         }
-                        break;    
+                        break;
+                    case 81: /*Rule(5RE/HERE) - this is the 1st in the string, or there is at least one character ahead & its NOT an 'E' */
+                        if (NdxPtr > 0 && this->Msgbuf[NdxPtr - 1] != 'A')
+                        {
+                            Test = true;
+                        }
+                        else if (NdxPtr == 0)
+                        {
+                            Test = true;
+                        }
+                        break;        
                     default:
                         break;
                     }
