@@ -69,6 +69,7 @@ esp_event_loop_args_t event_task_args = {
 /*20241120 AdvParser.cpp- added new sloppy bug letter break test to rule set & changed DitIntrvlVal calc*/
 /*20241124 Modified Night mode checkbox color & minor tweaks to AdvParser.cpp ruleset*/
 /*20241209 more tweaks to AdvParser.cpp to mainly to improve sloppy bug (B3) fist decoding*/
+/*20241212 more tweaks to AdvParser.cpp to improve quick timing set points */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

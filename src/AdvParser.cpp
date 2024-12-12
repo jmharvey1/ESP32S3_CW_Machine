@@ -1071,16 +1071,27 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                     if (Dbug)
                         printf("Path A - NuSpltVal:%d; i=%d; n=%d; MaxIntrval:%d\n", this->NuSpltVal, i, n, MaxIntrval);
                     lastDitPtr = i;
-                    if ((i + 1 <= n) && (arr[i + 1].Intrvl > (2 * arr[i].Intrvl))) // 1.8*arr[i].Intrvl
-                    {
-                        if (Dbug)
-                            printf("EXIT5; i=%d \n", i);
-                        break;
-                    }
+                    // if ((i + 1 <= n) && (arr[i + 1].Intrvl > (2 * arr[i].Intrvl))) // 1.8*arr[i].Intrvl
+                    // {
+                    //     if (i == 0 && arr[1].Cnt > arr[0].Cnt)
+                    //     {
+                    //         /*yes there was a big jump in interval timing, this is the 1st entry & could like be just a glitch
+                    //         so keep on going*/
+                    //         if (Dbug)
+                    //             printf("Possible GLitch; Keep Going i=%d \n", i);
+                    //     }
+                    //     else
+                    //     {
+                    //         if (Dbug)
+                    //             printf("EXIT5; i=%d \n", i);
+                    //         break;
+                    //     }
+                    // }
 
                     /*now Update/recalculate the running average dit interval value (based on the last six dit intervals)*/
                     if (arr[i].Intrvl <= DitDahSplitVal)
                     {
+                        // printf("Update/recalculate the running average dit interval 01\n");
                         /*20240228 new method*/
                         int LpCntr = 0;
                         while (LpCntr < arr[i].Cnt)
@@ -1092,6 +1103,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                             DitIntrvlPtr++;
                             if (DitIntrvlPtr == 6)
                                 DitIntrvlPtr = 0;
+                           // printf("%d. while (LpCntr < arr[%d].Cnt)\n", LpCntr, i);
                         }
                         this->DitIntrvlVal = 0; // reset DitIntrvlVal
                         for (int lptr = 0; lptr < 6; lptr++)
@@ -1105,6 +1117,22 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                         if (Dbug)
                             printf("SpltCalc = false\n");
                         SpltCalc = false; // found an abrupt increase in keydown interval; likely reprents the dit/dah boundry, so look no further
+                    }
+                    if ((i + 1 <= n) && (arr[i + 1].Intrvl > (2 * arr[i].Intrvl))) // 1.8*arr[i].Intrvl
+                    {
+                        if (i == 0 && arr[1].Cnt > arr[0].Cnt)
+                        {
+                            /*yes there was a big jump in interval timing, this is the 1st entry & could like be just a glitch
+                            so keep on going*/
+                            if (Dbug)
+                                printf("Possible GLitch; Keep Going i=%d \n", i);
+                        }
+                        else
+                        {
+                            if (Dbug)
+                                printf("EXIT5; i=%d \n", i);
+                            break;
+                        }
                     }
                 }
                 /*Collect data for an alternative derivation of NuSpltVal, by identifying the bucket with the most dits*/
