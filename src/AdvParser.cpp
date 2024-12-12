@@ -1035,191 +1035,230 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
     uint16_t MaxDelta = 0;
     MaxDahCnt = MaxDitCnt = DahCnt = 0;
     // if (Dbug) printf("\nSetSpltPt() - ");
-    for (i = 0; i < n; i++)
+    if(arr[n].Intrvl > 1.5 * arr[0].Intrvl )
     {
-
-        if ((arr[i].Intrvl > MaxIntrval))
+        for (i = 0; i < n; i++)
         {
-            if (Dbug) printf("EXIT1; i=%d \n", i);
-            break; // exclude/stop comparison when/if the interval exceeds that of a dah interval @ the current WPM
-        }
 
-        /*Test if the change interval between these keydwn groups is bigger than anything we've seen before (in this symbol set)*/
-        if (arr[i].Intrvl > 34)
-        { /*only consider intervals that represent keying below 35 wpm. Anything faster is likely just noise*/
-            if (FindFrstNtryPtr)
+            if ((arr[i].Intrvl > MaxIntrval))
             {
-                FindFrstNtryPtr = false;
-                FrstNtryPtr = i; // this pointer will be used later to test for this symbol set is a mix of dits & dahs
+                if (Dbug)
+                    printf("EXIT1; i=%d \n", i);
+                break; // exclude/stop comparison when/if the interval exceeds that of a dah interval @ the current WPM
             }
-            if (arr[i + 1].Intrvl - arr[i].Intrvl > MaxDelta && SpltCalc)
-            {
-                /* when there is more than 3 buckets, skip the last one.
-                Because, for bugs, the last one is likely an exaggerated daH */
-                if (n > 2 && i + 1 == n && arr[i + 1].Cnt == 1 && !AllDit)
+
+            /*Test if the change interval between these keydwn groups is bigger than anything we've seen before (in this symbol set)*/
+            if (arr[i].Intrvl > 34)
+            { /*only consider intervals that represent keying below 35 wpm. Anything faster is likely just noise*/
+                if (FindFrstNtryPtr)
                 {
-                    if (Dbug)  printf("EXIT2; i=%d \n", i);
+                    FindFrstNtryPtr = false;
+                    FrstNtryPtr = i; // this pointer will be used later to test for this symbol set is a mix of dits & dahs
+                }
+                if (arr[i + 1].Intrvl - arr[i].Intrvl > MaxDelta && SpltCalc)
+                {
+                    /* when there is more than 3 buckets, skip the last one.
+                    Because, for bugs, the last one is likely an exaggerated daH */
+                    if (n > 2 && i + 1 == n && arr[i + 1].Cnt == 1 && !AllDit)
+                    {
+                        if (Dbug)
+                            printf("EXIT2; i=%d \n", i);
+                        break;
+                    }
+                    MaxDelta = arr[i + 1].Intrvl - arr[i].Intrvl;
+
+                    this->NuSpltVal = arr[i].Intrvl + (MaxDelta) / 2;
+                    if (Dbug)
+                        printf("Path A - NuSpltVal:%d; i=%d; n=%d; MaxIntrval:%d\n", this->NuSpltVal, i, n, MaxIntrval);
+                    lastDitPtr = i;
+                    if ((i + 1 <= n) && (arr[i + 1].Intrvl > (2 * arr[i].Intrvl))) // 1.8*arr[i].Intrvl
+                    {
+                        if (Dbug)
+                            printf("EXIT5; i=%d \n", i);
+                        break;
+                    }
+
+                    /*now Update/recalculate the running average dit interval value (based on the last six dit intervals)*/
+                    if (arr[i].Intrvl <= DitDahSplitVal)
+                    {
+                        /*20240228 new method*/
+                        int LpCntr = 0;
+                        while (LpCntr < arr[i].Cnt)
+                        {
+                            // this->DitIntrvlVal = (uint16_t)((5 * (float)this->DitIntrvlVal) + (float)arr[i].Intrvl) / 6.0;
+                            // DitIntrvlPtr = 0;
+                            this->DitIntrvlRingBuf[DitIntrvlPtr] = arr[i].Intrvl;
+                            LpCntr++;
+                            DitIntrvlPtr++;
+                            if (DitIntrvlPtr == 6)
+                                DitIntrvlPtr = 0;
+                        }
+                        this->DitIntrvlVal = 0; // reset DitIntrvlVal
+                        for (int lptr = 0; lptr < 6; lptr++)
+                        {
+                            this->DitIntrvlVal += this->DitIntrvlRingBuf[lptr];
+                        }
+                        this->DitIntrvlVal /= 6;
+                    }
+                    if (arr[i + 1].Intrvl > 1.5 * arr[i].Intrvl && (arr[i].Cnt > 2) && i > 0)
+                    { // 1.5 * arr[i].Intrvl // 1.7 * arr[i].Intrvl
+                        if (Dbug)
+                            printf("SpltCalc = false\n");
+                        SpltCalc = false; // found an abrupt increase in keydown interval; likely reprents the dit/dah boundry, so look no further
+                    }
+                }
+                /*Collect data for an alternative derivation of NuSpltVal, by identifying the bucket with the most dits*/
+                if (arr[i].Cnt >= MaxDitCnt && (arr[i].Intrvl < this->NuSpltVal))
+                {
+                    MaxDitPtr = i;
+                    MaxDitCnt = arr[i].Cnt;
+                }
+                /*Collect data for an alternative derivation of NuSpltVal, by identifying the bucket with the most dahs*/
+                if (arr[n - i].Cnt >= MaxDahCnt && (arr[n - i].Intrvl > this->NuSpltVal) && AllDah)
+                {
+                    MaxDahPtr = n - i;
+                    MaxDahCnt = arr[n - i].Cnt;
+                }
+            }
+            int RightIndxPtr = n - i;
+            if (this->BugKey == 1)
+                RightIndxPtr = (n - 1) - i; // if its been a bug type key don't consider the last bucket, because it could contain exagerated dahs
+            if (RightIndxPtr < 1)
+                RightIndxPtr = 1;
+            // printf("arr[%d].Intrvl: %d;  arr[%d].Intrvl: %d; DitDahSplitVal: %d; n: %d\n", i, arr[i].Intrvl, RightIndxPtr, arr[RightIndxPtr].Intrvl, DitDahSplitVal, n);
+            if ((arr[RightIndxPtr].Intrvl < DitDahSplitVal))
+                AllDah = false;
+            if ((arr[i].Intrvl > DitDahSplitVal))
+                AllDit = false;
+            /* make absolutey certian that the dits dont cross over the dahs */
+            if (arr[i + 1].Intrvl > 2.5 * arr[i].Intrvl)
+            {
+                if (lastDitPtr + 1 >= n - i)
+                {
+                    if (Dbug)
+                        printf("EXIT3; i=%d \n", i);
                     break;
                 }
-                MaxDelta = arr[i + 1].Intrvl - arr[i].Intrvl;
-               
-                this->NuSpltVal = arr[i].Intrvl + (MaxDelta) / 2;
-                if (Dbug) printf("Path A - NuSpltVal:%d; i=%d; n=%d; MaxIntrval:%d\n", this->NuSpltVal, i, n, MaxIntrval);
-                lastDitPtr = i;
-                if((i+1 <= n) && (arr[i+1].Intrvl > (2 * arr[i].Intrvl))) //1.8*arr[i].Intrvl
+            }
+            /*check if the interval is a dit at less than 35wpm*/
+            if ((arr[i].Intrvl > 34) && (arr[i + 1].Intrvl > (1.45 * arr[i].Intrvl)) && arr[i].Cnt > 3)
+            {
+                if ((arr[i + 1].Intrvl < (1.75 * arr[i].Intrvl)) && (arr[i + 1].Cnt >= arr[i].Cnt))
+                // if ((arr[i + 1].Intrvl < (1.6 * arr[i].Intrvl)) && ((arr[i + 1].Intrvl < (arr[n].Intrvl/2.5))))
                 {
-                 if (Dbug)  printf("EXIT5; i=%d \n", i);
-                 break;   
+                    // keep going, because the next bucket has even more (or just as many) dits than the current
+                    if (Dbug)
+                        printf("Keep Looking. More Dits Ahead. Cur IndxPtr %d\n", i);
                 }
-
-                /*now Update/recalculate the running average dit interval value (based on the last six dit intervals)*/
-                if (arr[i].Intrvl <= DitDahSplitVal)
+                // if (Dbug) printf("BREAK\n");
+                else
                 {
-                    /*20240228 new method*/
-                    int LpCntr = 0;
-                    while (LpCntr < arr[i].Cnt)
-                    {
-                        // this->DitIntrvlVal = (uint16_t)((5 * (float)this->DitIntrvlVal) + (float)arr[i].Intrvl) / 6.0;
-                        // DitIntrvlPtr = 0;
-                        this->DitIntrvlRingBuf[DitIntrvlPtr] = arr[i].Intrvl;
-                        LpCntr++;
-                        DitIntrvlPtr++;
-                        if (DitIntrvlPtr == 6)
-                            DitIntrvlPtr = 0;
-                    }
-                    this->DitIntrvlVal = 0; // reset DitIntrvlVal
-                    for (int lptr = 0; lptr < 6; lptr++)
-                    {
-                        this->DitIntrvlVal += this->DitIntrvlRingBuf[lptr];
-                    }
-                    this->DitIntrvlVal /= 6;
-                }
-                if (arr[i + 1].Intrvl > 1.5 * arr[i].Intrvl && (arr[i].Cnt > 2) && i > 0)
-                { //1.5 * arr[i].Intrvl // 1.7 * arr[i].Intrvl
-                    if (Dbug) printf("SpltCalc = false\n");
-                    SpltCalc = false; // found an abrupt increase in keydown interval; likely reprents the dit/dah boundry, so look no further
+                    if (Dbug)
+                        printf("EXIT4; i=%d \n", i);
+                    break; // since we are working our way up the interval sequence, its appears that we have a cluster of dits & the next step up (because the gap is > 1.45 x this cluster) should be treated as a 'dah'. So its safe to quit looking
                 }
             }
-            /*Collect data for an alternative derivation of NuSpltVal, by identifying the bucket with the most dits*/
-            if (arr[i].Cnt >= MaxDitCnt && (arr[i].Intrvl < this->NuSpltVal))
-            {
-                MaxDitPtr = i;
-                MaxDitCnt = arr[i].Cnt;
-            }
-            /*Collect data for an alternative derivation of NuSpltVal, by identifying the bucket with the most dahs*/
-            if (arr[n-i].Cnt >= MaxDahCnt && (arr[n-i].Intrvl > this->NuSpltVal) && AllDah)
-            {
-                MaxDahPtr = n-i;
-                MaxDahCnt = arr[n-i].Cnt;
-            }
-        }
-        int RightIndxPtr = n - i;
-        if (this->BugKey == 1)
-            RightIndxPtr = (n - 1) - i; // if its been a bug type key don't consider the last bucket, because it could contain exagerated dahs
-        if (RightIndxPtr < 1)
-            RightIndxPtr = 1;
-        //printf("arr[%d].Intrvl: %d;  arr[%d].Intrvl: %d; DitDahSplitVal: %d; n: %d\n", i, arr[i].Intrvl, RightIndxPtr, arr[RightIndxPtr].Intrvl, DitDahSplitVal, n);
-        if ((arr[RightIndxPtr].Intrvl < DitDahSplitVal))
-            AllDah = false;
-        if ((arr[i].Intrvl > DitDahSplitVal))
-            AllDit = false;
-        /* make absolutey certian that the dits dont cross over the dahs */
-        if (arr[i + 1].Intrvl > 2.5 * arr[i].Intrvl)
-        {
-            if (lastDitPtr + 1 >= n - i)
-            {
-                if (Dbug) printf("EXIT3; i=%d \n", i);
-                break;
-            }
-        }
-        /*check if the interval is a dit at less than 35wpm*/
-        if ((arr[i].Intrvl > 34) && (arr[i + 1].Intrvl > (1.45 * arr[i].Intrvl)) && arr[i].Cnt > 3)
-        {
-            if ((arr[i + 1].Intrvl < (1.75 * arr[i].Intrvl)) && (arr[i + 1].Cnt >= arr[i].Cnt))
-            //if ((arr[i + 1].Intrvl < (1.6 * arr[i].Intrvl)) && ((arr[i + 1].Intrvl < (arr[n].Intrvl/2.5))))
-            {
-                // keep going, because the next bucket has even more (or just as many) dits than the current
-                if (Dbug)
-                    printf("Keep Looking. More Dits Ahead. Cur IndxPtr %d\n", i);
-            }
-            // if (Dbug) printf("BREAK\n");
-            else
-            {
-                if (Dbug) printf("EXIT4; i=%d \n", i);
-                break; // since we are working our way up the interval sequence, its appears that we have a cluster of dits & the next step up (because the gap is > 1.45 x this cluster) should be treated as a 'dah'. So its safe to quit looking
-            }
-        }
-    } // END 'for (i = 0; i < n; i++)' loop
-    if (n > 1 && this->BugKey == 1)
-    {
-        if (arr[FrstNtryPtr].Intrvl < DitDahSplitVal && ((DitDahSplitVal < arr[n].Intrvl && arr[n].Cnt > 1) || ((DitDahSplitVal < arr[n - 1].Intrvl))))
-        { /*the 1st interval is less than the current splitval and either the last invertval with multiple events, or the next to last entry is greater than the splitval*/
-            AllDah = AllDit = false;
-        }
-    }
-    else
-    {
-        if (arr[FrstNtryPtr].Intrvl < DitDahSplitVal && DitDahSplitVal < arr[n].Intrvl)
-        { /*the 1st interval is less than the current splitval and the last invertval is greater than the splitval*/
-            AllDah = AllDit = false;
-        }
-    }
+        } // END 'for (i = 0; i < n; i++)' loop
 
-    /* If a significant cluster of 'dits' were found (5), then test if their weighted interval
-       value is greater than the nusplitval value found above.
-       If true, then use this weighted value & recalculate the DitIntrvlVal*/
-    // printf("MaxDitCnt %d; MaxDitPtr %d; lastDitPtr %d\n", MaxDitCnt, MaxDitPtr, lastDitPtr);
-    if (MaxDitCnt >= 5)
-    { // && MaxDitPtr > lastDitPtr
-        if(MaxDahCnt >= 3) //20241207 added 
+        if (n > 1 && this->BugKey == 1)
         {
-            uint16_t oldSpltVal = this->NuSpltVal;
-            this->NuSpltVal = arr[MaxDitPtr].Intrvl + (arr[MaxDahPtr].Intrvl - arr[MaxDitPtr].Intrvl)/2;
-            /*don't make the following correct if we have been working with a straight key fist*/
-            if(this-> bgPdlCd != 50) this->NuSpltVal *= 0.95;//20241210 added based on k9vp bug mp3 test recording
-            if (Dbug){
-                char Keymode = 'S';
-                if(this-> bgPdlCd != 50) Keymode = ' '; 
-                
-                printf("Using Alternate Calc NuSpltVal Method A%c; Old NuSpltVal: %d; NuSpltVal: %d; MaxDahPtr: %d; MaxDitPtr: %d\n", Keymode, oldSpltVal, this->NuSpltVal, MaxDahPtr, MaxDitPtr);
+            if (arr[FrstNtryPtr].Intrvl < DitDahSplitVal && ((DitDahSplitVal < arr[n].Intrvl && arr[n].Cnt > 1) || ((DitDahSplitVal < arr[n - 1].Intrvl))))
+            { /*the 1st interval is less than the current splitval and either the last invertval with multiple events, or the next to last entry is greater than the splitval*/
+                AllDah = AllDit = false;
             }
         }
         else
         {
-        uint16_t WghtdDit = (1.6 * arr[MaxDitPtr].Intrvl);//20241126 changed from 1.5 to 1.6
-        if (Dbug)
-            printf("Using Alternate Calc NuSpltVal Method B: %d\n", this->NuSpltVal);
-        
-        this->NuSpltVal = WghtdDit;
+            if (arr[FrstNtryPtr].Intrvl < DitDahSplitVal && DitDahSplitVal < arr[n].Intrvl)
+            { /*the 1st interval is less than the current splitval and the last invertval is greater than the splitval*/
+                AllDah = AllDit = false;
+            }
         }
-        //printf("\nMaxDitPtr =%d; NuSpltVal =%d; ditVal:%d\n", MaxDitPtr, this->NuSpltVal, arr[lastDitPtr].Intrvl);
-        lastDitPtr = MaxDitPtr;
-        AllDit = AllDah = false;
-        
-        int LpCntr = 0;
-        while (LpCntr < arr[lastDitPtr].Cnt)
-        {
-            // DitIntrvlPtr = 0;
-            this->DitIntrvlRingBuf[DitIntrvlPtr] = arr[lastDitPtr].Intrvl;
-            LpCntr++;
-            DitIntrvlPtr++;
-            if (DitIntrvlPtr == 6)
-                DitIntrvlPtr = 0;
+
+        /* If a significant cluster of 'dits' were found (5), then test if their weighted interval
+           value is greater than the nusplitval value found above.
+           If true, then use this weighted value & recalculate the DitIntrvlVal*/
+        // printf("MaxDitCnt %d; MaxDitPtr %d; lastDitPtr %d\n", MaxDitCnt, MaxDitPtr, lastDitPtr);
+        if (MaxDitCnt >= 5)
+        {                       // && MaxDitPtr > lastDitPtr
+            if (MaxDahCnt >= 3) // 20241207 added
+            {
+                uint16_t oldSpltVal = this->NuSpltVal;
+                this->NuSpltVal = arr[MaxDitPtr].Intrvl + (arr[MaxDahPtr].Intrvl - arr[MaxDitPtr].Intrvl) / 2;
+                /*don't make the following correct if we have been working with a straight key fist*/
+                if (this->bgPdlCd != 50)
+                    this->NuSpltVal *= 0.95; // 20241210 added based on k9vp bug mp3 test recording
+                if (Dbug)
+                {
+                    char Keymode = 'S';
+                    if (this->bgPdlCd != 50)
+                        Keymode = ' ';
+
+                    printf("Using Alternate Calc NuSpltVal Method A%c; Old NuSpltVal: %d; NuSpltVal: %d; MaxDahPtr: %d; MaxDitPtr: %d\n", Keymode, oldSpltVal, this->NuSpltVal, MaxDahPtr, MaxDitPtr);
+                }
+            }
+            else
+            {
+                uint16_t WghtdDit = (1.6 * arr[MaxDitPtr].Intrvl); // 20241126 changed from 1.5 to 1.6
+                if (Dbug)
+                    printf("Using Alternate Calc NuSpltVal Method B: %d\n", this->NuSpltVal);
+
+                this->NuSpltVal = WghtdDit;
+            }
+            // printf("\nMaxDitPtr =%d; NuSpltVal =%d; ditVal:%d\n", MaxDitPtr, this->NuSpltVal, arr[lastDitPtr].Intrvl);
+            lastDitPtr = MaxDitPtr;
+            AllDit = AllDah = false;
+
+            int LpCntr = 0;
+            while (LpCntr < arr[lastDitPtr].Cnt)
+            {
+                // DitIntrvlPtr = 0;
+                this->DitIntrvlRingBuf[DitIntrvlPtr] = arr[lastDitPtr].Intrvl;
+                LpCntr++;
+                DitIntrvlPtr++;
+                if (DitIntrvlPtr == 6)
+                    DitIntrvlPtr = 0;
+            }
+            this->DitIntrvlVal = 0; // reset DitIntrvlVal
+            for (int lptr = 0; lptr < 6; lptr++)
+            {
+                this->DitIntrvlVal += this->DitIntrvlRingBuf[lptr];
+            }
+            this->DitIntrvlVal /= 6;
         }
-        this->DitIntrvlVal = 0; // reset DitIntrvlVal
-        for (int lptr = 0; lptr < 6; lptr++)
-        {
-            this->DitIntrvlVal += this->DitIntrvlRingBuf[lptr];
-        }
-        this->DitIntrvlVal /= 6;
     }
     // printf("\nlastDitPtr =%d; NuSpltVal =%d; ditVal:%d\n", lastDitPtr, this->NuSpltVal, arr[lastDitPtr].Intrvl);
 
     /*if this group of key down intervals is either All Dits or All dahs,
     then its pointless to reevaluate the "DitDahSplitVal"
     So abort this routine*/
+    if (AllDit && AllDah)
+    { /*OK use keyup interval to work out a spl1tpoint*/
+        /*Set the "MaxCntKyUpBcktPtr" property with Key Up Bucket index with the most intervals*/
+        uint8_t maxCnt = 0;
+        for (int i = 0; i <= KeyUpBucktPtr; i++)
+        {
+            if (KeyUpBuckts[i].Cnt > maxCnt)
+            {
+                maxCnt = KeyUpBuckts[i].Cnt;
+                MaxCntKyUpBcktPtr = i;
+            }
+        }
+        /*Assume the maxcnt point to the time interval that best repersents the inter element time, 
+        which if keyboard / paddle would be the same as the 'dit' interval.
+        That being the case, the 1.5 this time should be a gud choice for the splitpoint*/
+        this->NuSpltVal = 1.5 * KeyUpBuckts[MaxCntKyUpBcktPtr].Intrvl;
+        //this->NuSpltVal *= 0.95;//20241210 added based on k9vp bug mp3 test recording
+        this->DitDahSplitVal = this->NuSpltVal;
+        this->WrdBrkVal = 4 * KeyUpBuckts[MaxCntKyUpBcktPtr].Intrvl;
+        this->Bg1SplitPt = 1.1 * this->DitDahSplitVal;
+        if(this->NuSpltVal > arr[0].Intrvl) AllDah = false;
+        else AllDit = false;
+        if(DeBug) printf("\nAllDit && AllDah NuSpltVal = %d; Bg1SplitPt= %d; maxCntBckt: %d\n", this->NuSpltVal, this->Bg1SplitPt, MaxCntKyUpBcktPtr);
+    }
     if ((AllDit || AllDah) && (DitDahSplitVal != 0))
     {
+        
         SameSymblWrdCnt++;
         if (SameSymblWrdCnt > 2)
         { // had 3 all dits/dahs in a row; somethings not right, Do a hard reset
