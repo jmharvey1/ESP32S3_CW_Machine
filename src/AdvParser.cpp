@@ -858,8 +858,9 @@ void AdvParser::EvalTimeData(void)
         case 6 /* constant-expression */:
             /* code */
             // Sloppy Bug
-            if (TmpDwnIntrvls[n] >= DitDahSplitVal) // if true, its a 'dah'
+            if (TmpDwnIntrvls[n] > Bg1SplitPt) // if true, its a 'dah'//20241212 changed from >= DitDahSplitVal to > Bg1SplitPt
                 SymbSet += 1;                       // Set the new bit to a 'Dah'
+            //printf("SymbSet %d; n:%d; TmpDwnIntrvl: %d; Bg1SplitPt: %d\n", SymbSet, n, TmpDwnIntrvls[n], Bg1SplitPt);    
             break;
         default:
             if (TmpDwnIntrvls[n] >= Bg1SplitPt) // if true, its a 'dah'
@@ -1046,7 +1047,27 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                     printf("EXIT1; i=%d \n", i);
                 break; // exclude/stop comparison when/if the interval exceeds that of a dah interval @ the current WPM
             }
-
+            /*Collect data for an alternative derivation of NuSpltVal, by identifying the bucket with the most dahs*/
+            /*moved this test to here to ensure all dah interval times are considered; 
+            Before it could get skipped if 1st dit interval looked like a glitch*/
+            if (arr[n - i].Cnt >= MaxDahCnt && (arr[n - i].Intrvl > this->NuSpltVal) && AllDah)
+            {
+                if((i == 0 && arr[n - i].Cnt >1) || ((i > 0) ))
+                { /*Added this check to avoid using a super long dah interval*/
+                    /*now make sure we're not going to be dipping back into the "dit" group*/
+                    if ((MaxDahPtr > 0) && (2 * arr[n - i].Intrvl < arr[MaxDahPtr].Intrvl))
+                    {
+                        if (Dbug)
+                            printf("\tSkip Set MaxDahPtr i=%d \n", i);
+                    }
+                    else
+                    {
+                        MaxDahPtr = n - i;
+                        MaxDahCnt = arr[n - i].Cnt;
+                        // printf("MaxDahPtr: %d; MaxDahCnt: %d; i:%d; n: %d\n", MaxDahPtr, MaxDahCnt, i, n);
+                    }
+                }
+            }
             /*Test if the change interval between these keydwn groups is bigger than anything we've seen before (in this symbol set)*/
             if (arr[i].Intrvl > 34)
             { /*only consider intervals that represent keying below 35 wpm. Anything faster is likely just noise*/
@@ -1069,7 +1090,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
 
                     this->NuSpltVal = arr[i].Intrvl + (MaxDelta) / 2;
                     if (Dbug)
-                        printf("Path A - NuSpltVal:%d; i=%d; n=%d; MaxIntrval:%d\n", this->NuSpltVal, i, n, MaxIntrval);
+                        printf("Path A - NuSpltVal:%d; i=%d; n=%d; MaxDelta:%d\n", this->NuSpltVal, i, n, MaxDelta);
                     lastDitPtr = i;
                     // if ((i + 1 <= n) && (arr[i + 1].Intrvl > (2 * arr[i].Intrvl))) // 1.8*arr[i].Intrvl
                     // {
@@ -1103,7 +1124,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                             DitIntrvlPtr++;
                             if (DitIntrvlPtr == 6)
                                 DitIntrvlPtr = 0;
-                           // printf("%d. while (LpCntr < arr[%d].Cnt)\n", LpCntr, i);
+                            // printf("%d. while (LpCntr < arr[%d].Cnt)\n", LpCntr, i);
                         }
                         this->DitIntrvlVal = 0; // reset DitIntrvlVal
                         for (int lptr = 0; lptr < 6; lptr++)
@@ -1141,12 +1162,13 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                     MaxDitPtr = i;
                     MaxDitCnt = arr[i].Cnt;
                 }
-                /*Collect data for an alternative derivation of NuSpltVal, by identifying the bucket with the most dahs*/
-                if (arr[n - i].Cnt >= MaxDahCnt && (arr[n - i].Intrvl > this->NuSpltVal) && AllDah)
-                {
-                    MaxDahPtr = n - i;
-                    MaxDahCnt = arr[n - i].Cnt;
-                }
+                // /*Collect data for an alternative derivation of NuSpltVal, by identifying the bucket with the most dahs*/
+                // if (arr[n - i].Cnt >= MaxDahCnt && (arr[n - i].Intrvl > this->NuSpltVal) && AllDah)
+                // {
+                //     MaxDahPtr = n - i;
+                //     MaxDahCnt = arr[n - i].Cnt;
+                //     printf("MaxDahPtr: %d; MaxDahCnt: %d; i:%d; n: %d\n", MaxDahPtr, MaxDahCnt, i, n);
+                // }
             }
             int RightIndxPtr = n - i;
             if (this->BugKey == 1)
@@ -1214,12 +1236,12 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                 uint16_t oldSpltVal = this->NuSpltVal;
                 this->NuSpltVal = arr[MaxDitPtr].Intrvl + (arr[MaxDahPtr].Intrvl - arr[MaxDitPtr].Intrvl) / 2;
                 /*don't make the following correct if we have been working with a straight key fist*/
-                if (this->bgPdlCd != 50)
+                if (this->bgPdlCd != 50) //if NOT Bg3 Bug
                     this->NuSpltVal *= 0.95; // 20241210 added based on k9vp bug mp3 test recording
                 if (Dbug)
                 {
                     char Keymode = 'S';
-                    if (this->bgPdlCd != 50)
+                    if (this->bgPdlCd != 50) //if NOT Bg3 Bug
                         Keymode = ' ';
 
                     printf("Using Alternate Calc NuSpltVal Method A%c; Old NuSpltVal: %d; NuSpltVal: %d; MaxDahPtr: %d; MaxDitPtr: %d\n", Keymode, oldSpltVal, this->NuSpltVal, MaxDahPtr, MaxDitPtr);
@@ -1233,7 +1255,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
 
                 this->NuSpltVal = WghtdDit;
             }
-            // printf("\nMaxDitPtr =%d; NuSpltVal =%d; ditVal:%d\n", MaxDitPtr, this->NuSpltVal, arr[lastDitPtr].Intrvl);
+            printf("\nMaxDitPtr =%d; NuSpltVal =%d; ditVal:%d\n", MaxDitPtr, this->NuSpltVal, arr[lastDitPtr].Intrvl);
             lastDitPtr = MaxDitPtr;
             AllDit = AllDah = false;
 
