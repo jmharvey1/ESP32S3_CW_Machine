@@ -855,9 +855,12 @@ private:
     uint16_t DitIntrvlRingBuf[6]; //added 20241120
     uint16_t DitDahSplitVal;
     uint16_t AvgDahVal;
+    uint16_t AvgDahKeyUpVal;
+    uint16_t LtrBrkVal;
     uint16_t NuSpltVal = 0;
     //uint16_t DitIntrvlVal; //used as sanity test/check in 'bug' letterbrk rule set; 20240129 running average of the last 6 dits
     uint16_t WrdBrkVal; // serves in post parser as the value to insert a space in the reconstructed character string
+    bool  WrdBrkValid;
     unsigned int SymbSet; //bit-bucket that holds a collection of 0's & 1's where 1 = a dah & a 0 = a dit; so "C" = 1010
     unsigned int LstLtrBrkCnt = 0;//track the number of keyevents since last letterbreak.
     //uint16_t UnitIntvrlx2r5; //basic universal symbol interval; i.e. a standard dit X 2.4; used in b1 rule set to find letter breaks
@@ -899,6 +902,7 @@ public:
     float AvgSmblDedSpc;
     float wrdbrkFtcr;
     int GetMsgLen(void);
+    uint16_t GetWrdBrkIntrval(void);
     unsigned long LstGltchEvnt; //time stamp of last detected glitch (detected in/by Geoertzel.cpp)
     uint16_t DitIntrvlVal;//20240521 moved this from privat to public so Goertzel.cpp could see it
     uint16_t KeyUpIntrvls[IntrvlBufSize];

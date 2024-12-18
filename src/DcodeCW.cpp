@@ -1131,20 +1131,23 @@ void ChkDeadSpace(void)
 			}
 		}
 	}
-	/* 20240324 new approach to setting word break wait interval*/
-	if(advparser.KeyType == 2) wordBrk = (5 * wordBrk + (8*avgDeadSpace)) / 6; //cootie with short keyup intervals
-	/*20240328 added separate calc for paddle trying to stop unneeded word breaks*/
-	else if(advparser.KeyType == 0){
-		uint16_t NuWrdBkA = (uint16_t)(4.2*(float)avgDeadSpace);
-		uint16_t NuWrdBkB = (uint16_t)(2.3 * (float)advparser.UnitIntvrlx2r5);
-		wordBrk = (unsigned long)( wrdbrkFtcr *((6.0 * ((float)wordBrk/ wrdbrkFtcr) + ((float)NuWrdBkA)) / 7.0)); //paddle
-		//printf("wordBrkA: %d; wrdbrkFtcr %5.3f; NuWrdBkA: %d; NuWrdBkB: %d\n", (uint16_t)wordBrk, wrdbrkFtcr, NuWrdBkA, NuWrdBkB);
-	}
-	//else if(advparser.KeyType == 0) wordBrk = (unsigned long)((5.0 * (float)wordBrk + (2.3 * (float)advparser.UnitIntvrlx2r5)) / 6.0); //paddle 
-	else{
-	 wordBrk = (unsigned long)( wrdbrkFtcr *(5 * ((float)wordBrk/ wrdbrkFtcr) + (6*avgDeadSpace)) / 6);//all other key type
-	 //printf("wordBrkB: %d; wrdbrkFtcr %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr);
-	}
+	/*20241216 commented out the following and replaced with new method for setting/updating wordbreak interval based on advanced parser evaluation*/
+	uint16_t NuVal = advparser.GetWrdBrkIntrval();
+	if(NuVal>0) wordBrk =  NuVal;
+	// /* 20240324 new approach to setting word break wait interval*/
+	// if(advparser.KeyType == 2) wordBrk = (5 * wordBrk + (8*avgDeadSpace)) / 6; //cootie with short keyup intervals
+	// /*20240328 added separate calc for paddle trying to stop unneeded word breaks*/
+	// else if(advparser.KeyType == 0){
+	// 	uint16_t NuWrdBkA = (uint16_t)(4.2*(float)avgDeadSpace);
+	// 	uint16_t NuWrdBkB = (uint16_t)(2.3 * (float)advparser.UnitIntvrlx2r5);
+	// 	wordBrk = (unsigned long)( wrdbrkFtcr *((6.0 * ((float)wordBrk/ wrdbrkFtcr) + ((float)NuWrdBkA)) / 7.0)); //paddle
+	// 	//printf("wordBrkA: %d; wrdbrkFtcr %5.3f; NuWrdBkA: %d; NuWrdBkB: %d\n", (uint16_t)wordBrk, wrdbrkFtcr, NuWrdBkA, NuWrdBkB);
+	// }
+	// //else if(advparser.KeyType == 0) wordBrk = (unsigned long)((5.0 * (float)wordBrk + (2.3 * (float)advparser.UnitIntvrlx2r5)) / 6.0); //paddle 
+	// else{
+	//  wordBrk = (unsigned long)( wrdbrkFtcr *(5 * ((float)wordBrk/ wrdbrkFtcr) + (6*avgDeadSpace)) / 6);//all other key type
+	//  //printf("wordBrkB: %d; wrdbrkFtcr %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr);
+	// }
 	//printf("ReCal WordBrk - avgDeadSpace: %d; wordBrk: %d\n", (int)avgDeadSpace, (int)wordBrk);
 	//    printf("\n\r");
 	//    printf("; ");
@@ -1369,9 +1372,12 @@ bool chkChrCmplt(void)
 	/*20240226 added or clause to prevent long run on text strings which often end up scrambled by the post parser*/
 	/*20240322 Also in long runs, look for embedded 'DE' signifing call sign declaration & if found, force a word break */
 	//if (((noKeySig >= 0.75 * ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0))||(LtrPtr > 18 ||((LtrPtr >= 6) && (LtrHoldr[LtrPtr-2] == 'D') && (LtrHoldr[LtrPtr-1] == 'E'))))
-	if (((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0))||(LtrPtr > 18) ||((LtrPtr >= 6) && (LtrHoldr[LtrPtr-2] == 'D') && (LtrHoldr[LtrPtr-1] == 'E')))
-	
+	if (((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0))
+	||(KeyDwnPtr >= (IntrvlBufSize-5)) 
+	||((LtrPtr >= 6) && (LtrHoldr[LtrPtr-2] == 'D') && (LtrHoldr[LtrPtr-1] == 'E'))
+	||((LtrPtr >= 12)))
 	{
+		if(KeyDwnPtr >= (IntrvlBufSize-5)) printf("\n!!OVERFLOW!!\n");
 		if (KeyUpPtr < IntrvlBufSize && KeyDwnPtr >= 1)
 		{ // we have both a usable time & place to store it; and at least 1 keydwn interval has been captured
 			KeyUpIntrvls[KeyUpPtr] = (uint16_t)noKeySig;
@@ -1396,7 +1402,7 @@ bool chkChrCmplt(void)
 					{
 						oneLtrCntr++;
 						if (oneLtrCntr >= 2)
-						{ // had 2 entries in a row that were just one character in length; shorten the wordbrk interval
+						{ // had 2 entries in a row that were just one character in length; lengthen the wordbrk interval
 							wrdbrkFtcr += 0.15;// = 2.0
 							// LtrHoldr[LtrPtr] = curChar
 							if(DbgWrdBrkFtcr) printf("wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
