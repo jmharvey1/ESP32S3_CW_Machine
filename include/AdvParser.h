@@ -775,7 +775,7 @@ private:
         {"KOTE", "K9", 4, 200}, //725
         {"KON", "K9", 3, 200}, //726
         {"KTOE", "K9", 4, 200}, //727
-        {"MOW", "K9", 5, 200}, //728
+        {"KOW", "K9", 5, 200}, //728
         {"TTSVT", "73", 5, 0}, //729
         {"NMY", "NOW", 3, 200}, //730
         {"N9EY", "MONEY", 4, 0}, //731
@@ -858,6 +858,7 @@ private:
     uint16_t AvgDahKeyUpVal;
     uint16_t LtrBrkVal;
     uint16_t NuSpltVal = 0;
+    uint8_t MaxKeyUpBckt;
     //uint16_t DitIntrvlVal; //used as sanity test/check in 'bug' letterbrk rule set; 20240129 running average of the last 6 dits
     uint16_t WrdBrkVal; // serves in post parser as the value to insert a space in the reconstructed character string
     bool  WrdBrkValid;

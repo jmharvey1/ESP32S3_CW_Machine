@@ -48,6 +48,7 @@
  * 20241120 added new letter break test to sloppy bug rule set & SetSpltPt() changed calc DitIntrvlVal approach by adding ringbuff
  * 20241209 tweaks to AdvParser::EvalTimeData(void) intended to improve response to changes in sender fist & speed
  * 20241209 more tweaks to AdvParser.cpp to mainly to improve sloppy bug (B3) fist decoding
+ * 20241221 new quick method for finding letter break value
  * */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -250,6 +251,8 @@ void AdvParser::EvalTimeData(void)
         // }
     }
     /*Build the Key Up Bucket table*/
+    this->MaxKeyUpBckt =0;
+    uint8_t MaxKeyUpCnt = 0;
     KeyUpBuckts[KeyUpBucktPtr].Intrvl = this->KeyUpIntrvls[0]; // At this point KeyUpBucktPtr = 0
     KeyUpBuckts[KeyUpBucktPtr].Cnt = 1;
     for (int i = 1; i < KeyUpPtr; i++)
@@ -259,6 +262,11 @@ void AdvParser::EvalTimeData(void)
         {
             KeyUpBuckts[KeyUpBucktPtr].Cnt++;
             match = true;
+        }
+        if(KeyUpBuckts[KeyUpBucktPtr].Cnt >= MaxKeyUpCnt)
+        {
+            MaxKeyUpCnt = KeyUpBuckts[KeyUpBucktPtr].Cnt;
+            this->MaxKeyUpBckt = KeyUpBucktPtr;
         }
         if (!match)
         {
@@ -275,30 +283,65 @@ void AdvParser::EvalTimeData(void)
     /*Do quick letterbreak find*/
     if(KeyUpBucktPtr >= 1)
     {
-        int strt = KeyUpBucktPtr/2;
-        if(strt == 0)//there were only 2 sets of keyup bucktets
-        {
-            /*split the difference*/
-            this->LtrBrkVal = KeyUpBuckts[0].Intrvl +(KeyUpBuckts[1].Intrvl- KeyUpBuckts[0].Intrvl)/2;
-        } 
+        char method = ' ';
+        int strt = 0;
+        int launchStrt = 0;
+        if (KeyUpBuckts[this->MaxKeyUpBckt].Cnt > 2)
+        { /*20241221 new quick method for finding letter break value*/
+            if(this->MaxKeyUpBckt == KeyUpBucktPtr)
+            {
+                this->LtrBrkVal =0.9 * KeyUpBuckts[this->MaxKeyUpBckt].Intrvl;
+                this->WrdBrkVal = (uint16_t)(2.7 * this->LtrBrkVal);
+                method = 'A';
+            }
+            else
+            {
+            /*use 1.5 times the maximum value that can be in this bucket/group*/    
+            this->LtrBrkVal = 1.5 *(4 + (1.2 * KeyUpBuckts[this->MaxKeyUpBckt].Intrvl));
+            this->WrdBrkVal = (uint16_t)(2.7 * this->LtrBrkVal);
+            method = 'B';
+            }
+        }
         else
         {
-             this->LtrBrkVal =  KeyUpBuckts[strt].Intrvl;
-        }
-        //printf("KeyUpBuckts[%d].Intrvl = %d; KeyUpBucktPtr: %d\n", strt, KeyUpBuckts[strt].Intrvl, KeyUpBucktPtr);
-        int launchStrt = strt;
-        strt++;
-        //for (int i = strt; i < KeyDwnBucktPtr; i++)
-        while( strt < KeyUpBucktPtr)
-        {
-            if(KeyUpBuckts[strt].Intrvl >= (1.3* this->LtrBrkVal)) this->LtrBrkVal =  KeyUpBuckts[strt].Intrvl;
-            // printf("KeyUpBuckts[%d].Intrvl = %d; this->LtrBrkVal= %d\n", strt, KeyUpBuckts[strt].Intrvl, this->LtrBrkVal);
+            strt = KeyUpBucktPtr / 2;
+            if (strt == 0) // there were only 2 sets of keyup bucktets
+            {
+                /*split the difference*/
+                this->LtrBrkVal = KeyUpBuckts[0].Intrvl + (KeyUpBuckts[1].Intrvl - KeyUpBuckts[0].Intrvl) / 2;
+                method = 'C';
+            }
+            else
+            {
+                
+               if(strt < KeyUpBucktPtr) {
+                this->LtrBrkVal = KeyUpBuckts[strt].Intrvl + (KeyUpBuckts[strt+1].Intrvl - KeyUpBuckts[strt].Intrvl) / 2;
+                method = 'D';
+               }
+               else
+               {
+                    this->LtrBrkVal = KeyUpBuckts[strt].Intrvl;
+                    method = 'E';
+               }
+            }
+            // printf("KeyUpBuckts[%d].Intrvl = %d; KeyUpBucktPtr: %d\n", strt, KeyUpBuckts[strt].Intrvl, KeyUpBucktPtr);
+            launchStrt = strt;
             strt++;
+            // for (int i = strt; i < KeyDwnBucktPtr; i++)
+            while (strt < KeyUpBucktPtr)
+            {
+                if (KeyUpBuckts[strt].Intrvl >= (1.3 * this->LtrBrkVal))
+                {
+                    this->LtrBrkVal = KeyUpBuckts[strt].Intrvl;
+                    method = 'F';
+                }
+                // printf("KeyUpBuckts[%d].Intrvl = %d; this->LtrBrkVal= %d\n", strt, KeyUpBuckts[strt].Intrvl, this->LtrBrkVal);
+                strt++;
+            }
+            strt--;
         }
-        strt--;
-        if (Dbug) printf("quick letterbreak find - this->LtrBrkVal: %d; LAUNCH strt: %d; END strt: %d\n", this->LtrBrkVal, launchStrt, strt);
-        //this->WrdBrkVal = (uint16_t)(KeyUpBuckts[strt].Intrvl+(KeyUpBuckts[KeyUpBucktPtr].Intrvl -KeyUpBuckts[strt].Intrvl)/2);
-        //this->WrdBrkValid = true;
+        if (Dbug) printf("quick letterbreak find Method %c- this->LtrBrkVal: %d; LAUNCH strt: %d; END strt: %d\n",  method, this->LtrBrkVal, launchStrt, strt);
+        
     }
     if (KeyDwnBucktPtr >= 1 && KeyUpBucktPtr >= 1)
     {
@@ -624,7 +667,7 @@ void AdvParser::EvalTimeData(void)
         //printf("\n ^^^^^^UnitIntvrlx2r5 = %d\n", UnitIntvrlx2r5);
         Bg1SplitPt = (uint16_t)((float)UnitIntvrlx2r5 * 0.726);
     }
-    this->WrdBrkVal = (uint16_t)(5.5 * ((AvgSmblDedSpc + DitIntrvlVal) / 2)); // 20240507 - made word break a little longer, to reduce the frequency of un-needed word breaks
+    //this->WrdBrkVal = (uint16_t)(5.5 * ((AvgSmblDedSpc + DitIntrvlVal) / 2)); // 20240507 - made word break a little longer, to reduce the frequency of un-needed word breaks
     this->WrdBrkValid = true;
     if(this->LtrBrkVal == this->AvgSmblDedSpc) this->LtrBrkVal = 1.5* this->AvgSmblDedSpc; //this would only be the case, when there are just 2 keyupbuckets
     if (Dbug)
@@ -1418,7 +1461,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
     { /*OK use keyup interval to work out a spl1tpoint*/
         /*Set the "MaxCntKyUpBcktPtr" property with Key Up Bucket index with the most intervals*/
         uint8_t maxCnt = 0;
-        for (int i = 0; i <= KeyUpBucktPtr; i++)
+        for (int i = 0; i < KeyUpBucktPtr; i++)// ingnore last keyup bucket, its going to a letter break of worse yet word break
         {
             if (KeyUpBuckts[i].Cnt > maxCnt)
             {
@@ -1434,7 +1477,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                     printf("ALLDIT/ALLDAH Calc NuSpltVal Method: %d\n", this->NuSpltVal);
         //this->NuSpltVal *= 0.95;//20241210 added based on k9vp bug mp3 test recording
         this->DitDahSplitVal = this->NuSpltVal;
-        this->WrdBrkVal = 4 * KeyUpBuckts[MaxCntKyUpBcktPtr].Intrvl;
+        this->WrdBrkVal = 3 * KeyUpBuckts[MaxCntKyUpBcktPtr].Intrvl; //4 * KeyUpBuckts[MaxCntKyUpBcktPtr].Intrvl;
         this->Bg1SplitPt = 1.1 * this->DitDahSplitVal;
         if(this->NuSpltVal > arr[0].Intrvl) AllDah = false;
         if(this->NuSpltVal < arr[KeyDwnBucktPtr].Intrvl) AllDit = false;
