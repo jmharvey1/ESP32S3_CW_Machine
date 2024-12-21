@@ -12,6 +12,7 @@
 /*20240103 added void CurMdStng(int MdStng) primarily to switch in extended symbol set timing while in Bg1 mode*/
 /*20240114 added small differential term to noisLvl to improve noise tracking with widely spaced characters
 			Added timing link to AdvPaser to imporve FltrPrd timing (glitch protection/rejection)*/
+/*20241221 new dynamic adjustment/correction to squelch/tonethreshold during keydown interval*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -119,6 +120,8 @@ float ClipLvlS = 25000;//based on 20230811 configuration
 float NoiseFlr = 0;
 float SigDect = 0;//introduced primarily for Detecting Hi-speed CW keydown events
 float OLDNoiseFlr = 0;
+float SigSlope = 1;
+float OldNowLvl = 0;
 float SigPk =0;
 float MagBuf[MagBSz];
 float NoisBuf[2*MagBSz];
@@ -272,7 +275,7 @@ float GetMagnitudeSquared(float q1, float q2, float Coeff, int SmplCnt)
 	//PhazAng = 360 * ((atan(real / imag)) / (2 * M_PI));
 	return result;
 }
-
+/*Main entry point calc next Goertezl sample set*/
 void ComputeMags(unsigned long now){
 	TmpEvntTime = now;
 	// magC = Grtzl_Gain * 4.0*sqrt(GetMagnitudeSquared(Q1C, Q2C, coeffC, NC));
@@ -408,6 +411,8 @@ void ComputeMags(unsigned long now){
 		GudSig = 1;
 		SkipCnt1 =0;
 	}
+
+
 	if(noisLvl < CurNoise) noisLvl = CurNoise;//20231022 added this to lessen the chance that noise might induce a false keydown at the 1st of a letter/character
 	AdjSqlch = noisLvl;
 	if(AdjSqlch < 1500) AdjSqlch = 1500; //20230814 make sure squelch lvl is always above the "no input signal" level; this stops the decoder from generating random characters when no signal is applied
@@ -510,6 +515,20 @@ void Chk4KeyDwn(float NowLvl)
 		NoisBuf[OldestSmpl] = noisLvl; 
 
 	} else KeyDwnCnt = 0;
+	/*20241221 new dynamic adjustment/correction to squelch/tonethreshold during keydown interval*/
+	if(!state)
+	{ 
+		if (OldNowLvl > 0)
+		{
+			SigSlope = ((NowLvl-OldNowLvl)+OldNowLvl) / OldNowLvl;
+			if (NowLvl < OldNowLvl) SigSlope *= -1.5;
+			if(SigSlope <3 && SigSlope  > -3){
+				CurNoise += (SigSlope) * (0.04* CurNoise) ;
+				//printf("SigSlope %5.2f\n", SigSlope);
+			}	
+		}
+		OldNowLvl = NowLvl;
+	}
 	/*now if this last sample represents a keydown state(state ==0), 
 	Lets set the CurNoise to be mid way between the lowest curlevel and the NFlrBase value*/
 	if(!state){

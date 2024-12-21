@@ -871,9 +871,9 @@ void AdvParser::EvalTimeData(void)
     {
     case 0:          // paddle/keyboard
         ModeCnt = 0; // DcodeCW.cpp use "Normal" timing
-        if(this->LtrBrkVal > 2.0*this->AvgSmblDedSpc)
+        if(this->LtrBrkVal > 1.7*this->AvgSmblDedSpc)
         {
-            this->LtrBrkVal = 2.0*this->AvgSmblDedSpc;
+            this->LtrBrkVal = 1.7*this->AvgSmblDedSpc;
             if(DeBug) printf("\nRecalced LtrBrkVal = %d\n", this->LtrBrkVal);
         }
         break;
