@@ -73,6 +73,8 @@ esp_event_loop_args_t event_task_args = {
 /*20241214 more tweaks to AdvParser.cpp to improve BUG decoding */
 /*20241221 Goertzelcpp - added dynamic adjustment/correction to squelch/threshold */
 /*20241221 AdvParser.cpp - revised quick method for finding letter break value */
+/*20241226 AdvParser.cpp - more refinements to letter break & word break code*/
+
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -906,10 +908,7 @@ void AdvParserTask(void *param)
   {
     /* Sleep until instructed to resume from DcodeCW.cpp */
     // printf("AdvParserTask Launched\n"); //added to verify task management
-    /*Used diagnose Advance parser CPU usage*/
-    // AdvPStart = pdTICKS_TO_MS(xTaskGetTickCount());
-    //if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
-    //{
+   
       BlkDcdUpDts = true;
       advparser.EvalTimeData();
       /*Now compare Advparser decoded text to original text; If not the same,
@@ -1022,6 +1021,7 @@ void AdvParserTask(void *param)
             if (OlddeletCnt > deletCnt)
               deletCnt++;
           }
+          if(spacemarker == 'Y') deletCnt++;
           /*End new find delete count method*/
           char DelStr[30];
           if(deletCnt>29)
@@ -1049,9 +1049,6 @@ void AdvParserTask(void *param)
           /*for test/debug, show/print the before & after results*/
           //printf("old txt:%s;  new txt:%s\n\tdelete cnt: %d; advparser.LtrPtr %d; new txt length: %d; RingBufTst=%c; bufcharcnt: %d; ringbuf: %c%s%c; Space Corrected = %c(%d/%c%c%C) \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, ptr, RingBufTst, bufcharcnt, '"', ringbuf, '"', spacemarker, LstChr, '"', LstChr, '"');
         }
-        
-        //lvglmsgbx.Delete(true, deletCnt);
-        
         if(advparser.Dbug)
           printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
         
@@ -1062,24 +1059,20 @@ void AdvParserTask(void *param)
         /*now should be safe resume displayupdate task*/
            xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
         }
-      }else //printf("old txt: %s\n", advparser.LtrHoldr);
+        //printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
+      }//else printf("old txt: %s\n", advparser.LtrHoldr);
 
       if (advparser.Dbug)
         printf("%s\n", advparser.LtrHoldr);
-      if (same)
-      {
-      } // printf("END Scan SAME true\n");
-      //else
-      //  printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
-    //  xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
-    //}
+      
+    
     BlkDcdUpDts = false;
     // erase contents of LtrHoldr & reset its index pointer (LtrPtr)
     for (int i = 0; i < LtrPtr; i++)
       advparser.LtrHoldr[i] = 0;
     if (advparser.Dbug)
       printf("--------\n\n");
-    /*The following code is priimarilry for debugging stack alocation & understanding how much time the advance parser needs*/
+    /*The following code is primarilry for debugging stack alocation & understanding how much time the advance parser needs*/
     // uint16_t AdvPIntrvl = (uint16_t)(pdTICKS_TO_MS(xTaskGetTickCount())-AdvPStart);
     // printf("AdvPIntrvl: %d\n", AdvPIntrvl);
     // uxHighWaterMark = uxTaskGetStackHighWaterMark( NULL );

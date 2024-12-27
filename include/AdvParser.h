@@ -868,6 +868,7 @@ private:
     uint16_t Bg1SplitPt; //bug1 rule set dit/dah decision value; derived from UnitIntvrlx2r5
     char BrkFlg;
     /* Methods */
+    void CalAvgDeadIntvrl(void);
     bool Tst4LtrBrk(int& n);
     bool PadlRules(int& n);
     bool Bug1Rules(int& n);
