@@ -1132,11 +1132,13 @@ void ChkDeadSpace(void)
 		}
 	}
 	/*20241216 commented out the following and replaced with new method for setting/updating wordbreak interval based on advanced parser evaluation*/
-	uint16_t NuVal = advparser.GetWrdBrkIntrval();
+	uint16_t NuVal = 0;
+	if(wpm< 36) NuVal =advparser.GetWrdBrkIntrval();
 	if(NuVal>0) wordBrk =  NuVal;
+	
 	// /* 20240324 new approach to setting word break wait interval*/
 	// if(advparser.KeyType == 2) wordBrk = (5 * wordBrk + (8*avgDeadSpace)) / 6; //cootie with short keyup intervals
-	// /*20240328 added separate calc for paddle trying to stop unneeded word breaks*/
+	/*20240328 added separate calc for paddle trying to stop unneeded word breaks*/
 	// else if(advparser.KeyType == 0){
 	// 	uint16_t NuWrdBkA = (uint16_t)(4.2*(float)avgDeadSpace);
 	// 	uint16_t NuWrdBkB = (uint16_t)(2.3 * (float)advparser.UnitIntvrlx2r5);

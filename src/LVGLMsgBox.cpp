@@ -182,6 +182,25 @@ static void HelpBtn_event_handler(lv_event_t *e)
 		break;
 	}
 }
+
+static void ClrBtn_event_handler(lv_event_t *e)
+{
+	const char *TAG1 = "ClrBtn_event_handler";
+	lv_event_code_t code = lv_event_get_code(e);
+	switch (code)
+	{
+	case LV_EVENT_CLICKED:
+	{
+		printf("Main Screen (sc_1) 'Clear Text' button click event\n");
+		lv_textarea_set_text(DecdTxtArea, "");
+	}
+	break;
+
+	default:
+		break;
+	}
+}
+
 /*Actually the setting screen home/exit button call-back event handler*/
 static void Settings_Scrn_evnt_cb(lv_event_t *e)
 {
@@ -1147,7 +1166,7 @@ void Bld_LVGL_GUI(void)
 		lv_label_set_text(label, "Decoder Status");
 		label2 = lv_label_create(cont1);
 		lv_obj_set_size(label2, 350, 20);
-		lv_obj_set_pos(label2, 370, 180);
+		lv_obj_set_pos(label2, 660, 180);//410
 		lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
 
 		wpm_lbl = lv_label_create(cont1);
@@ -1191,7 +1210,7 @@ void Bld_LVGL_GUI(void)
 	lv_obj_t *exit_btn_label = lv_label_create(exit_btn);
 	lv_obj_add_style(exit_btn_label, &style_label, 0);
 	lv_label_set_text(exit_btn_label, "Settings");
-	lv_obj_align_to(exit_btn_label, exit_btn, LV_ALIGN_CENTER, 0, 0);
+	lv_obj_align_to(exit_btn_label, exit_btn, LV_ALIGN_CENTER, 0, 2);
 
 	/*Setup 'help' button at bottom of display*/
 	lv_obj_t *help_btn = lv_btn_create(scr_1);
@@ -1203,8 +1222,20 @@ void Bld_LVGL_GUI(void)
 	lv_obj_t *help_btn_label = lv_label_create(help_btn);
 	lv_obj_add_style(help_btn_label, &style_label, 0);
 	lv_label_set_text(help_btn_label, "Help");
-	lv_obj_align_to(help_btn_label, help_btn, LV_ALIGN_CENTER, 0, 0);
-	//printf("Bld_LVGL_GUI load(scr_1)\n");
+	lv_obj_align_to(help_btn_label, help_btn, LV_ALIGN_CENTER, 0, 2);
+
+	/*Setup 'Clear' button @ base of Decoder Text Area*/
+	lv_obj_t *ClrTxt_btn = lv_btn_create(scr_1);
+	lv_obj_add_style(ClrTxt_btn, &style_btn, 0);
+	lv_obj_set_size(ClrTxt_btn, 90, 30);
+	lv_obj_set_pos(ClrTxt_btn, 320, 221);
+	lv_obj_add_event_cb(ClrTxt_btn, ClrBtn_event_handler, LV_EVENT_CLICKED, NULL);
+
+	lv_obj_t *ClrTxt_btn_label = lv_label_create(ClrTxt_btn);
+	lv_obj_add_style(ClrTxt_btn_label, &style_label, 0);
+	lv_label_set_text(ClrTxt_btn_label, "Clear Text");
+	//lv_obj_align_to(ClrTxt_btn_label, ClrTxt_btn, LV_ALIGN_CENTER, 10, 2);
+	lv_obj_align_to(ClrTxt_btn_label, ClrTxt_btn, LV_ALIGN_CENTER, 0, 0);
 	lv_scr_load(scr_1);
 
 	if (scr_2 != NULL){

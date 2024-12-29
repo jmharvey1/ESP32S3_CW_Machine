@@ -461,16 +461,30 @@ void AdvParser::EvalTimeData(void)
         if(AllDah)
         {
             /*force the DitDahSplitVal to be less than any keydwn interval in this group*/
+            /*Test check for 'streched' dahs*/
             //this->DitDahSplitVal = KeyDwnBuckts[0].Intrvl/2;
             //if (Dbug) printf("ReSetB DitDahSplitVal:%d\n", this->DitDahSplitVal);
             uint16_t RunngTotl = 0;
+            uint16_t mindah =1000;
+            uint16_t maxdah =0;
+            uint16_t dahcnt = KeyDwnPtr;
             for (int i = 0; i < KeyDwnPtr; i++)
             {
-                 RunngTotl += KeyDwnIntrvls[i];
+                RunngTotl += KeyDwnIntrvls[i];
+                if(KeyDwnIntrvls[i]<mindah) mindah = KeyDwnIntrvls[i];
+                if(KeyDwnIntrvls[i]>maxdah) maxdah = KeyDwnIntrvls[i];
             }
-            this->DitDahSplitVal = (uint16_t)(0.75 * ((float)RunngTotl / (float)KeyDwnPtr));
+            float StrchRatio = (float)maxdah/(float)mindah;
+            if(StrchRatio > 1.5){
+                /*take out the stretched dah*/
+                RunngTotl -= maxdah;
+                dahcnt--;
+                if (Dbug)
+                printf("Dropping Stretched Dah %d from DitDahSplitVal calc\n",  maxdah);
+            }
+            this->DitDahSplitVal = (uint16_t)(0.75 * ((float)RunngTotl / (float)dahcnt));
             if (Dbug)
-                printf("ReSetB DitDahSplitVal = 0.75* (RunngTotl/%d) = %d\n", KeyDwnPtr, this->DitDahSplitVal);
+                printf("ReSetB DitDahSplitVal = 0.75* (RunngTotl/%d) = %d\n", dahcnt, this->DitDahSplitVal);
         }
         this->WrdBrkVal = 1.4*this->LtrBrkVal;
         if (Dbug) printf("WrdBrkVal Method 2; 1.4*this->LtrBrkVal:%d = %d\n",this->LtrBrkVal, this->WrdBrkVal);
@@ -1838,7 +1852,8 @@ bool AdvParser::SloppyBgRules(int &n)
     bool ltrbrkFlg = false;
     //if (TmpUpIntrvls[n] >= 1.1* this->LtrBrkVal)
     //if (TmpUpIntrvls[n] >= 1.26* this->LtrBrkVal)
-    if (TmpUpIntrvls[n] >= 1.31* this->LtrBrkVal)
+    //if (TmpUpIntrvls[n] >= 1.31* this->LtrBrkVal)
+    if (TmpUpIntrvls[n] >= 1.4* this->LtrBrkVal)
     {
         ExitPath[n] = 0;
         BrkFlg = '+';
