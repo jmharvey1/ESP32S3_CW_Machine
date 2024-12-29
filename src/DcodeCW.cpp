@@ -23,7 +23,8 @@
  * 20240117 Added AdvParser detected keymode to dispaly status line
  * 20240124 added requirement that Key up & down arrays match in length before attempting to do a post reparse of the las word captured
  * 20240420 added auto word break timing 'wrdbrkFtcr' ; added auto word break timing 'wrdbrkFtcr' (AdvParser/DcodeCW)
- * 20240522 added auto glitch detection to support post parser (AdvParser.cpp) 
+ * 20240522 added auto glitch detection to support post parser (AdvParser.cpp)
+ * 20241229 revised approach to setting word break wait interval via the WrdBrkFtcr 
  *   */
  
 
@@ -448,17 +449,6 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 				charCnt = 0;
 				
 			}
-			// else if (charCnt > 12) //we've gone 12 characters w/o a word break; force a reset based on the longest keyup interval since last word break
-			// {
-			// 	if (MaxDeadTime < wordBrk)
-			// 	{
-			// 		//printf("  FIX wordBrk: %d; MaxDeadTime: %d\n", (int)wordBrk, (int)MaxDeadTime);
-			// 		wordBrk = MaxDeadTime;
-					
-			// 	}
-			// 	MaxDeadTime = 0;
-			// 	charCnt = 0;
-			// }
 			noSigStrt = EvntTime; // jmh20190717added to prevent an absurd value
 
 			if (DeCodeVal == 0)
@@ -1131,11 +1121,13 @@ void ChkDeadSpace(void)
 			}
 		}
 	}
-	/*20241216 commented out the following and replaced with new method for setting/updating wordbreak interval based on advanced parser evaluation*/
-	uint16_t NuVal = 0;
-	if(wpm< 36) NuVal =advparser.GetWrdBrkIntrval();
-	if(NuVal>0) wordBrk =  NuVal;
-	
+	/* 20241229 new approach to setting word break wait interval*/
+	uint16_t NuVal = advparser.GetWrdBrkIntrval();//= 0;
+	if(NuVal>0)
+	{
+		wordBrk =  (uint16_t)(wrdbrkFtcr* (float)NuVal);
+		if(DbgWrdBrkFtcr) printf("WrdBrkIntrval:%d; wordBrkA: %d; wrdbrkFtcr %5.3f\n", NuVal, (uint16_t)wordBrk, wrdbrkFtcr);
+	}	
 	// /* 20240324 new approach to setting word break wait interval*/
 	// if(advparser.KeyType == 2) wordBrk = (5 * wordBrk + (8*avgDeadSpace)) / 6; //cootie with short keyup intervals
 	/*20240328 added separate calc for paddle trying to stop unneeded word breaks*/
@@ -1151,25 +1143,7 @@ void ChkDeadSpace(void)
 	//  //printf("wordBrkB: %d; wrdbrkFtcr %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr);
 	// }
 	//printf("ReCal WordBrk - avgDeadSpace: %d; wordBrk: %d\n", (int)avgDeadSpace, (int)wordBrk);
-	//    printf("\n\r");
-	//    printf("; ");
-	//    printf(avgDeadSpace);
-	//    printf("; ");
-	//    printf(avgDit);
-	//    printf("; ");
-	//    printf(avgDah);
-	//    printf("; ");
-	//    printf(ltrBrk);
-	//    printf("; ");
-	//    printf(AvgLtrBrk);
-	//    printf("; ");
-	//    printf(wordBrk);
-	//    printf("; ");
-	//    printf(lastWrdVal);
-	//    printf("; ");
-	//    printf(NuWrd);
-	//    printf("; ");
-	//     USBprintIntln(DeCodeVal);
+	
 	if (NuWrd)
 		NuWrdflg = true;
 }

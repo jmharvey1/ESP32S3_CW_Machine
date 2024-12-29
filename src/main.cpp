@@ -75,6 +75,7 @@ esp_event_loop_args_t event_task_args = {
 /*20241221 AdvParser.cpp - revised quick method for finding letter break value */
 /*20241226 AdvParser.cpp - more refinements to letter break & word break code*/
 /*20241229 More tweaks AdvParser.cpp & added clear RX text button to main screen */
+/*20241229 DcodeCW.cpp - revised approach to setting word break wait interval via the WrdBrkFtcr*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
