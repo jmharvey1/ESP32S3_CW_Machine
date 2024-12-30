@@ -1127,6 +1127,18 @@ void ChkDeadSpace(void)
 	{
 		wordBrk =  (uint16_t)(wrdbrkFtcr* (float)NuVal);
 		if(DbgWrdBrkFtcr) printf("WrdBrkIntrval:%d; wordBrkA: %d; wrdbrkFtcr %5.3f\n", NuVal, (uint16_t)wordBrk, wrdbrkFtcr);
+	}
+	else
+	{
+		if (wpm > 35)
+		{
+			uint16_t NuWrdBkA = (uint16_t)(4.2*(float)avgDeadSpace);
+			uint16_t OldWrdBk = wordBrk/ wrdbrkFtcr;
+			if(NuWrdBkA != OldWrdBk){
+			wordBrk = (unsigned long)( wrdbrkFtcr *((6.0 * ((float)OldWrdBk) + ((float)NuWrdBkA)) / 7.0)); //paddle
+			if(DbgWrdBrkFtcr) printf("wpm > 35 -  wordBrkA: %d; wrdbrkFtcr %5.3f; NuWrdBkA: %d\n", (uint16_t)wordBrk, wrdbrkFtcr, NuWrdBkA);	
+			}
+		}
 	}	
 	// /* 20240324 new approach to setting word break wait interval*/
 	// if(advparser.KeyType == 2) wordBrk = (5 * wordBrk + (8*avgDeadSpace)) / 6; //cootie with short keyup intervals
@@ -1373,7 +1385,7 @@ bool chkChrCmplt(void)
 				{
 					/*Only one letter in this word; */
 					if (LtrHoldr[0] != '-' && LtrHoldr[0] != '.' && LtrHoldr[0] != '?'
-						&& LtrHoldr[0] != 'K' && LtrHoldr[0] != 'R'
+						&& LtrHoldr[0] != 'K' && LtrHoldr[0] != 'R' && LtrHoldr[0] != 'E'
 						&& (LtrHoldr[0] < '0' || LtrHoldr[0] > '9'  ))
 					{
 						oneLtrCntr++;
@@ -2355,7 +2367,7 @@ void dispMsg(char Msgbuf[50])
 				if (curChar != 'T') WrdChrCnt++;
 				/*Auto-word break adjustment test*/
 				//if (LtrPtr > 11 && curChar != 'T')
-				if (WrdChrCnt > 11){/*this word is getting long. Shorten the wordBrk interval a bit*/
+				if (WrdChrCnt > 9){/*this word is getting long. Shorten the wordBrk interval a bit*/
 					wrdbrkFtcr -= 0.05; //-= 0.025
 					if(DbgWrdBrkFtcr) printf("wordBrk-: %d; wrdbrkFtcr: %5.3f; MsgBuf: %s\n", (uint16_t)wordBrk, wrdbrkFtcr, Msgbuf);
 				}
