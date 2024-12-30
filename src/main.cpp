@@ -76,6 +76,7 @@ esp_event_loop_args_t event_task_args = {
 /*20241226 AdvParser.cpp - more refinements to letter break & word break code*/
 /*20241229 More tweaks AdvParser.cpp & added clear RX text button to main screen */
 /*20241229 DcodeCW.cpp - revised approach to setting word break wait interval via the WrdBrkFtcr*/
+/*20241230 LVGLMsgBox.cpp - Added 'F7' shortcut to clear Decoded Text space/area*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -1788,6 +1789,11 @@ void ProcsKeyEntry(uint8_t keyVal)
   else if ((keyVal == 0x9C))
   { // Cntrl+"S"
     setupFlg = !setupFlg;
+    return;
+  }
+  else if ((keyVal == 0x87))
+  { // "F7" - Clear Decode Text Area Space
+    lvglmsgbx.ClrDcdTA();
     return;
   }
   else if ((keyVal == 0x88))

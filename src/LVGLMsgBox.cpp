@@ -16,6 +16,7 @@
 /*20241113 reworked Night mode sig strenght bar color*/
 /*20241115 Added Night mode to saved settings*/
 /*20241124 Modified Night mode checkbox color*/
+/*20241230 Added method ClrDcdTA(void) to support 'clear Decoded Text' space/area*/
 
 #include <stdio.h>
 #include "sdkconfig.h"
@@ -191,7 +192,7 @@ static void ClrBtn_event_handler(lv_event_t *e)
 	{
 	case LV_EVENT_CLICKED:
 	{
-		printf("Main Screen (sc_1) 'Clear Text' button click event\n");
+		// printf("Main Screen (sc_1) 'Clear Text' button click event\n");
 		lv_textarea_set_text(DecdTxtArea, "");
 	}
 	break;
@@ -2827,6 +2828,37 @@ void LVGLMsgBox::ReStrtMainScrn(void)
 	Bld_LVGL_GUI();
 	xSemaphoreGive(lvgl_semaphore);
 	MutexLckId = 0;
+};
+/*Remote entry call to clear/reset decode text area space*/
+void LVGLMsgBox::ClrDcdTA(void)
+{
+	bool tryagn = true;
+	int trycnt = 0;
+	MutexLckId = 20;
+	while (tryagn)
+	{
+		if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
+		{
+			MutexLckId = 14;
+			tryagn = false;
+			report = false;
+			bypassMutex = true;
+			Msg2Actv = true;
+		}
+		else
+		{
+			trycnt++;
+			if (trycnt > 5)
+			{
+				trycnt = 5;
+				report = true;
+				printf("LVGLMsgBox::Exit_Settings timed out; MutexLckId = %d; timerID = %d\n", MutexLckId, timerID);
+			}
+		}
+	}
+	lv_textarea_set_text(DecdTxtArea, "");
+	MutexLckId = 0;
+	xSemaphoreGive(lvgl_semaphore);
 };
 
 void LVGLMsgBox::HiLite_Seltcd_Setting(int paramptr, int oldparamptr)
