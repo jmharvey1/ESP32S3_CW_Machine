@@ -1324,7 +1324,7 @@ void SetLtrBrk(void)
 ////////////////////////////////////////////////////////////////////////
 bool chkChrCmplt(void)
 {
-	//uint8_t DBtrace =0;
+	// uint8_t DBtrace =0;
 	bool done = false;
 	Pstate = 0;
 	unsigned long Now = pdTICKS_TO_MS(xTaskGetTickCount()); //(GetTimr5Cnt()/10);
@@ -1340,7 +1340,7 @@ bool chkChrCmplt(void)
 		ltrCmplt = -2500;
 	if ((Now >= letterBrk) && letterBrk != 0)
 	{
-		ltrCmplt = -2800; //doing this for 'plot' state trace
+		ltrCmplt = -2800; // doing this for 'plot' state trace
 
 		if (DeCodeVal > 1)
 		{
@@ -1359,13 +1359,11 @@ bool chkChrCmplt(void)
 	float noKeySig = (float)(Now - noSigStrt);
 	/*20240226 added or clause to prevent long run on text strings which often end up scrambled by the post parser*/
 	/*20240322 Also in long runs, look for embedded 'DE' signifing call sign declaration & if found, force a word break */
-	//if (((noKeySig >= 0.75 * ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0))||(LtrPtr > 18 ||((LtrPtr >= 6) && (LtrHoldr[LtrPtr-2] == 'D') && (LtrHoldr[LtrPtr-1] == 'E'))))
-	if (((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0))
-	||(KeyDwnPtr >= (IntrvlBufSize-5)) 
-	||((LtrPtr >= 6) && (LtrHoldr[LtrPtr-2] == 'D') && (LtrHoldr[LtrPtr-1] == 'E'))
-	||((LtrPtr >= 12)))
+	// if (((noKeySig >= 0.75 * ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0))||(LtrPtr > 18 ||((LtrPtr >= 6) && (LtrHoldr[LtrPtr-2] == 'D') && (LtrHoldr[LtrPtr-1] == 'E'))))
+	if (((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0)) || (KeyDwnPtr >= (IntrvlBufSize - 5)) || ((LtrPtr >= 6) && (LtrHoldr[LtrPtr - 2] == 'D') && (LtrHoldr[LtrPtr - 1] == 'E')) || ((LtrPtr >= 12)))
 	{
-		if(KeyDwnPtr >= (IntrvlBufSize-5)) printf("\n!!OVERFLOW!!\n");
+		if (KeyDwnPtr >= (IntrvlBufSize - 5))
+			printf("\n!!OVERFLOW!!\n");
 		if (KeyUpPtr < IntrvlBufSize && KeyDwnPtr >= 1)
 		{ // we have both a usable time & place to store it; and at least 1 keydwn interval has been captured
 			KeyUpIntrvls[KeyUpPtr] = (uint16_t)noKeySig;
@@ -1384,16 +1382,15 @@ bool chkChrCmplt(void)
 				if (LtrPtr == 1)
 				{
 					/*Only one letter in this word; */
-					if (LtrHoldr[0] != '-' && LtrHoldr[0] != '.' && LtrHoldr[0] != '?'
-						&& LtrHoldr[0] != 'K' && LtrHoldr[0] != 'R' && LtrHoldr[0] != 'E'
-						&& (LtrHoldr[0] < '0' || LtrHoldr[0] > '9'  ))
+					if (LtrHoldr[0] != '-' && LtrHoldr[0] != '.' && LtrHoldr[0] != '?' && LtrHoldr[0] != 'K' && LtrHoldr[0] != 'R' && LtrHoldr[0] != 'E' && (LtrHoldr[0] < '0' || LtrHoldr[0] > '9'))
 					{
 						oneLtrCntr++;
 						if (oneLtrCntr >= 2)
-						{ // had 2 entries in a row that were just one character in length; lengthen the wordbrk interval
-							wrdbrkFtcr += 0.15;// = 2.0
+						{						// had 2 entries in a row that were just one character in length; lengthen the wordbrk interval
+							wrdbrkFtcr += 0.15; // = 2.0
 							// LtrHoldr[LtrPtr] = curChar
-							if(DbgWrdBrkFtcr) printf("wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
+							if (DbgWrdBrkFtcr)
+								printf("wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
 						}
 					}
 				}
@@ -1402,7 +1399,7 @@ bool chkChrCmplt(void)
 				/*1st refresh/sync 'advparser.Dbug' */
 				if (DeBug)
 				{
-					//printf("advparser.Dbug = true\n");
+					// printf("advparser.Dbug = true\n");
 					advparser.Dbug = true;
 				}
 				// else
@@ -1432,7 +1429,7 @@ bool chkChrCmplt(void)
 				{
 					advparser.LtrHoldr[i] = LtrHoldr[i];
 				}
-				//printf("chkChrCmplt Started AdvParser Task\n");
+				// printf("chkChrCmplt Started AdvParser Task\n");
 				/*now we can start/resart the post parsing process */
 				vTaskResume(AdvParserTaskHandle);
 				LckHiSpd = false;
@@ -1440,11 +1437,12 @@ bool chkChrCmplt(void)
 			else if (wpm >= 36)
 			{
 				/*20241209 added the following 2 lines*/
-				if(!LckHiSpd){
-				ModeCnt = 0;
-				SetModFlgs(ModeCnt); //Force paddle/keyboard // DcodeCW.cpp routine; Update DcodeCW.cpp timing settings & ultimately update display status line
-    			CurMdStng(ModeCnt);
-				LckHiSpd = true;
+				if (!LckHiSpd)
+				{
+					ModeCnt = 0;
+					SetModFlgs(ModeCnt); // Force paddle/keyboard // DcodeCW.cpp routine; Update DcodeCW.cpp timing settings & ultimately update display status line
+					CurMdStng(ModeCnt);
+					LckHiSpd = true;
 				}
 				if (LtrPtr == 1)
 				{
@@ -1453,12 +1451,20 @@ bool chkChrCmplt(void)
 					if (oneLtrCntr >= 2)
 					{ // had 2 entries in a row that were just one character in lenght; shorten the wordbrk interval
 						wrdbrkFtcr += 0.2;
-						if(DbgWrdBrkFtcr) printf("wordBrk+: %d; wrdbrkFtcr: %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr);
+						if (DbgWrdBrkFtcr)
+							printf("wordBrk+: %d; wrdbrkFtcr: %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr);
 					}
 				}
 				else
 					oneLtrCntr = 0;
 			}
+			// else if ((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && LtrPtr == 1)
+			// {
+			// 	if (advparser.Dbug)
+			// 	{
+			// 		printf("--------\n  %s\n--------\n\n",LtrHoldr);
+			// 	}
+			// }
 		}
 
 		for (int i = 0; i < LtrPtr; i++)
@@ -1543,7 +1549,7 @@ bool chkChrCmplt(void)
 					++i;			 // move buffer pointer to 1st available empty array position
 				CodeValBuf[i] = 255; // insert space in text to create a word break
 				NuWrd = true;
-				//if(KeyUpPtr == 2) printf("XXXXXX%d\n", DBtrace);
+				// if(KeyUpPtr == 2) printf("XXXXXX%d\n", DBtrace);
 			}
 			TDBptr = Bitpos;
 			Bitpos = 0;

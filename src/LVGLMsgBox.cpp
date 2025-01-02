@@ -2856,7 +2856,9 @@ void LVGLMsgBox::ClrDcdTA(void)
 			}
 		}
 	}
-	lv_textarea_set_text(DecdTxtArea, "");
+	/*insert line space in decoded text area*/
+	Update_textarea(DecdTxtArea, '\n');//lv_textarea_set_text(DecdTxtArea, "");
+	Update_textarea(DecdTxtArea, '\n');//lv_textarea_set_text(DecdTxtArea, "");
 	MutexLckId = 0;
 	xSemaphoreGive(lvgl_semaphore);
 };

@@ -77,6 +77,7 @@ esp_event_loop_args_t event_task_args = {
 /*20241229 More tweaks AdvParser.cpp & added clear RX text button to main screen */
 /*20241229 DcodeCW.cpp - revised approach to setting word break wait interval via the WrdBrkFtcr*/
 /*20241230 LVGLMsgBox.cpp - Added 'F7' shortcut to clear Decoded Text space/area*/
+/*20250101 AdvParser.cpp - more refinements to letter break, splitPt, & word break code*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
