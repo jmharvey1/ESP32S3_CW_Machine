@@ -51,6 +51,7 @@
  * 20241221 new quick method for finding letter break value
  * 20241226 more refinements to letter break & word break code
  * 20250101 more refinements to letter break, splitPt, & word break code
+ * 20250108 more refinements to letter break, & DitIntrvlVal code
  * */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -88,11 +89,14 @@ AdvParser::AdvParser(void) // TFT_eSPI *tft_ptr, char *StrdTxt
 void AdvParser::CalAvgDeadIntvrl(void)
 {
     if(this->AllDah) return;    
-    int oldval = this->KeyUpIntrvls[0];
+    int oldval = 0;
     int EvntCnt = 0;
     uint16_t RuningTotal = 0;
     bool KpGg = true;
-    while (EvntCnt <= ((TmpUpIntrvlsPtr / 2) + 1) && KpGg)
+    int stop = (TmpUpIntrvlsPtr / 2);
+    if(stop == 0 ) stop = 1;
+    //printf(" oldval: %d; TmpUpIntrvlsPtr: %d; stop:%d \n", (uint16_t)oldval, TmpUpIntrvlsPtr, stop);
+    while ((EvntCnt < stop) && KpGg)
     {
         oldval = this->KeyUpIntrvls[EvntCnt];
         // printf(" oldval: %d\n",(uint16_t)oldval);
@@ -106,7 +110,7 @@ void AdvParser::CalAvgDeadIntvrl(void)
     if (EvntCnt > 0)
     {
         this->AvgSmblDedSpc = (uint16_t)RuningTotal / EvntCnt;
-        // printf(" RuningTotal %d; EvntCnt %d; AvgSmblDedSpc: %d\n",RuningTotal, EvntCnt, (uint16_t)this->AvgSmblDedSpc);
+        //printf(" RuningTotal %d; EvntCnt %d; AvgSmblDedSpc: %d\n",RuningTotal, EvntCnt, (uint16_t)this->AvgSmblDedSpc);
     }
 };
 /*Main entry point to post process the key time intervals used to create the current word*/
@@ -119,9 +123,7 @@ void AdvParser::EvalTimeData(void)
     this->AllDit = false;
     bool DoGlitchChk = false;
     bool GLitchFlg = false;
-    // bool prntOvrRide = false;
-    // bool oldDbugState = false;
-    // Dbug = false; //enable for special testing
+    if (Dbug) printf("EvalTimeData() \nKeyDwnPtr:%d; KeyUpPtr:%d\n", KeyDwnPtr, KeyUpPtr);
     if (this->LstGltchEvnt != 0)
     {
         unsigned long LstGltchIntrvl = pdTICKS_TO_MS(xTaskGetTickCount()) - this->LstGltchEvnt;
@@ -294,13 +296,13 @@ void AdvParser::EvalTimeData(void)
     if(UprHlf <= 5) UprHlf = 0;
     if(UprHlf >= 6) UprHlf--;
     if(UprHlf >= 6) UprHlf--;  
-    bool check = true;
+    //bool check = true;
     if (Dbug) printf("*** Letter Break Start ***\nKeyUpPtr:%d; UprHlf = %d\n", KeyUpPtr, UprHlf);
     int bstltrbrkptr =0;
     float MaxLtrBrkSlope = 0;
     float CurLtrBrkSlope = 0;
-    int stop = KeyUpPtr-1;
-    if(KeyUpPtr>6) stop = KeyUpPtr-2; // if there are more than 6 keyup events the last one is a word break
+    int stop = KeyUpPtr;//KeyUpPtr-1;
+    //if(KeyUpPtr>6) stop = KeyUpPtr-2; // if there are more than 6 keyup events the last one is a word break
     for (int i = 1; i < KeyUpPtr; i++)
     {
          CurLtrBrkSlope = ((float)((float)this->KeyUpIntrvls[i+1]/(float)this->KeyUpIntrvls[i]));
@@ -310,7 +312,8 @@ void AdvParser::EvalTimeData(void)
         //     check = false;
         //     if (Dbug) printf("i:%d; %d/%d = %5.1f STOP\n", i, this->KeyUpIntrvls[i+1], this->KeyUpIntrvls[i], CurLtrBrkSlope );
         // }
-        if(check && i>=UprHlf && i< stop)
+        //if(check && i>=UprHlf && i< stop)
+        if(i>=UprHlf && i< stop)
         {
             if (Dbug) printf("i:%d; %d/%d = %5.1f\n", i, this->KeyUpIntrvls[i+1], this->KeyUpIntrvls[i], CurLtrBrkSlope);
             if(CurLtrBrkSlope>MaxLtrBrkSlope)
@@ -318,6 +321,7 @@ void AdvParser::EvalTimeData(void)
                 MaxLtrBrkSlope = CurLtrBrkSlope;
                 bstltrbrkptr =i;
             }
+            if(MaxLtrBrkSlope >= 1.6 && bstltrbrkptr >= 2) stop = i;
         }
         bool match = false;
         if ((float)this->KeyUpIntrvls[i] <= (4 + (1.2 * KeyUpBuckts[KeyUpBucktPtr].Intrvl)))
@@ -349,10 +353,15 @@ void AdvParser::EvalTimeData(void)
     {
         char method = ' ';
         int strt = 0;
-        if(check) LtrBrkPtr = bstltrbrkptr;
-        int launchStrt = LtrBrkPtr; //0;
-        this->LtrBrkVal = this->KeyUpIntrvls[LtrBrkPtr]+ (uint16_t)((float)(this->KeyUpIntrvls[LtrBrkPtr+1]-this->KeyUpIntrvls[LtrBrkPtr])/2.0);
-        method = 'Q';
+        // if(check)
+        // {
+            LtrBrkPtr = bstltrbrkptr;
+            method = 'Q';
+        // }
+        // else method = '?';    
+        //int launchStrt = LtrBrkPtr; //0;
+        //this->LtrBrkVal = this->KeyUpIntrvls[LtrBrkPtr]+ (uint16_t)((float)(this->KeyUpIntrvls[LtrBrkPtr+1]-this->KeyUpIntrvls[LtrBrkPtr])/2.0);
+        this->LtrBrkVal = this->KeyUpIntrvls[LtrBrkPtr+1];
         // if (KeyUpBuckts[this->MaxKeyUpBckt].Cnt > 2)
         // { /*20241221 new quick method for finding letter break value*/
         //     if (this->MaxKeyUpBckt == KeyUpBucktPtr)
@@ -822,23 +831,6 @@ void AdvParser::EvalTimeData(void)
     // }
     /*now collect data needed to derive average, non-letter break, 'Dit', keyup time interval(AvgSmblDedSpc)*/
     if(GLitchFlg) CalAvgDeadIntvrl();
-    // int oldval = this->KeyUpIntrvls[0];
-    // EvntCnt = 0;
-    // bool KpGg = true;
-    // while(EvntCnt <= ((TmpUpIntrvlsPtr/2)+1) && KpGg)
-    // {
-    //     oldval = this->KeyUpIntrvls[EvntCnt];
-    //     //printf(" oldval: %d\n",(uint16_t)oldval);
-    //     RuningTotal += oldval;
-    //     EvntCnt++;
-    //     if((this->KeyUpIntrvls[EvntCnt] > 1.7*oldval)) KpGg = false;
-    //     if(!KpGg && (EvntCnt < TmpUpIntrvlsPtr/2) && (this->KeyUpIntrvls[EvntCnt]< this->DitDahSplitVal)) KpGg = true;
-    // } 
-    // if (EvntCnt > 0)
-    // {
-    //     this->AvgSmblDedSpc = (uint16_t)RuningTotal / EvntCnt;
-    //     //printf(" RuningTotal %d; EvntCnt %d; AvgSmblDedSpc: %d\n",RuningTotal, EvntCnt, (uint16_t)this->AvgSmblDedSpc);
-    // }
     /*now collect data needed to derive average, non-letter break, 'dah', keyup time interval*/
     int DahUpRuningTotal = 0;
     int DahUpCnt =0;
@@ -868,7 +860,7 @@ void AdvParser::EvalTimeData(void)
     }
     uint16_t OldIntvrlx2r5 = UnitIntvrlx2r5;
     UnitIntvrlx2r5 = (uint16_t)(2.4 * ((AvgSmblDedSpc + DitIntrvlVal) / 2));
-    //printf("UnitIntvrlx2r5 =%d; AvgSmblDedSpc =%d; DitIntrvlVal =%d\n",UnitIntvrlx2r5, (uint16_t)AvgSmblDedSpc, DitIntrvlVal);
+    //printf("UnitIntvrlx2r5: %d; AvgSmblDedSpc: %d; DitIntrvlVal: %d\n",UnitIntvrlx2r5, (uint16_t)AvgSmblDedSpc, DitIntrvlVal);
     if (!this->AllDit)
     {
         //printf("\n ^^^^^^UnitIntvrlx2r5 = %d\n", UnitIntvrlx2r5);
@@ -1126,7 +1118,7 @@ void AdvParser::EvalTimeData(void)
         if((this->LtrBrkVal > 1.7*this->AvgSmblDedSpc)
             && (this->AvgSmblDedSpc> 30))
         {
-            this->LtrBrkVal = 1.7*this->AvgSmblDedSpc;
+            this->LtrBrkVal = (uint16_t)(0.921*(float)(this->AvgSmblDedSpc+ this->DitIntrvlVal));
             if(DeBug) printf("\nRecalced LtrBrkVal = %d\n", this->LtrBrkVal);
         }
         break;
@@ -1440,7 +1432,8 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         float MaxSpltPtSlope = 0;
         float CurSpltPtSlope = 0;
         int start = KeyDwnPtr / 4;
-        for (int i = start; i < KeyDwnPtr - 2; i++) // set/limit the test to ignore the last/longest keydwn in the series, because it could/likely be a stretched dah;
+        int stop = KeyDwnPtr;
+        for (int i = start; i < stop; i++) // set/limit the test to ignore the last/longest keydwn in the series, because it could/likely be a stretched dah;
         {
             CurSpltPtSlope = ((float)((float)this->KeyDwnIntrvls[i + 1] / (float)this->KeyDwnIntrvls[i]));
             if (Dbug)
@@ -1450,16 +1443,34 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                 MaxSpltPtSlope = CurSpltPtSlope;
                 bstSpltPtptr = i;
             }
+            if (MaxSpltPtSlope > 1.5) stop =  KeyDwnPtr- 2;// we found an apparent step change, So no need look at the last 2 intervals
         }
         this->NuSpltVal = this->KeyDwnIntrvls[bstSpltPtptr] + ((this->KeyDwnIntrvls[bstSpltPtptr + 1] - this->KeyDwnIntrvls[bstSpltPtptr]) / 2);
         this->DitDahSplitVal = this->NuSpltVal;
         this->Bg1SplitPt = 1.1 * this->DitDahSplitVal;
-        /*20240609 Calc avg dah interval for this data set*/
+        /*20240609 Calc avg dit & dah intervals for this data set*/
         DahCnt = 0;
         int RuningTotal = 0;
         for (i = 0; i <= n; i++)
         {
+            /*Dit averaging*/
+            if (arr[i].Intrvl <= this->DitDahSplitVal)
+            {
+                // printf("Update/recalculate the running average dit interval 01\n");
+                /*20240228 new method*/
+                int LpCntr = 0;
+                while (LpCntr < arr[i].Cnt)
+                {
+                    this->DitIntrvlRingBuf[DitIntrvlPtr] = arr[i].Intrvl;
+                    LpCntr++;
+                    DitIntrvlPtr++;
+                    if (DitIntrvlPtr == 6)
+                        DitIntrvlPtr = 0;
+                    // printf("%d. while (LpCntr < arr[%d].Cnt)\n", LpCntr, i);
+                }
+            }
 
+            /*Dah average*/
             if (arr[i].Intrvl > this->DitDahSplitVal)
             {
                 DahCnt += arr[i].Cnt;
@@ -1470,8 +1481,16 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         {
             this->AvgDahVal = (uint16_t)RuningTotal / DahCnt;
         }
+        /*now recalculate the new average dit interval (based on the last 6 dits)*/
+        this->DitIntrvlVal = 0; // reset DitIntrvlVal
+        for (int lptr = 0; lptr < 6; lptr++)
+        {
+            this->DitIntrvlVal += this->DitIntrvlRingBuf[lptr];
+        }
+        this->DitIntrvlVal /= 6;
+        //printf("this->DitIntrvlVal/6 = %d\n", this->DitIntrvlVal);
         if (Dbug)
-            printf("EXIT8; bstSpltPtptr=%d; this->NuSpltVal: %d; this->KeyDwnIntrvls[bstSpltPtptr]:%d\n", bstSpltPtptr, this->NuSpltVal, this->KeyDwnIntrvls[bstSpltPtptr]);
+            printf("EXIT8; bstSpltPtptr=%d; this->NuSpltVal: %d; this->KeyDwnIntrvls[bstSpltPtptr]:%d; this->DitIntrvlVal:%d\n", bstSpltPtptr, this->NuSpltVal, this->KeyDwnIntrvls[bstSpltPtptr], this->DitIntrvlVal);
         AllDah = AllDit = false;
         return;
     }
@@ -1585,8 +1604,6 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                         int LpCntr = 0;
                         while (LpCntr < arr[i].Cnt)
                         {
-                            // this->DitIntrvlVal = (uint16_t)((5 * (float)this->DitIntrvlVal) + (float)arr[i].Intrvl) / 6.0;
-                            // DitIntrvlPtr = 0;
                             this->DitIntrvlRingBuf[DitIntrvlPtr] = arr[i].Intrvl;
                             LpCntr++;
                             DitIntrvlPtr++;
@@ -1600,6 +1617,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                             this->DitIntrvlVal += this->DitIntrvlRingBuf[lptr];
                         }
                         this->DitIntrvlVal /= 6;
+                        //printf("this->DitIntrvlVal/6 = %d\n", this->DitIntrvlVal);
                     }
                     
                     if (curRatio > 1.5 && (runngCnt >= HalfCnt) && i > 0)
@@ -2381,7 +2399,7 @@ bool AdvParser::SloppyBgRules(int &n)
         }
         if ((TmpUpIntrvls[n] < this->UnitIntvrlx2r5) && (n < (this->KeyDwnPtr - 1)))
         { /*we had a run of dits, But last dit keyup event doesn't seem to signify a letter break, and there are more events to test*/
-            
+            if (this->Dbug) printf("\n%2d. DWn: %3d\tUp: %3d\t", n, TmpDwnIntrvls[n], TmpUpIntrvls[n]);
             ExitPath[n] = 33;
             BrkFlg = '~';
             return false;
@@ -2629,10 +2647,9 @@ bool AdvParser::CootyRules(int &n)
     return false;
 };
 ////////////////////////////////////////////////////////
+ /*Paddle or Keyboard rules*/
 bool AdvParser::PadlRules(int &n)
 {
-    /*Paddle or Keyboard rules*/
-    
     //if (n > 0 && (TmpUpIntrvls[n] > this->UnitIntvrlx2r5))
     if (n > 0 && (TmpUpIntrvls[n] >= this->LtrBrkVal))
     {

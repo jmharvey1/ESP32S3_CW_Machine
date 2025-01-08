@@ -13,6 +13,7 @@
 /*20240114 added small differential term to noisLvl to improve noise tracking with widely spaced characters
 			Added timing link to AdvPaser to imporve FltrPrd timing (glitch protection/rejection)*/
 /*20241221 new dynamic adjustment/correction to squelch/tonethreshold during keydown interval*/
+/*20250107 More tweaks to squelch/curNois/noisLvl to make it more responsive to changing signal conditions*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -324,10 +325,14 @@ void ComputeMags(unsigned long now){
 
 	}
 	float curNois = (SigPk - NoiseFlr);
-	//if(curNois>6000) curNois = 6000;//if(curNois>8000) curNois = 8000;
-	//printf("%d\n", (int)curNois);
-	curNois *= 2.2;//curNois *= 4.2;//curNois *= 2.2;//curNois *= 1.8;
-	noisLvl = ((35*noisLvl) + curNois)/36;
+	//if(PlotFlg) printf("%d", (int)curNois);
+	/*20250107 More tweaks to squelch/curNois/noisLvl to make it more responsive to changing signal conditions & Conmercial RX AGC circuits */
+	/*under quiet condx, curNois = 200 to 450; sudden strong tone input, curNois = 3000 to 7000 */
+	//if(curNois>2000) curNois = 2000;
+	if(curNois>30000) curNois = 30000; //cap sudden keydown signal to noise to 30K
+	curNois *= 2.0;//1.8;//curNois *= 2.2;
+	//noisLvl = ((8*noisLvl) + curNois)/9;
+	noisLvl = ((4*noisLvl) + curNois)/5;
 	/*Now look to see if the noise is increasing
 	And if it is, Add a differential term/componet to the noisLvl*/
 	int LstNLvlIndx = NoisPtr-1;
@@ -515,28 +520,60 @@ void Chk4KeyDwn(float NowLvl)
 		NoisBuf[OldestSmpl] = noisLvl; 
 
 	} else KeyDwnCnt = 0;
-	/*20241221 new dynamic adjustment/correction to squelch/tonethreshold during keydown interval*/
-	if(!state)
+	
+	/*now if this last sample represents a keydown state(state ==0), 
+	Lets set the CurNoise to be mid way between the lowest curlevel and the NFlrBase value*/
+	if(!state){
+		float tmpcurnoise;
+		if(!SlwFlg)
+		{
+			tmpcurnoise = ((CurLvl-NFlrBase)/2) + NFlrBase;
+			//printf("tmpcurnoise = ((CurLvl-NFlrBase)/2) + NFlrBase\n");
+		} 
+		else
+		{
+			//tmpcurnoise = 1.0*CurNoise;
+			tmpcurnoise = ((CurLvl-NFlrBase)/5) + NFlrBase;
+			//printf("tmpcurnoise = ((CurLvl-NFlrBase)/5) + NFlrBase\n");
+		}
+		if((tmpcurnoise < CurNoise)&& (tmpcurnoise > 3*NFlrBase) )
+		{
+			CurNoise = tmpcurnoise;
+			//printf("Apply Correction\n");
+		}
+		// else
+		// {
+		// 	printf("Skip Correction\n");
+		// }
+		/*20241221 new dynamic adjustment/correction to squelch/tonethreshold during keydown interval*/
+		if (OldNowLvl > 0)
+		{
+			SigSlope = ((NowLvl-OldNowLvl)+OldNowLvl) / OldNowLvl;
+			if (NowLvl < OldNowLvl) SigSlope *= -1.5;
+			if(SigSlope <3 && SigSlope  > -6){
+				if(SigSlope>0) CurNoise += (SigSlope) * (0.01* CurNoise) ;
+				else CurNoise += (SigSlope) * (0.04* CurNoise) ;
+				//printf("SigSlope %5.2f\n", SigSlope);
+			}	
+		}if(!state)
 	{ 
 		if (OldNowLvl > 0)
 		{
 			SigSlope = ((NowLvl-OldNowLvl)+OldNowLvl) / OldNowLvl;
 			if (NowLvl < OldNowLvl) SigSlope *= -1.5;
-			if(SigSlope <3 && SigSlope  > -3){
-				CurNoise += (SigSlope) * (0.04* CurNoise) ;
+			if(SigSlope <3 && SigSlope  > -6){
+				if(SigSlope>0) CurNoise += (SigSlope) * (0.01* CurNoise) ;
+				else CurNoise += (SigSlope) * (0.04* CurNoise) ;
 				//printf("SigSlope %5.2f\n", SigSlope);
 			}	
 		}
 		OldNowLvl = NowLvl;
 	}
-	/*now if this last sample represents a keydown state(state ==0), 
-	Lets set the CurNoise to be mid way between the lowest curlevel and the NFlrBase value*/
-	if(!state){
-		float tmpcurnoise;
-		if(!SlwFlg) tmpcurnoise = ((CurLvl-NFlrBase)/2) + NFlrBase;
-		else tmpcurnoise = 1.0*CurNoise;
-		if((tmpcurnoise < CurNoise)&& (tmpcurnoise > 3*NFlrBase) ) CurNoise = tmpcurnoise; 
+
+		OldNowLvl = NowLvl;  
 	}
+	
+	
 	/* new auto-adjusting glitch detection; based on average dit length */
 	unsigned long Now2 = TmpEvntTime; //set Now2 to the current sampleset's timestamp
 	/*Added to support ESP32 CW decoding process*/
