@@ -24,7 +24,8 @@
  * 20240124 added requirement that Key up & down arrays match in length before attempting to do a post reparse of the las word captured
  * 20240420 added auto word break timing 'wrdbrkFtcr' ; added auto word break timing 'wrdbrkFtcr' (AdvParser/DcodeCW)
  * 20240522 added auto glitch detection to support post parser (AdvParser.cpp)
- * 20241229 revised approach to setting word break wait interval via the WrdBrkFtcr 
+ * 20241229 revised approach to setting word break wait interval via the WrdBrkFtcr
+ * 20250110 Changed method of passing key state from Goertzel to CW Decoder (DcodeCW.cpp), Now using a task & Queues 
  *   */
  
 
@@ -110,8 +111,8 @@ char PrntBuf[150];
 /*the following vairables were created for the AutoMode detector*/
 uint16_t KeyUpIntrvls[IntrvlBufSize];
 uint16_t KeyDwnIntrvls[IntrvlBufSize];
-int KeyUpPtr = 0;
-int KeyDwnPtr = 0;
+int DeCd_KeyUpPtr = 0;
+int DeCd_KeyDwnPtr = 0;
 
 // DeBug Character buffer to compare original Decode Text Vs AdvParser text
 char LtrHoldr[30];
@@ -168,6 +169,8 @@ volatile unsigned long STart = 0;
 volatile unsigned long AltSTart = 0;
 volatile unsigned long start1 = 0;	// added in an attempt to recover from a failed/lost time stamp
 volatile unsigned long MySTart = 0; // only used for testing
+unsigned long KeyUPStart = 0;
+unsigned long OldKeyUPStart = 0;
 // volatile unsigned long EvntStart = 0;
 volatile unsigned long lastDit1; // added for testing
 volatile unsigned long Oldstart = 0;
@@ -254,7 +257,55 @@ void StartDecoder(LVGLMsgBox *pttftmsgbx)
 	
 } /* END SetUp Code */
 /////////////////////////////////////////
-
+void KeyEvntTask(void *param)
+{
+	unsigned long EvntTime;
+	unsigned long OldEvntTime = 0;
+	while (1)
+	{
+		bool lpagn = true;
+		
+		uint8_t Kstate;
+		uint16_t interval = 0;
+		while (lpagn) //(TickType_t)10
+		{
+			if (xQueueReceive(KeyEvnt_que, (void *)&EvntTime, pdMS_TO_TICKS(10)) == pdTRUE)
+			{
+				if (xQueueReceive(KeyState_que, (void *)&Kstate, pdMS_TO_TICKS(10)) == pdTRUE)
+				{
+					//printf("%d ", Kstate);
+					interval = (uint16_t)(EvntTime - OldEvntTime );
+					OldEvntTime = EvntTime;
+					if (interval < 1000)
+					{
+						if (Kstate)
+						{
+							KeyDwnIntrvls[DeCd_KeyDwnPtr] = interval;
+							//printf("%d+ %d; ", DeCd_KeyDwnPtr, interval);
+							DeCd_KeyDwnPtr++;
+						}
+						else if(DeCd_KeyDwnPtr >0)
+						{
+							KeyUpIntrvls[DeCd_KeyUpPtr] = interval;
+							//printf("%d- %d\n", DeCd_KeyUpPtr, interval);
+							DeCd_KeyUpPtr++;
+						}
+					}
+					KeyEvntSR(Kstate, EvntTime);
+				}
+				else
+				{
+					lpagn = false;
+				}
+			}
+			else
+			{
+				lpagn = false;
+			}
+		}
+		vTaskSuspend(KeyEvntTaskTaskHandle);
+	}
+}
 /* In ESP32 No Longer a Stand alone Interurpt; but now called from within Goertzel.cpp*/
 void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 { // keydown Kstate =0; Keyup Kstate = 1;
@@ -302,13 +353,19 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 			deadSpace = (STart - noSigStrt) + 4; //+4;//jmh 20230706 added this corection value for ESP32
 			SpaceStk[Bitpos] = deadSpace;
 			/* usable event; store KeyUp time to AutoMode detector Up time buffer*/
-			if(KeyUpPtr < IntrvlBufSize && KeyDwnPtr >= 1){ //we have both a usable time & place to store it; and at least 1 keydwn interval has been captured
-				KeyUpIntrvls[KeyUpPtr] = (uint16_t)deadSpace;
-				KeyUpPtr++;
+			if(DeCd_KeyUpPtr < IntrvlBufSize && DeCd_KeyDwnPtr >= 1)
+			{ //we have both a usable time & place to store it; and at least 1 keydwn interval has been captured
+				//KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)deadSpace; //20250110 commented out
+				//DeCd_KeyUpPtr++; //20250110 commented out
 				/*20240129 Added this check to catch out of sync keyup vs keydown interval history (arrays)*/
-				if(KeyDwnPtr != KeyUpPtr){
-					KeyUpPtr--;
-					//printf("ERROR KeyDwnPtr %d\n", KeyDwnPtr);
+				//if(DeCd_KeyDwnPtr > DeCd_KeyUpPtr && DeCd_KeyDwnPtr == 2)
+				if(DeCd_KeyDwnPtr != DeCd_KeyUpPtr)
+				{
+					//KeyDwnIntrvls[0] = KeyDwnIntrvls[1];
+					//DeCd_KeyDwnPtr--;
+					//printf("!!ERROR!!; DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d; Bitpos:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr, Bitpos);
+					//KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)deadSpace; //20250110 commented out
+					//DeCd_KeyUpPtr++; //20250110 commented out
 				}
 			}
 			if (Bitpos <= 14)
@@ -471,6 +528,8 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 		else if (Kstate == HIGH && XspctHi)
 		{ // "Key Up" event/evaluations;
 			int prob = 0;
+			OldKeyUPStart = KeyUPStart;
+			KeyUPStart = EvntTime;
 			if(ltrCmplt == -3500) SetLtrBrk(); //20231231 added to ensure that letter break timing is engaged
 			if (DeCodeVal == 0)
 			{
@@ -525,7 +584,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 					return;
 				}
 				AltSTart = pdTICKS_TO_MS(xTaskGetTickCount()); // GetTimr5Cnt()/10;//use this as a backup start value when STrat = 0 on a keyup event
-				STart = 0;
+				// STart = 0;//20250110 commented out in an attempt to recover missed Keyup events
 
 				if (glitchCnt == 2)
 				{
@@ -700,6 +759,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 
 			} // End if(DeCodeVal!= 0)
 		}
+		else printf("Kstate ERROR\n");
 		// end of key interrupt processing;
 		// Now, if we are here; the interrupt was a "Key-Up" event. Now its time to decide whether this last "Key-Down" period represents a "dit", a "dah"
 		// , or just garbage.
@@ -743,9 +803,18 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 			return;
 		}
 		/* usable event; store Keydown time to AutoMode detector dwn time buffer*/
-		if(KeyDwnPtr < IntrvlBufSize){ //we have both a usable time & place to store it
-			KeyDwnIntrvls[KeyDwnPtr] = (uint16_t)period;
-			KeyDwnPtr++;
+		if(DeCd_KeyDwnPtr < IntrvlBufSize){ //we have both a usable time & place to store it
+			// KeyDwnIntrvls[DeCd_KeyDwnPtr] = (uint16_t)period; //20250110 commented out
+			if(DeCd_KeyDwnPtr != DeCd_KeyUpPtr)
+			{
+				deadSpace = ((EvntTime - OldKeyUPStart));
+				deadSpace = 25;
+				//deadSpace = ((EvntTime - Oldstart)) - period;
+				//printf("!DeCd_KeyDwnPtr=%d; DeCd_KeyUpPtr=%d; deadSpace=%d; OldKeyUPStart=%d; EvntTime=%d; period;%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr, (uint16_t)deadSpace, (uint16_t)OldKeyUPStart, (uint16_t)EvntTime, (uint16_t)period);
+				//KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)deadSpace; //20250110 commented out
+				//DeCd_KeyUpPtr++; //20250110 commented out
+			}
+			//DeCd_KeyDwnPtr++; //20250110 commented out
 		}
 
 		/**** if here, its a usable event; Now, decide if its a "Dit" or "Dah"  ****/
@@ -1360,23 +1429,26 @@ bool chkChrCmplt(void)
 	/*20240226 added or clause to prevent long run on text strings which often end up scrambled by the post parser*/
 	/*20240322 Also in long runs, look for embedded 'DE' signifing call sign declaration & if found, force a word break */
 	// if (((noKeySig >= 0.75 * ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0))||(LtrPtr > 18 ||((LtrPtr >= 6) && (LtrHoldr[LtrPtr-2] == 'D') && (LtrHoldr[LtrPtr-1] == 'E'))))
-	if (((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0)) || (KeyDwnPtr >= (IntrvlBufSize - 5)) || ((LtrPtr >= 6) && (LtrHoldr[LtrPtr - 2] == 'D') && (LtrHoldr[LtrPtr - 1] == 'E')) || ((LtrPtr >= 12)))
+	if (((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0)) || (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5)) || ((LtrPtr >= 6) && (LtrHoldr[LtrPtr - 2] == 'D') && (LtrHoldr[LtrPtr - 1] == 'E')) || ((LtrPtr >= 12)))
 	{
-		if (KeyDwnPtr >= (IntrvlBufSize - 5))
+		if (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5))
 			printf("\n!!OVERFLOW!!\n");
-		if (KeyUpPtr < IntrvlBufSize && KeyDwnPtr >= 1)
+		//if (DeCd_KeyUpPtr < IntrvlBufSize && DeCd_KeyDwnPtr >= 1)
+		if (DeCd_KeyDwnPtr != 0)
 		{ // we have both a usable time & place to store it; and at least 1 keydwn interval has been captured
-			KeyUpIntrvls[KeyUpPtr] = (uint16_t)noKeySig;
-			KeyUpPtr++;
+			KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)noKeySig;
+			// printf("%d- %d\n", DeCd_KeyUpPtr, (uint16_t)noKeySig);
+			DeCd_KeyUpPtr++;
 			// DBtrace = DBtrace | 0b1;
 		}
 		// Ok just detected a new wordbreak interval; So Now need/can evaluate
 		// the contents of the AutoMode detector time buffers
-		// printf("%s\n",LtrHoldr);
-		if (KeyDwnPtr > 2 && KeyUpPtr > 2 && KeyUpIntrvls[0] > 0 && KeyDwnIntrvls[0] > 0)
+		//printf("\n@@@  %s\n",LtrHoldr);
+		if (DeCd_KeyDwnPtr > 2 && DeCd_KeyUpPtr > 2 && KeyUpIntrvls[0] > 0 && KeyDwnIntrvls[0] > 0)
 		{
-			// printf("\nWORD BREAK - KeyDwnPtr: %d; KeyUpPtr:%d\n", KeyDwnPtr, KeyUpPtr);
-			if ((LtrPtr >= 1 || KeyDwnPtr >= 9) && ((wpm > 13) || (LtrPtr > 3)) && (wpm < 36) && (KeyDwnPtr == KeyUpPtr)) // don't try to reparse if the key up & down pointers arent equal
+			//printf("\nWORD BREAK - DeCd_KeyDwnPtr: %d; DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
+			if ((LtrPtr >= 1 || DeCd_KeyDwnPtr >= 9) && ((wpm > 13) || (LtrPtr > 3)) 
+				&& (wpm < 36) && (DeCd_KeyDwnPtr == DeCd_KeyUpPtr)) // don't try to reparse if the key up & down pointers arent equal
 			{																											  // dont do "post parsing" with just one letter or WPMs <= 13
 				/*Auto-word break adjustment test*/
 				if (LtrPtr == 1)
@@ -1402,27 +1474,28 @@ bool chkChrCmplt(void)
 					// printf("advparser.Dbug = true\n");
 					advparser.Dbug = true;
 				}
+				
 				// else
 				// 	advparser.Dbug = false;
 				/*Sync advparser.wrdbrkFtcr to current wrdbrkFtcr*/
 				advparser.wrdbrkFtcr = wrdbrkFtcr;
 				/*Perpare advparser, by 1st copying current decoder symbol sets into local advparser arrays*/
 #if USE_TST_DATA
-				KeyUpPtr = KeyDwnPtr = testSize;
-				for (int i = 0; i < KeyDwnPtr; i++)
+				DeCd_KeyUpPtr = DeCd_KeyDwnPtr = testSize;
+				for (int i = 0; i < DeCd_KeyDwnPtr; i++)
 				{
 					advparser.KeyUpIntrvls[i] = testKeyUp[i];
 					advparser.KeyDwnIntrvls[i] = testKeyDwn[i];
 				}
 #else
-				for (int i = 0; i <= KeyDwnPtr; i++)
+				for (int i = 0; i <= DeCd_KeyDwnPtr; i++)
 				{
 					advparser.KeyUpIntrvls[i] = KeyUpIntrvls[i];
 					advparser.KeyDwnIntrvls[i] = KeyDwnIntrvls[i];
 				}
 #endif /* USE_TST_DATA*/
-				advparser.KeyUpPtr = KeyUpPtr;
-				advparser.KeyDwnPtr = KeyDwnPtr;
+				advparser.KeyUpPtr = DeCd_KeyUpPtr;
+				advparser.KeyDwnPtr = DeCd_KeyDwnPtr;
 				advparser.wpm = wpm;
 				advparser.LtrPtr = LtrPtr;
 				for (int i = 0; i <= LtrPtr; i++)
@@ -1458,6 +1531,20 @@ bool chkChrCmplt(void)
 				else
 					oneLtrCntr = 0;
 			}
+			else
+			{
+				printf("advparser SKIPPED - Current WPM too low or High or DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
+				while (DeCd_KeyDwnPtr != DeCd_KeyUpPtr)
+				{
+					KeyUpIntrvls[DeCd_KeyUpPtr] = 0;
+					DeCd_KeyUpPtr++;
+				}
+
+				for(int i= 0; i< DeCd_KeyDwnPtr; i++)
+				{
+					printf("%d; %d; %d\n", i, KeyDwnIntrvls[i], KeyUpIntrvls[i]);
+				} 
+			}
 			// else if ((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && LtrPtr == 1)
 			// {
 			// 	if (advparser.Dbug)
@@ -1466,12 +1553,12 @@ bool chkChrCmplt(void)
 			// 	}
 			// }
 		}
-
+		else printf("advparser SKIPPED - no usable KeyUpIntrvls[0],KeyDwnIntrvls[0] data; DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
 		for (int i = 0; i < LtrPtr; i++)
 			LtrHoldr[i] = 0;
 		LtrPtr = 0;
 		WrdChrCnt = 0;
-		KeyDwnPtr = KeyUpPtr = 0; // resetbuffer pntrs
+		DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // resetbuffer pntrs
 
 		Pstate = 2; // have word
 		// DBtrace = DBtrace | 0b10;
@@ -1549,7 +1636,7 @@ bool chkChrCmplt(void)
 					++i;			 // move buffer pointer to 1st available empty array position
 				CodeValBuf[i] = 255; // insert space in text to create a word break
 				NuWrd = true;
-				// if(KeyUpPtr == 2) printf("XXXXXX%d\n", DBtrace);
+				
 			}
 			TDBptr = Bitpos;
 			Bitpos = 0;

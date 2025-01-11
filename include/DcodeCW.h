@@ -40,6 +40,10 @@ extern bool CptrTxt;
 
 extern unsigned long SmpIntrl;
 extern struct DF_t DFault;
+
+extern QueueHandle_t KeyEvnt_que;
+extern QueueHandle_t KeyState_que;
+extern TaskHandle_t KeyEvntTaskTaskHandle;
 #define USE_TST_DATA 0  //set to 1, if debug with testKeyDwn & testKeyUp data is desired
 #define testSize 11 /*set this value to match the size of testKeyDwn & testKeyUp datasets/arrays*/
 /*Use copy and paste of advanceparser debug serial output, to populate the 2 following arrays*/
@@ -438,6 +442,7 @@ const char DicTbl2[ARSIZE2][6]={
 
 ////////////////////////////////////////////////////////////////////////////
 void StartDecoder(LVGLMsgBox *pttftmsgbx);
+void KeyEvntTask(void *param);
 void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime);// keydown state =0; Keyup state = 1
 void GrabBack(bool IsDah);
 void Dcodeloop(void);

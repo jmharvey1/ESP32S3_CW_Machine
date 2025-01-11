@@ -80,6 +80,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250101 AdvParser.cpp - more refinements to letter break, splitPt, & word break code*/
 /*20250107 Goertzelcpp - More tweaks to squelch/curNois/noisLvl to make it more responsive to changing signal conditions */
 /*20250108 AdvParser.cpp - more refinements to letter break, & DitIntrvlVal code*/
+/*20250110 Changed method of passing 'key' state from Goertzel to CW Decoder (DcodeCW.cpp), Now using a task & Queues*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -170,6 +171,11 @@ static const uint8_t state_que_len = 100;//50;
 static QueueHandle_t state_que;
 static const int RxSig_que_len = 15;//50
 QueueHandle_t RxSig_que;
+
+static const int KeyEvnt_que_len = 10;//50
+static const int KeyState_que_len = 10;
+QueueHandle_t KeyEvnt_que;
+QueueHandle_t KeyState_que;
 //static const uint8_t Sampl_que_len = 6 * Goertzel_SAMPLE_CNT;
 //static QueueHandle_t Sampl_que;
 
@@ -208,6 +214,7 @@ TaskHandle_t GoertzelTaskHandle;
 static TaskHandle_t DsplUpDtTaskHandle = NULL;
 TaskHandle_t CWDecodeTaskHandle = NULL;
 TaskHandle_t AdvParserTaskHandle = NULL;
+TaskHandle_t KeyEvntTaskTaskHandle = NULL;
 bool BlkDcdUpDts = false;
 //static TaskHandle_t UpDtRxSigTaskHandle = NULL;
 TaskHandle_t BLEscanTask_hndl = NULL;
@@ -1173,6 +1180,8 @@ void app_main()
   gpio_set_level(KEY, Key_Up); // key 'UP' state
   state_que = xQueueCreate(state_que_len, sizeof(uint8_t));
   RxSig_que  = xQueueCreate(RxSig_que_len, sizeof(int));
+  KeyEvnt_que = xQueueCreate(KeyEvnt_que_len, sizeof(unsigned long));
+  KeyState_que = xQueueCreate(KeyState_que_len, sizeof(uint8_t));
   mutex = xSemaphoreCreateMutex();
   DsplUpDt_AdvPrsrTsk_mutx =  xSemaphoreCreateMutex();
   ADCread_disp_refr_timer_mutx = xSemaphoreCreateMutex();
@@ -1194,6 +1203,19 @@ void app_main()
     ESP_LOGI(TAG, "AdvParser Task handle FAILED");
 
   vTaskSuspend( AdvParserTaskHandle );
+  //////////////////////////////////////////////
+  xTaskCreatePinnedToCore(
+      KeyEvntTask, /* Function to implement the task */
+      "KeyEvnt Task", /* Name of the task */
+      4096,  /* Stack size in words */
+      NULL,  /* Task input parameter */
+      2,  /* Priority of the task */
+      &KeyEvntTaskTaskHandle,  /* Task handle. */
+      0); /* Core where the task should run */
+  if (KeyEvntTaskTaskHandle == NULL)
+    ESP_LOGI(TAG, "KeyEvnt Task handle FAILED");
+
+  vTaskSuspend( KeyEvntTaskTaskHandle );
 /////////////////////////////////////////////////
 /*Not currently using this approach/method*/
   //  xTaskCreatePinnedToCore(

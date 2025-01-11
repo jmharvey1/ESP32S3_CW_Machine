@@ -14,11 +14,15 @@
 			Added timing link to AdvPaser to imporve FltrPrd timing (glitch protection/rejection)*/
 /*20241221 new dynamic adjustment/correction to squelch/tonethreshold during keydown interval*/
 /*20250107 More tweaks to squelch/curNois/noisLvl to make it more responsive to changing signal conditions*/
+/*20250110 Changed method of passing key state from Goertzel to CW Decoder (DcodeCW.cpp), Now using a task & Queues*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
 #include "DcodeCW.h"
 #include "LVGLMsgBox.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "freertos/queue.h"
 #define MagBSz  6//3
 AdvParser advparser;
 uint16_t adc_buf[Goertzel_SAMPLE_CNT];
@@ -657,7 +661,17 @@ void Chk4KeyDwn(float NowLvl)
 				if(1) GudSig = 1;
 				if(state == 1) LEDGREEN = 0;
 				else LEDGREEN = (int)CurLvl;
-				KeyEvntSR(Sentstate, TmpEvntTime);
+				if (xQueueSend(KeyEvnt_que, &TmpEvntTime, pdMS_TO_TICKS(2)) == pdFALSE)
+          		{
+            		printf("Failed to push 'TmpEvntTime' to 'KeyEvnt_que'\n");
+          		}
+				if (xQueueSend(KeyState_que, &Sentstate, pdMS_TO_TICKS(2)) == pdFALSE)
+          		{
+            		printf("Failed to push 'Sentstate' to 'KeyState_que'\n");
+          		}
+				//else printf("%d ", Sentstate);
+				vTaskResume( KeyEvntTaskTaskHandle );
+				//KeyEvntSR(Sentstate, TmpEvntTime);
 			}
 		} 
 	}
