@@ -81,6 +81,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250107 Goertzelcpp - More tweaks to squelch/curNois/noisLvl to make it more responsive to changing signal conditions */
 /*20250108 AdvParser.cpp - more refinements to letter break, & DitIntrvlVal code*/
 /*20250110 Changed method of passing 'key' state from Goertzel to CW Decoder (DcodeCW.cpp), Now using a task & Queues*/
+/*20250112 DcodeCW.cpp - Refined/Debugged Queue(s) management & building KeyDwn & KeyUp data sets related to AdvParser*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -172,8 +173,8 @@ static QueueHandle_t state_que;
 static const int RxSig_que_len = 15;//50
 QueueHandle_t RxSig_que;
 
-static const int KeyEvnt_que_len = 10;//50
-static const int KeyState_que_len = 10;
+static const int KeyEvnt_que_len = 50;
+static const int KeyState_que_len = KeyEvnt_que_len;
 QueueHandle_t KeyEvnt_que;
 QueueHandle_t KeyState_que;
 //static const uint8_t Sampl_que_len = 6 * Goertzel_SAMPLE_CNT;
@@ -965,6 +966,9 @@ void AdvParserTask(void *param)
       uint8_t LstChr = 0;
       if (!same)
       {
+        #ifdef DeBgQueue
+        printf("advparser.Msgbuf %s\n", advparser.Msgbuf);
+        #endif
         /*need to block display update task during this 'if()' code */
         if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
         {

@@ -66,6 +66,7 @@ unsigned long NoisePrd = 0;
 unsigned long EvntTime = 0;
 unsigned long StrtKeyDwn = 0;
 unsigned long TmpEvntTime = 0;
+unsigned long OldTmpEvntTime = 0;
 float NFlrBase = 0;
 float avgKeyDwn = 1200/15;
 int NFlrRatio = 0;
@@ -669,7 +670,12 @@ void Chk4KeyDwn(float NowLvl)
           		{
             		printf("Failed to push 'Sentstate' to 'KeyState_que'\n");
           		}
-				//else printf("%d ", Sentstate);
+				uint16_t Interval = (uint16_t)(TmpEvntTime-OldTmpEvntTime);
+				OldTmpEvntTime = TmpEvntTime;
+				// if(Sentstate) printf("DN %d   ", Interval);
+				// else printf("UP %d   ", Interval);
+				
+				
 				vTaskResume( KeyEvntTaskTaskHandle );
 				//KeyEvntSR(Sentstate, TmpEvntTime);
 			}
