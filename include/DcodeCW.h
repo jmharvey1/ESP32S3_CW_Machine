@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include "LVGLMsgBox.h"
 #include "main.h"
+extern uint8_t chkcnt;
 extern uint8_t GudSig;
 extern float SqlchLvl;
 extern float CurNoise;

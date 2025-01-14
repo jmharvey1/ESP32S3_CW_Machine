@@ -169,12 +169,12 @@ float BiasError = 0;
 int Smplcnt = 0;
 bool SmplSetDone = false;
 volatile int CurHiWtrMrk = 0;
-static const uint8_t state_que_len = 2*IntrvlBufSize;//100;
+static const uint8_t state_que_len = 100;
 static QueueHandle_t state_que;
 static const int RxSig_que_len = 15;//50
 QueueHandle_t RxSig_que;
 
-static const int KeyEvnt_que_len = 50;
+static const int KeyEvnt_que_len = 2*IntrvlBufSize;//50;
 static const int KeyState_que_len = KeyEvnt_que_len;
 QueueHandle_t KeyEvnt_que;
 QueueHandle_t KeyState_que;

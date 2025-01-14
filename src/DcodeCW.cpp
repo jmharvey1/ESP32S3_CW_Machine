@@ -229,6 +229,7 @@ bool AbrtFlg = false;
 bool KEISRwaiting = false;
 bool LckHiSpd = false; //20241209 added to support ensuring decoder is configure for paddle/keyboard for speeds in excees of 36WPM
 unsigned long OldEvntTime = 0;
+uint8_t chkcnt = 0;
 //  End of CW Decoder Global Variables
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -237,7 +238,8 @@ void StartDecoder(LVGLMsgBox *pttftmsgbx)
 	// Begin CW Decoder setup
 	DeCodeVal_mutex = xSemaphoreCreateMutex();
 	ptrmsgbx = pttftmsgbx;
-	/*initialize Decoded Character Buffer with ASCii space*/
+	chkcnt = 0;
+ 	/*initialize Decoded Character Buffer with ASCii space*/
 	for (int i = 0; i < sizeof(DcddChrBuf)-1; i++)
 	{
 		DcddChrBuf[i] =   (uint8_t) 32;// add "space" symbol;
@@ -1571,6 +1573,7 @@ bool chkChrCmplt(void)
 	bool ValidWrdBrk = true;
 	bool KDwnFnd = false;
 	bool RunAdvPrsr = false;
+	bool DataSetRdy = false;
 	uint16_t KDwnIntrvl = 0;
 	Pstate = 0;
 	unsigned long Now = pdTICKS_TO_MS(xTaskGetTickCount()); //(GetTimr5Cnt()/10);
@@ -1611,6 +1614,13 @@ bool chkChrCmplt(void)
 	{
 		if(Dbg) printf("step1\n");
 		BldKeyUpDwnDataSet();
+		if(chkcnt == DeCd_KeyDwnPtr)
+		{
+			// printf("chkcnt%d == DeCd_KeyDwnPt:%d\n", chkcnt, DeCd_KeyDwnPtr);
+			DataSetRdy = true;
+		}	
+		// else printf("chkcnt%d != DeCd_KeyDwnPt:%d\n", chkcnt, DeCd_KeyDwnPtr);
+		chkcnt = 0;
 		// /*1st take one final peek at the queues to validate this loooks like a real word break*/
 		// unsigned long EvntTime;
 		// uint8_t Kstate;
@@ -1666,7 +1676,7 @@ bool chkChrCmplt(void)
 			if (DeCd_KeyDwnPtr > 2 && DeCd_KeyUpPtr > 2 && KeyUpIntrvls[0] > 0 && KeyDwnIntrvls[0] > 0)
 			{
 				// printf("\nWORD BREAK - DeCd_KeyDwnPtr: %d; DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
-				if ((LtrPtr >= 1 || DeCd_KeyDwnPtr >= 9) && ((wpm > 13) || (LtrPtr > 3)) && (wpm < 36) && (DeCd_KeyDwnPtr == DeCd_KeyUpPtr)) // don't try to reparse if the key up & down pointers arent equal
+				if (DataSetRdy && (LtrPtr >= 1 || DeCd_KeyDwnPtr >= 9) && ((wpm > 13) || (LtrPtr > 3)) && (wpm < 36) && (DeCd_KeyDwnPtr == DeCd_KeyUpPtr)) // don't try to reparse if the key up & down pointers arent equal
 				{																															 // dont do "post parsing" with just one letter or WPMs <= 13
 					/*Auto-word break adjustment test*/
 					if (LtrPtr == 1)

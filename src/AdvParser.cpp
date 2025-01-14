@@ -592,7 +592,9 @@ void AdvParser::EvalTimeData(void)
                     }
                     //else if ((ThisElmntIntrvl < 0.72 * AvgElmntIntrvl) || (ThisElmntIntrvl > 1.20 * AvgElmntIntrvl))
                     //else if ((ThisElmntIntrvl < 0.72 * AvgElmntIntrvl))
-                    else if((TmpDwnIntrvls[rScanPtr]<  0.6 * DitIntrvlVal) || (TmpUpIntrvls[rScanPtr] < 0.6* AvgSmblDedSpc))
+                    //else if((TmpDwnIntrvls[rScanPtr]<  0.6 * DitIntrvlVal) || (TmpUpIntrvls[rScanPtr] < 0.6* AvgSmblDedSpc))
+                    /*20250114 removed the keyup qualifer/test because new tonedetect code can return in very small (but valid) time interval*/
+                    else if((TmpDwnIntrvls[rScanPtr]<  0.6 * DitIntrvlVal))
                     { /*this looks like 'glitch' because its combined time interval is either to big or too small to be part of this data set */
                         if (Dbug)
                             printf("\t'GLITCH' Entry(Deleted): TmpDwnIntrvls[%d] %d;  TmpUpIntrvls[%d] %d; DitIntrvlVal %d; AvgSmblDedSpc %d\n", rScanPtr, TmpDwnIntrvls[rScanPtr], rScanPtr, TmpUpIntrvls[rScanPtr], (uint16_t)DitIntrvlVal, (uint16_t)AvgSmblDedSpc);
@@ -614,28 +616,29 @@ void AdvParser::EvalTimeData(void)
                         TmpUpIntrvlsPtr--;
                         rScanPtr--;
                     }
-                    else if (TmpDwnIntrvls[rScanPtr] < 0.45 * DitIntrvlVal)
-                    { /*this looks like 'glitch' because its too small to be part of this data set */
-                        if (Dbug)
-                            printf("\t'GLITCH' Entry(Deleted) 2small: TmpDwnIntrvls[%d] %d;  TmpUpIntrvls[%d] %d\n", rScanPtr, TmpDwnIntrvls[rScanPtr], rScanPtr, TmpUpIntrvls[rScanPtr]);
-                        GLitchFlg = true;
-                        if (rScanPtr > 0)
-                        {
-                            TmpUpIntrvls[rScanPtr - 1] += TmpDwnIntrvls[rScanPtr];
-                            TmpUpIntrvls[rScanPtr - 1] += TmpUpIntrvls[rScanPtr];
-                        }
-                        /*now delete this entry by moving all the following entries forward by one position*/
-                        int strtmv = rScanPtr;
-                        while (strtmv < TmpUpIntrvlsPtr - 1)
-                        {
-                            // printf("Moving Entry: TmpDwnIntrvls[%d] %d\n", strtmv, TmpDwnIntrvls[strtmv]);
-                            TmpDwnIntrvls[strtmv] = TmpDwnIntrvls[strtmv + 1];
-                            TmpUpIntrvls[strtmv] = TmpUpIntrvls[strtmv + 1];
-                            strtmv++;
-                        }
-                        TmpUpIntrvlsPtr--;
-                        rScanPtr--;
-                    }
+                    /*20250114 After changing how the tone detect curlvl is managed removed the minimum keyup test/check*/
+                    // else if (TmpDwnIntrvls[rScanPtr] < 0.45 * DitIntrvlVal)
+                    // { /*this looks like 'glitch' because its too small to be part of this data set */
+                    //     if (Dbug)
+                    //         printf("\t'GLITCH' Entry(Deleted) 2small: TmpDwnIntrvls[%d] %d;  TmpUpIntrvls[%d] %d\n", rScanPtr, TmpDwnIntrvls[rScanPtr], rScanPtr, TmpUpIntrvls[rScanPtr]);
+                    //     GLitchFlg = true;
+                    //     if (rScanPtr > 0)
+                    //     {
+                    //         TmpUpIntrvls[rScanPtr - 1] += TmpDwnIntrvls[rScanPtr];
+                    //         TmpUpIntrvls[rScanPtr - 1] += TmpUpIntrvls[rScanPtr];
+                    //     }
+                    //     /*now delete this entry by moving all the following entries forward by one position*/
+                    //     int strtmv = rScanPtr;
+                    //     while (strtmv < TmpUpIntrvlsPtr - 1)
+                    //     {
+                    //         // printf("Moving Entry: TmpDwnIntrvls[%d] %d\n", strtmv, TmpDwnIntrvls[strtmv]);
+                    //         TmpDwnIntrvls[strtmv] = TmpDwnIntrvls[strtmv + 1];
+                    //         TmpUpIntrvls[strtmv] = TmpUpIntrvls[strtmv + 1];
+                    //         strtmv++;
+                    //     }
+                    //     TmpUpIntrvlsPtr--;
+                    //     rScanPtr--;
+                    // }
                     else
                     {
                         if (Dbug)

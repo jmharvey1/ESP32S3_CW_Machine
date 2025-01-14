@@ -662,14 +662,19 @@ void Chk4KeyDwn(float NowLvl)
 				if(1) GudSig = 1;
 				if(state == 1) LEDGREEN = 0;
 				else LEDGREEN = (int)CurLvl;
-				if (xQueueSend(KeyEvnt_que, &TmpEvntTime, pdMS_TO_TICKS(2)) == pdFALSE)
-          		{
-            		printf("Failed to push 'TmpEvntTime' to 'KeyEvnt_que'\n");
-          		}
-				if (xQueueSend(KeyState_que, &Sentstate, pdMS_TO_TICKS(2)) == pdFALSE)
-          		{
-            		printf("Failed to push 'Sentstate' to 'KeyState_que'\n");
-          		}
+				if(Sentstate) chkcnt++; 
+				xQueueSend(KeyEvnt_que, &TmpEvntTime, (TickType_t)0);
+				xQueueSend(KeyState_que, &Sentstate, (TickType_t)0);
+				// if (xQueueSend(KeyEvnt_que, &TmpEvntTime, pdMS_TO_TICKS(2)) == pdFALSE)
+          		// {
+            	// 	printf("Failed to push 'TmpEvntTime%d' to 'KeyEvnt_que'\n", (uint16_t)TmpEvntTime);
+				// 	//vTaskDelay(pdMS_TO_TICKS(15));
+          		// }
+				// if  (xQueueSend(KeyState_que, &Sentstate, pdMS_TO_TICKS(2)) == pdFALSE)
+          		// {
+            	// 	printf("Failed to push 'Sentstate:%d' to 'KeyState_que'\n", (uint8_t)Sentstate);
+				// 	//vTaskDelay(15);
+          		// }
 				//uint16_t Interval = (uint16_t)(TmpEvntTime-OldTmpEvntTime);
 				//OldTmpEvntTime = TmpEvntTime;
 				// if(Sentstate) printf("DN %d   ", Interval);

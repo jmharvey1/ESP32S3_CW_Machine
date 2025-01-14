@@ -23,7 +23,7 @@
 #define INC_ADVPARSER_H_
 #include "stdint.h"// need this to use char type
 #include <stdio.h>
-#define IntrvlBufSize 200
+#define IntrvlBufSize 100
 #define MsgbufSize 50
 #define SrchDictSize 780
 struct Buckt_t
