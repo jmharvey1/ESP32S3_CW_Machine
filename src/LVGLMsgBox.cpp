@@ -91,6 +91,7 @@ static lv_obj_t *Hexit_btn;
 /*added for scope Sceen*/
 int bias_int = 0;
 int freq_int = 0;
+//int NxtRngBfrNdx = 0;
 bool SmplSetRdy = false;
 static lv_obj_t * ui_Scope;
 static lv_obj_t * ui_Help;
@@ -430,6 +431,7 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 		}
 		if (!updateCharCnt)
 			lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
+		
 
 		if (updateCharCnt)
 			ta_charCnt = CurKyBrdCharCnt;
@@ -441,6 +443,12 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 			sprintf(buf2, "CharCnt: %d", ta_charCnt);
 			lv_label_set_text(label2, buf2);
 		}
+		#ifdef AutoCorrect 
+		if (TxtArea == DecdTxtArea)
+		{
+			printf("<%c>", bufChar);
+		}
+		#endif
 	} // end bypass set mutex
 	else
 	{
@@ -503,7 +511,7 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 				if (trycnt > 5)
 				{
 					trycnt = 5;
-					// printf("LVGLMsgBox::update_text2 timed out; MutexLckId = %d\n", MutexLckId);
+					//printf("LVGLMsgBox::update_text2 timed out; MutexLckId = %d\n", MutexLckId);
 				}
 				vTaskDelay(pdMS_TO_TICKS(20));
 			}
@@ -1081,12 +1089,6 @@ void Bld_Settings_scrn(void)
 		lv_style_set_bg_color(&style_BtnDeslctd_bg, Btn_bgclr);
 	}
 	lv_scr_load(scr_2);
-
-	// if (scr_1 != NULL)
-	// {
-	// 	printf("[APP] Free memory: %d bytes\n", (int)esp_get_free_heap_size());
-	// 	printf("Hide Screen1:\n");
-	// }
 }
 
 /*Build GUI (Main Screen)*/
@@ -1885,7 +1887,9 @@ void LVGLMsgBox::dispDeCdrTxt(char Msgbuf[50], uint16_t Color)
 	int msgpntr = 0;
 
 	/* Add the contents of the Msgbuf to ringbuffer */
-
+	#ifdef AutoCorrect
+	printf("[%s]",Msgbuf);
+	#endif	
 	while (Msgbuf[msgpntr] != 0)
 	{
 		if (RingbufPntr1 < RingBufSz - 1)
@@ -1894,7 +1898,9 @@ void LVGLMsgBox::dispDeCdrTxt(char Msgbuf[50], uint16_t Color)
 			DeCdrRingbufChar[0] = 0;
 		DeCdrRingbufChar[RingbufPntr1] = Msgbuf[msgpntr];
 		/*Added for lvgl*/
-		//Pgbuf[0] = Msgbuf[msgpntr];
+		#ifdef AutoCorrect
+		if(DeCdrRingbufChar[RingbufPntr1] == ' ') printf("%c; RingbufPntr1 %d\n",DeCdrRingbufChar[RingbufPntr1], RingbufPntr1);
+		#endif
 		//printf("%c; RingbufPntr1 %d\n",Msgbuf[msgpntr], RingbufPntr1);
 		/*Not needed for vlgl display*/
 		// DeCdrRingbufClr[RingbufPntr1] = Color;
@@ -1902,15 +1908,6 @@ void LVGLMsgBox::dispDeCdrTxt(char Msgbuf[50], uint16_t Color)
 		if (RingbufPntr1 == RingBufSz)
 			RingbufPntr1 = 0;
 		msgpntr++;
-		// /*Added the following lines to maintain sync of the keyboard cursor as new characters are added to the screen via the CW decoder process*/
-		// if (Color == TFT_GREENYELLOW)
-		// {
-		// 	if (CursorPntr < cnt + 1)
-		// 		CursorPntr = cnt + 1;
-		// 	// char buf[30];
-		// 	// sprintf(buf, "CrsrPntr: %d; cnt: %d\r\n", CursorPntr, cnt);
-		// 	// printf(buf);
-		// }
 	}
 };
 /*New for lvgl based screen
@@ -2078,6 +2075,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 				// 	break;
 				// }
 				// ptft->setCursor(cursorX, cursorY);
+				//if(NxtRngBfrNdx != RingbufPntr2) printf("RingbufPntr2 ERROR\n");
 				char curChar = DeCdrRingbufChar[RingbufPntr2];
 				Pgbuf[0] = curChar;
 				// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Start\n");
@@ -2106,6 +2104,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 				RingbufPntr2++;
 				if (RingbufPntr2 == RingBufSz)
 					RingbufPntr2 = 0;
+				//NxtRngBfrNdx = 	RingbufPntr2;
 			} // End while (RingbufPntr2 != RingbufPntr1)
 		//	xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
 		}

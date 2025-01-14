@@ -670,14 +670,14 @@ void Chk4KeyDwn(float NowLvl)
           		{
             		printf("Failed to push 'Sentstate' to 'KeyState_que'\n");
           		}
-				uint16_t Interval = (uint16_t)(TmpEvntTime-OldTmpEvntTime);
-				OldTmpEvntTime = TmpEvntTime;
+				//uint16_t Interval = (uint16_t)(TmpEvntTime-OldTmpEvntTime);
+				//OldTmpEvntTime = TmpEvntTime;
 				// if(Sentstate) printf("DN %d   ", Interval);
 				// else printf("UP %d   ", Interval);
 				
 				
-				vTaskResume( KeyEvntTaskTaskHandle );
-				//KeyEvntSR(Sentstate, TmpEvntTime);
+				//vTaskResume( KeyEvntTaskTaskHandle );
+				KeyEvntSR(Sentstate, TmpEvntTime);
 			}
 		} 
 	}

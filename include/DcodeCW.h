@@ -443,6 +443,7 @@ const char DicTbl2[ARSIZE2][6]={
 ////////////////////////////////////////////////////////////////////////////
 void StartDecoder(LVGLMsgBox *pttftmsgbx);
 void KeyEvntTask(void *param);
+void BldKeyUpDwnDataSet(void);
 void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime);// keydown state =0; Keyup state = 1
 void GrabBack(bool IsDah);
 void Dcodeloop(void);
