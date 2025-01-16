@@ -84,6 +84,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250112 DcodeCW.cpp - Refined/Debugged Queue(s) management & building KeyDwn & KeyUp data sets related to AdvParser*/
 /*20250114 main.cpp - reworked postparser delete count management code to improve overwrite/replacement */
 /*20250115 Goertzelcpp - Tweaks to squelch/curNois/noisLvl to improve weak signal tone detection */
+/*20250115 AdvParser.cpp - lowered 'starting point' seach for letter break */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

@@ -52,6 +52,7 @@
  * 20241226 more refinements to letter break & word break code
  * 20250101 more refinements to letter break, splitPt, & word break code
  * 20250108 more refinements to letter break, & DitIntrvlVal code
+ * 20250115 lowered 'starting point' seach fof letter break
  * */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -293,9 +294,9 @@ void AdvParser::EvalTimeData(void)
     uint8_t UprHlf = (KeyUpPtr+1)/2;
     //if(UprHlf == 1) UprHlf = 0;
     //if(UprHlf > 1) UprHlf--;
-    if(UprHlf <= 5) UprHlf = 0;
-    if(UprHlf >= 6) UprHlf--;
-    if(UprHlf >= 6) UprHlf--;  
+    if(UprHlf < 4) UprHlf = 0;
+    if(UprHlf >= 4) UprHlf--;
+    if(UprHlf > 5) UprHlf--;  
     //bool check = true;
     if (Dbug) printf("*** Letter Break Start ***\nKeyUpPtr:%d; UprHlf = %d\n", KeyUpPtr, UprHlf);
     int bstltrbrkptr =0;
