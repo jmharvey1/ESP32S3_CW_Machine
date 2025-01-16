@@ -85,6 +85,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250114 main.cpp - reworked postparser delete count management code to improve overwrite/replacement */
 /*20250115 Goertzelcpp - Tweaks to squelch/curNois/noisLvl to improve weak signal tone detection */
 /*20250115 AdvParser.cpp - lowered 'starting point' seach for letter break */
+/*20250116 DcodeCW.cpp - Reworked BldKeyUpDwnDataSet() and other areas related to 'wrdbrkFtcr', to improve 'slow' code decoding*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

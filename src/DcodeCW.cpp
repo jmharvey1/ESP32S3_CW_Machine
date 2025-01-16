@@ -26,7 +26,8 @@
  * 20240522 added auto glitch detection to support post parser (AdvParser.cpp)
  * 20241229 revised approach to setting word break wait interval via the WrdBrkFtcr
  * 20250110 Changed method of passing key state from Goertzel to CW Decoder (DcodeCW.cpp), Now using a task & Queues
- * 20250112 Refined/Debugged Queue(s) management & building KeyDwn & KeyUp data sets related to AdvParser 
+ * 20250112 Refined/Debugged Queue(s) management & building KeyDwn & KeyUp data sets related to AdvParser
+ * 20250116 reworked BldKeyUpDwnDataSet() and other areas related to 'wrdbrkFtcr' to improve 'slow' code decoding
  *   */
  
 
@@ -40,7 +41,7 @@
 #define MaxIntrvlCnt 24
 #define LOW false //JMH ADD for Waveshare Version
 #define HIGH true //JMH ADD for Waveshare Version
-bool DbgWrdBrkFtcr = false;//when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
+bool DbgWrdBrkFtcr = false;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
 int ShrtBrk[10];
 int charCnt = 0;
 int shwltrBrk = 0;
@@ -390,7 +391,8 @@ void BldKeyUpDwnDataSet(void)
 				{
 					interval = (uint16_t)(EvntTime - OldEvntTime );
 					OldEvntTime = EvntTime;
-					if (interval < 750)
+					//if (interval < 750)
+					if (interval < wordBrk)
 					{
 						if (Kstate)// Key Down
 						{
@@ -431,19 +433,23 @@ void BldKeyUpDwnDataSet(void)
 						if (Kstate)// Key Down
 						{
 							#ifdef DeBgQueue
-							printf("Key DOWN NdX-reset; interval:%d > 750\n", interval);
+							//printf("Key DOWN NdX-reset; interval:%d > 750\n", interval);
+							printf("Key DOWN NdX-reset; interval:%d > wordBrk:%d\n", interval, (uint16_t)wordBrk);
 							#endif
 							DeCd_KeyUpPtr = DeCd_KeyDwnPtr = 0;
 						}
 						else
 						{
 							#ifdef DeBgQueue
-							printf("Key UP NdX-reset; interval:%d > 750\n", interval);
+							printf("Key UP NdX-reset; interval:%d > wordBrk:%d\n", interval, (uint16_t)wordBrk);
 							#endif
+							
 							if(DeCd_KeyDwnPtr>=4)
 							{
 								LclKeyState = 1;
+								#ifdef DeBgQueue
 								Dbg = true;
+								#endif
 								letterBrk = pdTICKS_TO_MS(xTaskGetTickCount()) - 10;
 								//KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)wordBrk;
 								//DeCd_KeyUpPtr++;
@@ -1367,7 +1373,7 @@ void ChkDeadSpace(void)
 	}
 	/* 20241229 new approach to setting word break wait interval*/
 	uint16_t NuVal = advparser.GetWrdBrkIntrval();//= 0;
-	if(NuVal>0)
+	if(0)//(NuVal>0)
 	{
 		wordBrk =  (uint16_t)(wrdbrkFtcr* (float)NuVal);
 		if(DbgWrdBrkFtcr) printf("WrdBrkIntrval:%d; wordBrkA: %d; wrdbrkFtcr %5.3f\n", NuVal, (uint16_t)wordBrk, wrdbrkFtcr);
@@ -1382,6 +1388,12 @@ void ChkDeadSpace(void)
 			wordBrk = (unsigned long)( wrdbrkFtcr *((6.0 * ((float)OldWrdBk) + ((float)NuWrdBkA)) / 7.0)); //paddle
 			if(DbgWrdBrkFtcr) printf("wpm > 35 -  wordBrkA: %d; wrdbrkFtcr %5.3f; NuWrdBkA: %d\n", (uint16_t)wordBrk, wrdbrkFtcr, NuWrdBkA);	
 			}
+		}
+		else
+		{
+			uint16_t NuWrdBkB = (uint16_t)(2.3 * (float)advparser.UnitIntvrlx2r5);
+			wordBrk = (unsigned long)( wrdbrkFtcr *((6.0 * ((float)wordBrk/ wrdbrkFtcr) + ((float)NuWrdBkB)) / 7.0)); //paddle
+			if(DbgWrdBrkFtcr) printf("wordBrk: %d; wrdbrkFtcr %5.3f; NuWrdBkB: %d\n", (uint16_t)wordBrk, wrdbrkFtcr, NuWrdBkB);
 		}
 	}	
 	// /* 20240324 new approach to setting word break wait interval*/
@@ -1673,20 +1685,26 @@ bool chkChrCmplt(void)
 			#ifdef DeBgQueue
 			printf("\n###  %s\n", LtrHoldr);
 			#endif
+			//printf("\n###  %s\n", LtrHoldr);
 			if (DeCd_KeyDwnPtr > 2 && DeCd_KeyUpPtr > 2 && KeyUpIntrvls[0] > 0 && KeyDwnIntrvls[0] > 0)
 			{
+				//printf(" 1##  %s; DataSetRdy:%d\n", LtrHoldr, (uint8_t)DataSetRdy);
 				// printf("\nWORD BREAK - DeCd_KeyDwnPtr: %d; DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
-				if (DataSetRdy && (LtrPtr >= 1 || DeCd_KeyDwnPtr >= 9) && ((wpm > 13) || (LtrPtr > 3)) && (wpm < 36) && (DeCd_KeyDwnPtr == DeCd_KeyUpPtr)) // don't try to reparse if the key up & down pointers arent equal
-				{																															 // dont do "post parsing" with just one letter or WPMs <= 13
+				if (DataSetRdy && (LtrPtr >= 1 || DeCd_KeyDwnPtr >= 9) && ((wpm > 11) || (LtrPtr > 3)) && (wpm < 36) && (DeCd_KeyDwnPtr == DeCd_KeyUpPtr)) // don't try to reparse if the key up & down pointers arent equal
+				{			
+					//printf("  2##  %s\n", LtrHoldr);																												 // dont do "post parsing" with just one letter or WPMs <= 13
 					/*Auto-word break adjustment test*/
 					if (LtrPtr == 1)
 					{
+						//printf("   3##  %s\n", LtrHoldr);
 						/*Only one letter in this word; */
 						if (LtrHoldr[0] != '-' && LtrHoldr[0] != '.' && LtrHoldr[0] != '?' && LtrHoldr[0] != 'K' && LtrHoldr[0] != 'R' && LtrHoldr[0] != 'E' && (LtrHoldr[0] < '0' || LtrHoldr[0] > '9'))
 						{
+							//printf("    4##  %s\n", LtrHoldr);
 							oneLtrCntr++;
 							if (oneLtrCntr >= 2)
-							{						// had 2 entries in a row that were just one character in length; lengthen the wordbrk interval
+							{		
+								//printf("     5##  %s\n", LtrHoldr);				// had 2 entries in a row that were just one character in length; lengthen the wordbrk interval
 								wrdbrkFtcr += 0.15; // = 2.0
 								// LtrHoldr[LtrPtr] = curChar
 								if (DbgWrdBrkFtcr)
@@ -2756,7 +2774,7 @@ void dispMsg(char Msgbuf[50])
 				if (curChar != 'T') WrdChrCnt++;
 				/*Auto-word break adjustment test*/
 				//if (LtrPtr > 11 && curChar != 'T')
-				if (WrdChrCnt > 9){/*this word is getting long. Shorten the wordBrk interval a bit*/
+				if (WrdChrCnt > 8){/*this word is getting long. Shorten the wordBrk interval a bit*/
 					wrdbrkFtcr -= 0.05; //-= 0.025
 					if(DbgWrdBrkFtcr) printf("wordBrk-: %d; wrdbrkFtcr: %5.3f; MsgBuf: %s\n", (uint16_t)wordBrk, wrdbrkFtcr, Msgbuf);
 				}
