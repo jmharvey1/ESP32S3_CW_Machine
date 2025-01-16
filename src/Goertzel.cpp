@@ -15,6 +15,7 @@
 /*20241221 new dynamic adjustment/correction to squelch/tonethreshold during keydown interval*/
 /*20250107 More tweaks to squelch/curNois/noisLvl to make it more responsive to changing signal conditions*/
 /*20250110 Changed method of passing key state from Goertzel to CW Decoder (DcodeCW.cpp), Now using a task & Queues*/
+/*20250115 Tweaks to squelch/curNois/noisLvl to improve weak signal tone detection */
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -365,12 +366,14 @@ void ComputeMags(unsigned long now){
 	/* try to establish what the long term noise floor is */
 	/* This sets the squelch point with/when only white noise is applied*/
 	if(!toneDetect)  CurNoise = ((399*CurNoise)+(1.4*SigPk))/400;
+	else CurNoise = (39* CurNoise + 1.1*CurLvl)/40;//(19* CurNoise + 1.1*CurLvl)/20;
 	/* now look or figure noise level based on what could be a tone driven result*/
-	if ((2*NoiseFlr > CurLvl) && (CurLvl > NoiseFlr) && (NoiseFlr/SigPk >0.5)) // && (SigPk/NoiseFlr>0.5
-	{ 
-		if(CurNoise < 0.5 * CurLvl) CurNoise = ((7 * CurNoise) + (0.4 * CurLvl))/8;//raise squelch/noise level, based on current "Key down" level
-		else if(CurNoise > CurLvl) CurNoise = (19* CurNoise + 1.1*CurLvl)/20; //drop  squelch/noise level, based on current "Key down" level
-	}
+	//if ((2*NoiseFlr > CurLvl) && (CurLvl > NoiseFlr) && (NoiseFlr/SigPk >0.5)) // && (SigPk/NoiseFlr>0.5
+	//{ 
+		//if(CurNoise < 0.5 * CurLvl) CurNoise = ((7 * CurNoise) + (0.4 * CurLvl))/8;//raise squelch/noise level, based on current "Key down" level
+		//else if(CurNoise > CurLvl) CurNoise = (19* CurNoise + 1.1*CurLvl)/20; //drop  squelch/noise level, based on current "Key down" level
+		//if(CurLvl> CurNoise) CurNoise =(19* CurNoise + 1.1*CurLvl)/20;
+	//}
 
 
 	/* If we're in a key-down state, and the Noise floor just Jumped up, as a reflection,
@@ -541,15 +544,13 @@ void Chk4KeyDwn(float NowLvl)
 			tmpcurnoise = ((CurLvl-NFlrBase)/5) + NFlrBase;
 			//printf("tmpcurnoise = ((CurLvl-NFlrBase)/5) + NFlrBase\n");
 		}
+		/*20250115 removed to improve tone detection in noisy sig*/
 		if((tmpcurnoise < CurNoise)&& (tmpcurnoise > 3*NFlrBase) )
 		{
 			CurNoise = tmpcurnoise;
 			//printf("Apply Correction\n");
 		}
-		// else
-		// {
-		// 	printf("Skip Correction\n");
-		// }
+		
 		/*20241221 new dynamic adjustment/correction to squelch/tonethreshold during keydown interval*/
 		if (OldNowLvl > 0)
 		{
