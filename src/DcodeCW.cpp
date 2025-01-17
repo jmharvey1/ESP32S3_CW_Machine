@@ -28,6 +28,7 @@
  * 20250110 Changed method of passing key state from Goertzel to CW Decoder (DcodeCW.cpp), Now using a task & Queues
  * 20250112 Refined/Debugged Queue(s) management & building KeyDwn & KeyUp data sets related to AdvParser
  * 20250116 reworked BldKeyUpDwnDataSet() and other areas related to 'wrdbrkFtcr' to improve 'slow' code decoding
+ * 20250117 Added word break conditional test to BldKeyUpDwnDataSet()
  *   */
  
 
@@ -392,7 +393,10 @@ void BldKeyUpDwnDataSet(void)
 					interval = (uint16_t)(EvntTime - OldEvntTime );
 					OldEvntTime = EvntTime;
 					//if (interval < 750)
-					if (interval < wordBrk)
+					uint16_t ResetInterval = 750;
+					/*20250117 - added this conditional test to establish whats a good 'reset' interval*/
+					if(wordBrk > ResetInterval) ResetInterval = (uint16_t)wordBrk;
+					if (interval < ResetInterval)
 					{
 						if (Kstate)// Key Down
 						{
@@ -434,14 +438,14 @@ void BldKeyUpDwnDataSet(void)
 						{
 							#ifdef DeBgQueue
 							//printf("Key DOWN NdX-reset; interval:%d > 750\n", interval);
-							printf("Key DOWN NdX-reset; interval:%d > wordBrk:%d\n", interval, (uint16_t)wordBrk);
+							printf("Key DOWN NdX-reset; interval:%d > ResetInterval:%d\n", interval, (uint16_t)ResetInterval);
 							#endif
 							DeCd_KeyUpPtr = DeCd_KeyDwnPtr = 0;
 						}
 						else
 						{
 							#ifdef DeBgQueue
-							printf("Key UP NdX-reset; interval:%d > wordBrk:%d\n", interval, (uint16_t)wordBrk);
+							printf("Key UP NdX-reset; interval:%d > ResetInterval:%d\n", interval, (uint16_t)ResetInterval);
 							#endif
 							
 							if(DeCd_KeyDwnPtr>=4)
@@ -466,9 +470,9 @@ void BldKeyUpDwnDataSet(void)
 								else
 								{
 									#ifdef DeBgQueue
-									printf("done = false; Replaced KeyUp interval%d with Cur wordBrk:%d\n", KeyUpIntrvls[DeCd_KeyUpPtr-1], (uint16_t)wordBrk);
+									printf("done = false; Replaced KeyUp interval%d with Cur ResetInterval:%d\n", KeyUpIntrvls[DeCd_KeyUpPtr-1], (uint16_t)ResetInterval);
 									#endif
-									KeyUpIntrvls[DeCd_KeyUpPtr-1] = (uint16_t)wordBrk;
+									KeyUpIntrvls[DeCd_KeyUpPtr-1] = (uint16_t)ResetInterval;
 								}
 							}
 						}
