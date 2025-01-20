@@ -46,34 +46,22 @@ extern QueueHandle_t KeyEvnt_que;
 extern QueueHandle_t KeyState_que;
 extern TaskHandle_t KeyEvntTaskTaskHandle;
 #define USE_TST_DATA 0  //set to 1, if debug with testKeyDwn & testKeyUp data is desired
-#define testSize 11 /*set this value to match the size of testKeyDwn & testKeyUp datasets/arrays*/
+#define testSize 5 /*set this value to match the size of testKeyDwn & testKeyUp datasets/arrays*/
 /*Use copy and paste of advanceparser debug serial output, to populate the 2 following arrays*/
 static uint16_t testKeyDwn[testSize]={
-76,
-71,
-71,
-81,
-71,
-324,
-66,
-81,
-76,
-71,
-71
+43,
+220,
+33,
+43,
+43
 };
 
 static uint16_t testKeyUp[testSize]={
-42,
-47,
-166,
-42,
-195,
-51,
-48,
-137,
-42,
-47,
-206
+62,
+67,
+497,
+234,
+583
 };
 
 

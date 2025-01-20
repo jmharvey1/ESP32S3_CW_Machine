@@ -87,6 +87,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250115 AdvParser.cpp - lowered 'starting point' seach for letter break */
 /*20250116 DcodeCW.cpp - Reworked BldKeyUpDwnDataSet() and other areas related to 'wrdbrkFtcr', to improve 'slow' code decoding*/
 /*20250117 DcodeCW.cpp - Added word break conditional test to BldKeyUpDwnDataSet()*/
+/*20250119 AdvParser.cpp - added code to ensure last dataset entry is treated as a letterbreak*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

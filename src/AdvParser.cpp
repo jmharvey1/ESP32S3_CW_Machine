@@ -53,6 +53,7 @@
  * 20250101 more refinements to letter break, splitPt, & word break code
  * 20250108 more refinements to letter break, & DitIntrvlVal code
  * 20250115 lowered 'starting point' seach fof letter break
+ * 20250119 added code to ensure last dataset entry was treated as a letterbreak, & other code to ensure alldit & alldah flags are cleared when appropriate
  * */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -1282,7 +1283,18 @@ void AdvParser::EvalTimeData(void)
         // }
         int curN = n + 1;
         /* now test if the follow on keyup time represents a letter break */
-        if (Tst4LtrBrk(n))
+        bool IsLtrBrk = Tst4LtrBrk(n);
+        /*20250119 added if statememt*/
+        if(n == TmpUpIntrvlsPtr-1)
+        {/*if last entry, make sure its flagged 'letter Complete'*/
+            BrkFlg = '+';
+            IsLtrBrk = true;
+            if (Dbug)
+            {
+                printf("$$\t");
+            }
+        }
+        if (IsLtrBrk)
         { /*if true we have a complete symbol set; So find matching character(s)*/
             /*But 1st, need to check if the letterbrk was based on exit-code 2,
             if so & in debug mode, need to do some logging cleanup/catchup work  */
@@ -1436,18 +1448,30 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         float MaxSpltPtSlope = 0;
         float CurSpltPtSlope = 0;
         int start = KeyDwnPtr / 4;
-        int stop = KeyDwnPtr;
-        for (int i = start; i < stop; i++) // set/limit the test to ignore the last/longest keydwn in the series, because it could/likely be a stretched dah;
+        int stop = KeyDwnPtr-1;
+        /*20250118 added while loop, incase initial pass didn't find a dit/dah split point*/
+        while(MaxSpltPtSlope < 1.2 && start>0)
         {
-            CurSpltPtSlope = ((float)((float)this->KeyDwnIntrvls[i + 1] / (float)this->KeyDwnIntrvls[i]));
-            if (Dbug)
-                printf("i:%d; %d/%d = %5.1f\n", i, this->KeyDwnIntrvls[i + 1], this->KeyDwnIntrvls[i], CurSpltPtSlope);
-            if (CurSpltPtSlope > MaxSpltPtSlope)
+            for (int i = start; i < stop; i++) // set/limit the test to ignore the last/longest keydwn in the series, because it could/likely be a stretched dah;
             {
-                MaxSpltPtSlope = CurSpltPtSlope;
-                bstSpltPtptr = i;
+                CurSpltPtSlope = ((float)((float)this->KeyDwnIntrvls[i + 1] / (float)this->KeyDwnIntrvls[i]));
+                if (Dbug)
+                    printf("i:%d; %d/%d = %5.1f\n", i, this->KeyDwnIntrvls[i + 1], this->KeyDwnIntrvls[i], CurSpltPtSlope);
+                if (CurSpltPtSlope > MaxSpltPtSlope)
+                {
+                    MaxSpltPtSlope = CurSpltPtSlope;
+                    bstSpltPtptr = i;
+                }
+                if (MaxSpltPtSlope > 1.5)
+                    stop -=1; //KeyDwnPtr - 2; // we found an apparent step change, So no need look at the last 2 intervals
             }
-            if (MaxSpltPtSlope > 1.5) stop =  KeyDwnPtr- 2;// we found an apparent step change, So no need look at the last 2 intervals
+            if(MaxSpltPtSlope < 1.2)
+            {
+                stop = start + 1;
+                start--;
+                if (Dbug)
+                    printf("Try again start:%d; stop:%d\n", start, stop);
+            }
         }
         this->NuSpltVal = this->KeyDwnIntrvls[bstSpltPtptr] + ((this->KeyDwnIntrvls[bstSpltPtptr + 1] - this->KeyDwnIntrvls[bstSpltPtptr]) / 2);
         this->DitDahSplitVal = this->NuSpltVal;
@@ -1460,6 +1484,11 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
             /*Dit averaging*/
             if (arr[i].Intrvl <= this->DitDahSplitVal)
             {
+                /*20250119 added if statememt*/
+                if(arr[i].Intrvl > 30)
+                {
+                    this->AllDah = false;
+                }
                 // printf("Update/recalculate the running average dit interval 01\n");
                 /*20240228 new method*/
                 int LpCntr = 0;
@@ -1484,6 +1513,8 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         if (DahCnt > 0)
         {
             this->AvgDahVal = (uint16_t)RuningTotal / DahCnt;
+            /*20250119 added next line*/
+            this->AllDit = false;
         }
         /*now recalculate the new average dit interval (based on the last 6 dits)*/
         this->DitIntrvlVal = 0; // reset DitIntrvlVal
@@ -1501,6 +1532,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
     /*Ok, there's not enough keydown events to use the simple "split point" method so do/try the following: */
     if(arr[n].Intrvl > 1.5 * arr[0].Intrvl )
     {
+        
         /*Do a quick sweep/scan to find initial dit/dah splitpoint*/
         int bstSpltPtptr = 0;
         float MaxSpltPtSlope = 0;
@@ -1516,6 +1548,13 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                 {
                     MaxSpltPtSlope = CurSpltPtSlope;
                     bstSpltPtptr = i;
+                }
+                /*20250119 added if statememt*/
+                if(arr[n].Intrvl > 2.0 * arr[i].Intrvl)
+                { /* the ith entry looks to be a valid keydown event, & its less than 1/2 the longest keydown event.
+                    So this dataset is a mix of dits, and dahs */ 
+                    this->AllDah = false; 
+                    this->AllDit = false;
                 }
             }
         }
