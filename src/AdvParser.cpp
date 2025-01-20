@@ -1450,20 +1450,25 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         int start = KeyDwnPtr / 4;
         int stop = KeyDwnPtr-1;
         /*20250118 added while loop, incase initial pass didn't find a dit/dah split point*/
-        while(MaxSpltPtSlope < 1.2 && start>0)
+        bool keepLookng = true;
+        while(MaxSpltPtSlope < 1.2 && start>0 && keepLookng)
         {
             for (int i = start; i < stop; i++) // set/limit the test to ignore the last/longest keydwn in the series, because it could/likely be a stretched dah;
             {
-                CurSpltPtSlope = ((float)((float)this->KeyDwnIntrvls[i + 1] / (float)this->KeyDwnIntrvls[i]));
-                if (Dbug)
-                    printf("i:%d; %d/%d = %5.1f\n", i, this->KeyDwnIntrvls[i + 1], this->KeyDwnIntrvls[i], CurSpltPtSlope);
-                if (CurSpltPtSlope > MaxSpltPtSlope)
-                {
-                    MaxSpltPtSlope = CurSpltPtSlope;
-                    bstSpltPtptr = i;
+                if (this->KeyDwnIntrvls[i] > 30)
+                {  /*20250120 added above 'if' to ignore apparent noise events */
+                    CurSpltPtSlope = ((float)((float)this->KeyDwnIntrvls[i + 1] / (float)this->KeyDwnIntrvls[i]));
+                    if (Dbug)
+                        printf("i:%d; %d/%d = %5.1f\n", i, this->KeyDwnIntrvls[i + 1], this->KeyDwnIntrvls[i], CurSpltPtSlope);
+                    if (CurSpltPtSlope > MaxSpltPtSlope)
+                    {
+                        MaxSpltPtSlope = CurSpltPtSlope;
+                        bstSpltPtptr = i;
+                    }
+                    if (MaxSpltPtSlope > 1.5)
+                        stop -= 1; // KeyDwnPtr - 2; // we found an apparent step change, So no need look at the last 2 intervals
                 }
-                if (MaxSpltPtSlope > 1.5)
-                    stop -=1; //KeyDwnPtr - 2; // we found an apparent step change, So no need look at the last 2 intervals
+                else keepLookng = false; /*20250120 stop when you're getting into noise events */
             }
             if(MaxSpltPtSlope < 1.2)
             {
