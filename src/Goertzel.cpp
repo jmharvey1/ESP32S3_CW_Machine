@@ -16,6 +16,7 @@
 /*20250107 More tweaks to squelch/curNois/noisLvl to make it more responsive to changing signal conditions*/
 /*20250110 Changed method of passing key state from Goertzel to CW Decoder (DcodeCW.cpp), Now using a task & Queues*/
 /*20250115 Tweaks to squelch/curNois/noisLvl to improve weak signal tone detection */
+/*20250120 another tweak to code to set noisLvl mainly intended to improve ingnoring white noise*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -335,10 +336,13 @@ void ComputeMags(unsigned long now){
 	/*20250107 More tweaks to squelch/curNois/noisLvl to make it more responsive to changing signal conditions & Conmercial RX AGC circuits */
 	/*under quiet condx, curNois = 200 to 450; sudden strong tone input, curNois = 3000 to 7000 */
 	//if(curNois>2000) curNois = 2000;
-	if(curNois>30000) curNois = 30000; //cap sudden keydown signal to noise to 30K
-	curNois *= 2.0;//1.8;//curNois *= 2.2;
+	//if(curNois>30000) curNois = 50000;//30000; //cap sudden keydown signal to noise to 30K
+	//curNois *= 2.0;//1.8;//
+	/*20250120 new code to set noisLvl*/
+	curNois *= 1.7;
 	//noisLvl = ((8*noisLvl) + curNois)/9;
-	noisLvl = ((4*noisLvl) + curNois)/5;
+	if(curNois>30000) noisLvl = ((9*noisLvl) + (curNois))/10;
+	else noisLvl = ((4*noisLvl) + (curNois))/5;
 	/*Now look to see if the noise is increasing
 	And if it is, Add a differential term/componet to the noisLvl*/
 	int LstNLvlIndx = NoisPtr-1;

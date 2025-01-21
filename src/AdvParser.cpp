@@ -3615,6 +3615,13 @@ bool AdvParser::SKRules(int &n)
         BrkFlg = '+';
         return true;
     }
+    /*Look/brake for exagerated dah (similar to sloppy bug sending)*/
+    if (((float)TmpDwnIntrvls[n] > (float)(1.12 * this->AvgDahVal))) // 20241125 added the 0.9 factor based on one slow SK sender's spacing
+    {
+        ExitPath[n] =  108;
+        BrkFlg = '+';
+        return true;
+    }
     /*Middle keyup test to see this keyup is twice the length of the one following it,
     If it is then call this one a letter break*/
     // if ((n < TmpUpIntrvlsPtr - 1) && (TmpUpIntrvls[n] > (2.0 * TmpUpIntrvls[n + 1]) + 8))

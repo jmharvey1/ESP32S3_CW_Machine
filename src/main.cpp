@@ -88,6 +88,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250116 DcodeCW.cpp - Reworked BldKeyUpDwnDataSet() and other areas related to 'wrdbrkFtcr', to improve 'slow' code decoding*/
 /*20250117 DcodeCW.cpp - Added word break conditional test to BldKeyUpDwnDataSet()*/
 /*20250119 AdvParser.cpp - added code to ensure last dataset entry is treated as a letterbreak*/
+/*another  Goertzelcpp - tweak to noisLvl code, mainly intended, to improve ingnoring white noise*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
