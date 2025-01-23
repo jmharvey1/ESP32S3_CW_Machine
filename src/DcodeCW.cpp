@@ -1421,9 +1421,9 @@ void ChkDeadSpace(void)
 }
 
 ///////////////////////////////////////////////////////////////////////
-void DbgRptr(bool dbgFLg, char pBuf[], char pStr[]){
+void DbgRptr(bool dbgLtrBrk, char pBuf[], char pStr[]){
 	// char tmpbuf[25];
-	if(!dbgFLg) return;
+	if(!dbgLtrBrk) return;
 	/* for (int p = 0; p < sizeof(tmpbuf); p++)
 	{
 		tmpbuf[p] = PrntBuf[p];
@@ -1444,12 +1444,12 @@ void SetLtrBrk(void)
 	unsigned long ltrBrkb;
 	char tmpbuf[50];
 	char Str[5];
-	bool dbgFLg = false;//true; // Set to true for letterbreak debugging
+	bool dbgLtrBrk = false;//true; // Set to true for letterbreak debugging
 	char StrBuf[25];
 	int slop = pdTICKS_TO_MS(xTaskGetTickCount()) - noSigStrt;
-	if (slop >= 4) dbgFLg = false; //regardles of original setting, kill debug output after 1st print following key up state
+	if (slop >= 4) dbgLtrBrk = false; //regardles of original setting, kill debug output after 1st print following key up state
 	sprintf(Str, " ");
-	DbgRptr(dbgFLg, StrBuf, Str);
+	DbgRptr(dbgLtrBrk, StrBuf, Str);
 
 	if (Bug3)
 	{
@@ -1460,7 +1460,7 @@ void SetLtrBrk(void)
 			ShrtBrk[i] = ShrtBrk[i - 1];
 		}
 		sprintf(Str, "Bg1:");
-		DbgRptr(dbgFLg, StrBuf, Str);
+		DbgRptr(dbgLtrBrk, StrBuf, Str);
 	}
 	// Figure out how much time to allow for a letter break
 
@@ -1468,7 +1468,7 @@ void SetLtrBrk(void)
 	{
 		space = ((9 * space) + (3 * avgDeadSpace)) / 10;
 		sprintf(Str, "Bg3:");
-		DbgRptr(dbgFLg, StrBuf, Str);
+		DbgRptr(dbgLtrBrk, StrBuf, Str);
 	}
 	else
 	{
@@ -1476,13 +1476,13 @@ void SetLtrBrk(void)
 		{
 			space = avgDeadSpace; //((3*space)+avgDeadSpace)/4; //20190717 jmh - Changed to averaging space value to reduce chance of glitches causing mid character letter breaks
 			sprintf(Str, "+");
-			DbgRptr(dbgFLg, StrBuf, Str);
+			DbgRptr(dbgLtrBrk, StrBuf, Str);
 		}
 		else
 		{
 			space = ((3 * space) + avgDit) / 4; // 20190717 jmh - Changed to averaging space value to reduce chance of glitches causing mid character letter breaks
 			sprintf(Str, "-");
-			DbgRptr(dbgFLg, StrBuf, Str);
+			DbgRptr(dbgLtrBrk, StrBuf, Str);
 		}
 	}
 
@@ -1491,18 +1491,12 @@ void SetLtrBrk(void)
 		ltrBrk = int(1.5 * (float(space))); // 20221106 went from 1.6 back to 1.5//20221105 went from 1.5 back to 1.6//20221022 went from 1.4 back to 1.5  // 20210410 went from 1.5 back to 1.4 // 20200306 went from 1.6 back to 1.5 to reduce the chance of having to deal with multi letter symbol groups
 		if (BugMode) //Bg2
 		{ // use special case spacing
-			// ltrBrk = int(1.0 * (float(space))); // 20221022 assume this is part of a dit series
-			// ltrBrk = int(1.9 * (float(space))); // 20230802 trying this value for ESP32 processing
-			// ltrBrk = int(1.7 * (float(AvgSmblDedSpc))); // 20230814 trying this value for ESP32 processing
 			ltrBrk = int(2.9 * (float(AvgSmblDedSpc))); // 20230815 trying this value for ESP32 processing
 			sprintf(Str, "!:");
-			DbgRptr(dbgFLg, StrBuf, Str);
+			DbgRptr(dbgLtrBrk, StrBuf, Str);
 		
 			if (((DeCodeVal & 1) == 1) && (DeCodeVal > 3))
 			{ // this dead space interval appears to be an mid-character event AND the last symbol detected was a "DAH".
-				// ltrBrk = int(2.7 * (float(space))); // 2.5 20230801 trying this value for ESP32 processing
-				// ltrBrk = int(2.1 * (float(AvgSmblDedSpc))); // 20230814 trying this value for ESP32 processing
-				// ltrBrk = int(0.56 * (float(avgDah))); // 20230815 trying this value for ESP32 processing
 				if(curRatio >= 3.1){// 20231229 added ratio comparison to the decision process
 					ltrBrk = int(0.92 * (float(avgDah))); // 20231229 trying this value for ESP32 processing
 					sprintf(Str, "A1:");
@@ -1511,7 +1505,7 @@ void SetLtrBrk(void)
 					ltrBrk = int(2.85 * (float(avgDit))); // 20231229 trying this value for ESP32 processing 	
 					sprintf(Str, "A2:");
 				}
-				DbgRptr(dbgFLg, StrBuf, Str);
+				DbgRptr(dbgLtrBrk, StrBuf, Str);
 			}
 			else if ((deadSpace < wordBrk) && (DeCodeVal == 3))
 			{ // the first symbol sent is a dash
@@ -1524,13 +1518,13 @@ void SetLtrBrk(void)
 				{ // hold on, new ltrBrk interval seems short
 					ltrBrk = ltrBrka;
 					sprintf(Str, "B:");
-					DbgRptr(dbgFLg, StrBuf, Str);
+					DbgRptr(dbgLtrBrk, StrBuf, Str);
 				}
 				else
 				{
 					ltrBrk = ltrBrkb;
 					sprintf(Str, "C:");
-					DbgRptr(dbgFLg, StrBuf, Str);
+					DbgRptr(dbgLtrBrk, StrBuf, Str);
 				}
 			}
 		}
@@ -1539,15 +1533,16 @@ void SetLtrBrk(void)
 			/*20230814 New strategy*/
 			if ((DeCodeVal & 1) == 1)
 			{
-				ltrBrk = int(0.8 * (float(avgDah))); // last synbol is a "dah"
+				/*20250122 changed to 0.65 based on recording from VK5CT*/
+				ltrBrk = int(0.65 * (float(avgDah))); //int(0.8 * (float(avgDah))); // last synbol is a "dah"
 				sprintf(Str, "D:");
-				DbgRptr(dbgFLg, StrBuf, Str);
+				DbgRptr(dbgLtrBrk, StrBuf, Str);
 			}
 			else
 			{
 				ltrBrk = int(1.6 * (float(avgDit))); // int(2.0 * (float(avgDit)));  //last synbol is a "dit"
 				sprintf(Str, "E:");
-				DbgRptr(dbgFLg, StrBuf, Str);
+				DbgRptr(dbgLtrBrk, StrBuf, Str);
 			}
 		}
 	}
@@ -1564,8 +1559,8 @@ void SetLtrBrk(void)
 	/*Now work out what the average intersymbol space time is*/
 	if ((3.18 * (float)deadSpace) < (float)avgDah)
 		AvgSmblDedSpc = (19 * AvgSmblDedSpc + (float)deadSpace) / 20;
-	/*Set dbgFLg = true, when diagnosing letter break timing */
-	if (dbgFLg)
+	/*Set dbgLtrBrk = true, when diagnosing letter break timing */
+	if (dbgLtrBrk)
 	{
 			sprintf(PrntBuf, "\tltrBrk: %d; deadSpace: %u; space: %u; avgDeadSpace: %u; AvgSmblDedSpc: %u; avgDah: %u; avgDit: %u\n\r",
 					(uint16_t)ltrBrk, (uint16_t)deadSpace, (uint16_t)space, (uint16_t)avgDeadSpace, (uint16_t)AvgSmblDedSpc, (uint16_t)avgDah, (uint16_t)avgDit);
@@ -1626,10 +1621,15 @@ bool chkChrCmplt(void)
 	/*20240322 Also in long runs, look for embedded 'DE' signifing call sign declaration & if found, force a word break */
 	// if (((noKeySig >= 0.75 * ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0))||(LtrPtr > 18 ||((LtrPtr >= 6) && (LtrHoldr[LtrPtr-2] == 'D') && (LtrHoldr[LtrPtr-1] == 'E'))))
 	if(Dbg) printf("stepB\n");
-	if (((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0)) || (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5)) || ((LtrPtr >= 6) && (LtrHoldr[LtrPtr - 2] == 'D') && (LtrHoldr[LtrPtr - 1] == 'E')) || ((LtrPtr >= 12)))
+	if (((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0)) 
+		|| (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5)) 
+		|| ((LtrPtr >= 6) && (LtrHoldr[LtrPtr - 2] == 'D') && (LtrHoldr[LtrPtr - 1] == 'E')) 
+		|| ((LtrPtr >= 12)))
+		//|| ForcedWrdBrk)
 	{
 		if(Dbg) printf("step1\n");
 		BldKeyUpDwnDataSet();
+		//ForcedWrdBrk = false;
 		if(chkcnt == DeCd_KeyDwnPtr)
 		{
 			// printf("chkcnt%d == DeCd_KeyDwnPt:%d\n", chkcnt, DeCd_KeyDwnPtr);
@@ -2856,7 +2856,6 @@ void dispMsg(char Msgbuf[50])
 			{ // we're working with the last letter received was started before a normal letter break period
 				ShrtFctr = float(float(80 * ltrBrk) / float(100 * UsrLtrBrk));
 				ShrtBrkA = (80 * UsrLtrBrk) / 100; // ShrtBrkA = (76*UsrLtrBrk)/100; //ShrtBrkA = (88*UsrLtrBrk)/100; //ShrtBrkA = (90*UsrLtrBrk)/100; //ShrtBrkA =  ShrtFctr*UsrLtrBrk;
-				
 			}
 
 			if ((ShrtBrk[LtrCntr] < 0.6 * wordBrk) && curChar != ' ' && (info[0] == 0))

@@ -170,6 +170,7 @@ bool adcON =false;
 bool SkippDotClkISR = false;
 bool ScopeArm = false;
 bool ScopeTrigr = true;
+bool ForcedWrdBrk = false;
 uint8_t QueFullstate;
 float BiasError = 0;
 int Smplcnt = 0;
@@ -380,6 +381,7 @@ void addSmpl(int k, int i, int *pCntrA)
       SmplSetDone = true;
     }
   }
+
   /*IIR manual method */
 float decimated = float(k);
 float IIRBPOut =
@@ -393,6 +395,7 @@ in_z1 = decimated;
 out_z2 = out_z1;
 out_z1 = IIRBPOut;
 decimated = IIRBPOut;
+
 		/*2nd stage */
 // IIRBPOut =
 // 	a0 * decimated
@@ -465,7 +468,8 @@ k = (int)decimated;
             /*if here, we just had a shift in the incoming tone of more than 15hz, 
             so assume new 'sender', & force a wordbreak in the decoded text
             by setting the expected wordbreak time to 0 */
-            wordBrk =0;
+            //ForcedWrdBrk = true;
+            //lvglmsgbx.ClrDcdTA(); // start new line when sender (frequency) changes
           }
           DmodFrqOld = (4*TARGET_FREQUENCYC + DemodFreq)/5;
           //sprintf(Title, "Tone: %d\t%d\n", DemodFreq, (int)SmplCNt);

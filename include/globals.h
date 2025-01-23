@@ -48,6 +48,7 @@ extern char LogBuf[];
 
 extern bool mutexFLG;//JMH Added
 extern bool Touch_mutex;
+extern bool ForcedWrdBrk;
 
 
 #endif /* INC_GLOBALS_H_ */

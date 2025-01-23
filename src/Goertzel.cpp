@@ -369,8 +369,20 @@ void ComputeMags(unsigned long now){
 	magB = ((magB)+CurLvl)/2; //((2*magB)+CurLvl)/3; //(magC + magL + magH)/3; //
 	/* try to establish what the long term noise floor is */
 	/* This sets the squelch point with/when only white noise is applied*/
-	if(!toneDetect)  CurNoise = ((399*CurNoise)+(1.4*SigPk))/400;
-	else CurNoise = (39* CurNoise + 1.1*CurLvl)/40;//(19* CurNoise + 1.1*CurLvl)/20;
+	if(!toneDetect)
+	{
+		CurNoise = ((399*CurNoise)+(1.4*SigPk))/400;
+	}
+	else
+	{
+		CurNoise = (39* CurNoise + 1.1*CurLvl)/40;//(19* CurNoise + 1.1*CurLvl)/20;
+		if(CurNoise<15000)
+		{
+			//CurNoise = 15000;
+			CurNoise = (19* CurNoise + (0.75*magB))/20;
+		}
+
+	}
 	/* now look or figure noise level based on what could be a tone driven result*/
 	//if ((2*NoiseFlr > CurLvl) && (CurLvl > NoiseFlr) && (NoiseFlr/SigPk >0.5)) // && (SigPk/NoiseFlr>0.5
 	//{ 

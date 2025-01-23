@@ -1143,7 +1143,7 @@ void AdvParser::EvalTimeData(void)
         ModeCnt = 0; // DcodeCW.cpp use "Normal" timing
         break;
     case 6:          // Sloppy Bug
-        ModeCnt = 0; // DcodeCW.cpp use "Normal" timing
+        ModeCnt = 1; // DcodeCW.cpp use "Bug3" timing
         break;
     default:
         break;

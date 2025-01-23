@@ -26,6 +26,8 @@
 #define IntrvlBufSize 100
 #define MsgbufSize 50
 #define SrchDictSize 790
+// #define DBugSrchEsRplace // uncomment to enable posting classic error fixes to serial port for debugging
+
 struct Buckt_t
 {
 	uint16_t Intrvl;
@@ -666,7 +668,7 @@ private:
         {"LOOIN", "LOOP", 5, 200}, //616
         {"ATHILE", "WHILE", 6, 200}, //617
         {"COET", "COM", 4, 200}, //618
-        {"EET" , "O", 3, 257}, //619//super sloppy bug
+        {"WWB", "WATTS", 3, 0}, //619
         {"7OI1" , "781", 3, 257}, //620//super sloppy bug
         {"MTMEAN" , "OOP", 6, 257}, //621//super sloppy bug
         {"CMMT" , "COM", 4, 257}, //622//super sloppy bug
@@ -828,6 +830,8 @@ private:
         {"MWCH", "MATCH", 4, 0}, //778
         {"QRTY", "MARTY", 4, 0}, //779
         {"QRY", "MARY", 3, 0}, //780
+        {"BETNR", "BETTER", 5, 0}, //781
+        
     };
     
     bool AllDah;
