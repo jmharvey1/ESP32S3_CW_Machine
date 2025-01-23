@@ -17,6 +17,7 @@
 /*20250110 Changed method of passing key state from Goertzel to CW Decoder (DcodeCW.cpp), Now using a task & Queues*/
 /*20250115 Tweaks to squelch/curNois/noisLvl to improve weak signal tone detection */
 /*20250120 another tweak to code to set noisLvl mainly intended to improve ingnoring white noise*/
+/*20250122 added tweak to code to better handle low noise signals & at low levels*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -376,6 +377,7 @@ void ComputeMags(unsigned long now){
 	else
 	{
 		CurNoise = (39* CurNoise + 1.1*CurLvl)/40;//(19* CurNoise + 1.1*CurLvl)/20;
+		/*20250122 added the following 'if' to better handle low noise signals & at low level*/
 		if(CurNoise<15000)
 		{
 			//CurNoise = 15000;
