@@ -89,6 +89,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250117 DcodeCW.cpp - Added word break conditional test to BldKeyUpDwnDataSet()*/
 /*20250119 AdvParser.cpp - added code to ensure last dataset entry is treated as a letterbreak*/
 /*another  Goertzelcpp - tweak to noisLvl code, mainly intended, to improve ingnoring white noise*/
+/*20250123 Goertzelcpp - reworked, yet again , how to manage tonedetect threshold level for both noisy & quiet conditions*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

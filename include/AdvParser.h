@@ -831,6 +831,7 @@ private:
         {"QRTY", "MARTY", 4, 0}, //779
         {"QRY", "MARY", 3, 0}, //780
         {"BETNR", "BETTER", 5, 0}, //781
+        {"WATB", "WATTS", 4, 0}, //782
         
     };
     

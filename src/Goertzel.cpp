@@ -18,6 +18,7 @@
 /*20250115 Tweaks to squelch/curNois/noisLvl to improve weak signal tone detection */
 /*20250120 another tweak to code to set noisLvl mainly intended to improve ingnoring white noise*/
 /*20250122 added tweak to code to better handle low noise signals & at low levels*/
+/*20250123 reworked, yet again , how to manage tonedetect threshold level for both noisy & quiet conditions*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -39,6 +40,7 @@ int LEDGREEN = 0;
 uint8_t LEDBLUE = 0;
 uint8_t LightLvl = 0;
 uint8_t LstLightLvl = 0;
+uint8_t OLDstate = 1;
 bool Ready = true;
 bool toneDetect = false;
 bool SlwFlg = false;
@@ -72,6 +74,7 @@ unsigned long TmpEvntTime = 0;
 unsigned long OldTmpEvntTime = 0;
 float NFlrBase = 0;
 float avgKeyDwn = 1200/15;
+float curNois =0;
 int NFlrRatio = 0;
 uint8_t GlthCnt = 0;
 bool StrngSigFLg = false; // used as part of the glitch detection process
@@ -164,7 +167,7 @@ void PlotIfNeed2(void){
 		//sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)CurLvl, (int)SqlchLvl, (int)NoiseFlr, KeyState, (int)CurNoise, (int)AdjSqlch-500, NFkeystate, PltGudSig);//standard plot display
 		//sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)noisLvl, (int)CurLvl, (int)SigDect, KeyState, NFkeystate, (int)CurNoise, (int)AdjSqlch-90, ClimCnt);
 	
-		sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)noisLvl, (int)CurLvl, (int)SigDect, KeyState, NFkeystate, (int)CurNoise, ltrCmplt);//standard plot display
+		sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)noisLvl, (int)CurLvl, (int)SigDect, KeyState, NFkeystate, (int)CurNoise, (int)ltrCmplt);//standard plot display 
 		
 		//sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)CurLvl, (int)NFlrBase, NFlrRatio, (int)NoiseFlr, KeyState, (int)CurNoise, (int)AdjSqlch-500, NFkeystate);
 		//sprintf(PlotTxt, "%d\t%d\t%d\t%d\n", (int)now, (int)NoisePrd, (int)avgDit, keystate);
@@ -325,14 +328,14 @@ void ComputeMags(unsigned long now){
 	for( int i =1 ; i <MagBSz; i++){
 		if(MagBuf[i]<NoiseFlr) NoiseFlr = MagBuf[i];
 		if(MagBuf[i]>SigPk) SigPk = MagBuf[i];
-		/*look for the smallest magnitude found in the 3 oldest samples; remember we alrady have one, the oldest of the three. So only need to check two more */
+		/*look for the smallest magnitude found in the 3 oldest samples; remember we already have one, the oldest of the three. So only need to check two more */
 		if( i < 2){
 			OldestDataPt++;
 			if(MagBuf[OldestDataPt] < SigDect) SigDect = MagBuf[OldestDataPt];
 		}
 
 	}
-	float curNois = (SigPk - NoiseFlr);
+	curNois = (SigPk - NoiseFlr);
 	//if(PlotFlg) printf("%d", (int)curNois);
 	/*20250107 More tweaks to squelch/curNois/noisLvl to make it more responsive to changing signal conditions & Conmercial RX AGC circuits */
 	/*under quiet condx, curNois = 200 to 450; sudden strong tone input, curNois = 3000 to 7000 */
@@ -372,17 +375,18 @@ void ComputeMags(unsigned long now){
 	/* This sets the squelch point with/when only white noise is applied*/
 	if(!toneDetect)
 	{
-		CurNoise = ((399*CurNoise)+(1.4*SigPk))/400;
+		//CurNoise = ((399*CurNoise)+(1.4*SigPk))/400;
+		CurNoise = ((99*CurNoise)+(1.4*SigPk))/100;
 	}
 	else
 	{
-		CurNoise = (39* CurNoise + 1.1*CurLvl)/40;//(19* CurNoise + 1.1*CurLvl)/20;
-		/*20250122 added the following 'if' to better handle low noise signals & at low level*/
-		if(CurNoise<15000)
-		{
-			//CurNoise = 15000;
-			CurNoise = (19* CurNoise + (0.75*magB))/20;
-		}
+		// CurNoise = (39* CurNoise + 1.1*CurLvl)/40;//(19* CurNoise + 1.1*CurLvl)/20;
+		// /*20250122 added the following 'if' to better handle low noise signals & at low level*/
+		// if(CurNoise<15000)
+		// {
+			//CurNoise = (29* CurNoise + (1.00*magB))/30;
+			//CurNoise = (59* CurNoise + (1.00*magB))/60;
+		//}
 
 	}
 	/* now look or figure noise level based on what could be a tone driven result*/
@@ -549,55 +553,81 @@ void Chk4KeyDwn(float NowLvl)
 	
 	/*now if this last sample represents a keydown state(state ==0), 
 	Lets set the CurNoise to be mid way between the lowest curlevel and the NFlrBase value*/
-	if(!state){
+	if(!state)
+	{
 		float tmpcurnoise;
-		if(!SlwFlg)
-		{
-			tmpcurnoise = ((CurLvl-NFlrBase)/2) + NFlrBase;
-			//printf("tmpcurnoise = ((CurLvl-NFlrBase)/2) + NFlrBase\n");
-		} 
-		else
-		{
-			//tmpcurnoise = 1.0*CurNoise;
-			tmpcurnoise = ((CurLvl-NFlrBase)/5) + NFlrBase;
-			//printf("tmpcurnoise = ((CurLvl-NFlrBase)/5) + NFlrBase\n");
-		}
-		/*20250115 removed to improve tone detection in noisy sig*/
-		if((tmpcurnoise < CurNoise)&& (tmpcurnoise > 3*NFlrBase) )
+		// if(!SlwFlg)
+		// {
+		tmpcurnoise = ((CurLvl - NFlrBase) / 2) + NFlrBase;
+		if (state != OLDstate)
 		{
 			CurNoise = tmpcurnoise;
-			//printf("Apply Correction\n");
+			OLDstate = state;
+			//printf("tmpcurnoise = ((CurLvl-NFlrBase)/2) + NFlrBase\n");
 		}
 		
+		// }
+		// else
+		// {
+		//	tmpcurnoise = ((CurLvl-NFlrBase)/5) + NFlrBase;
+		// printf("tmpcurnoise = ((CurLvl-NFlrBase)/5) + NFlrBase\n");
+		// }
+		/*20250115 removed to improve tone detection in noisy sig*/
+		// if ((tmpcurnoise < CurNoise) && (tmpcurnoise > 3 * NFlrBase))
+		// {
+		// 	CurNoise = tmpcurnoise;
+		// 	// printf("Apply Correction\n");
+		// }
+
 		/*20241221 new dynamic adjustment/correction to squelch/tonethreshold during keydown interval*/
-		if (OldNowLvl > 0)
+		// if (OldNowLvl > 0)
+		// {
+		// 	SigSlope = ((NowLvl - OldNowLvl) + OldNowLvl) / OldNowLvl;
+		// 	if (NowLvl < OldNowLvl)
+		// 		SigSlope *= -1.5;
+		// 	if (SigSlope < 3 && SigSlope > -6)
+		// 	{
+		// 		if (SigSlope > 0)
+		// 			CurNoise += (SigSlope) * (0.01 * CurNoise);
+		// 		else
+		// 			CurNoise += (SigSlope) * (0.04 * CurNoise); //falling keydown signal
+		// 		printf("SigSlope %5.2f\n", SigSlope);
+		// 	}
+		// }
+		if (!state)
 		{
-			SigSlope = ((NowLvl-OldNowLvl)+OldNowLvl) / OldNowLvl;
-			if (NowLvl < OldNowLvl) SigSlope *= -1.5;
-			if(SigSlope <3 && SigSlope  > -6){
-				if(SigSlope>0) CurNoise += (SigSlope) * (0.01* CurNoise) ;
-				else CurNoise += (SigSlope) * (0.04* CurNoise) ;
-				//printf("SigSlope %5.2f\n", SigSlope);
-			}	
-		}if(!state)
-	{ 
-		if (OldNowLvl > 0)
-		{
-			SigSlope = ((NowLvl-OldNowLvl)+OldNowLvl) / OldNowLvl;
-			if (NowLvl < OldNowLvl) SigSlope *= -1.5;
-			if(SigSlope <3 && SigSlope  > -6){
-				if(SigSlope>0) CurNoise += (SigSlope) * (0.01* CurNoise) ;
-				else CurNoise += (SigSlope) * (0.04* CurNoise) ;
-				//printf("SigSlope %5.2f\n", SigSlope);
-			}	
+			if (OldNowLvl > 0)
+			{
+				SigSlope = ((NowLvl - OldNowLvl) + OldNowLvl) / OldNowLvl;
+				if (NowLvl < OldNowLvl)
+					SigSlope *= -1.5;
+				if (SigSlope < 3 && SigSlope > -6)
+				{
+					if (SigSlope > 0)
+						CurNoise += (SigSlope) * (0.001 * CurNoise);
+					else
+						CurNoise += (SigSlope) * (0.004 * CurNoise);
+					// printf("SigSlope %5.2f\n", SigSlope);
+				}
+			}
+			OldNowLvl = NowLvl;
 		}
+
 		OldNowLvl = NowLvl;
 	}
+	else
+		/*20250123 new approach to finding where/when to reset the threshold tone detect level
+		Note: the 'or' curNois va NowLvl test is based on the curNois dropping below the CurLvl(nowlvl) 
+		even in a noisy environment as a way to detect the presence of a tone */
+		if ((state != OLDstate) || (curNois < 0.75* NowLvl))
+		{
+			float tmpcurnoise = ((CurNoise - NFlrBase) / 2) + NFlrBase;
+			CurNoise = tmpcurnoise;
+			OLDstate = state;
+			//printf("tmpcurnoise = ((CurLvl-NFlrBase)/2) + NFlrBase\n");
+		}
+		//OLDstate = state;
 
-		OldNowLvl = NowLvl;  
-	}
-	
-	
 	/* new auto-adjusting glitch detection; based on average dit length */
 	unsigned long Now2 = TmpEvntTime; //set Now2 to the current sampleset's timestamp
 	/*Added to support ESP32 CW decoding process*/
