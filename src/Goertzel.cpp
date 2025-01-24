@@ -344,6 +344,8 @@ void ComputeMags(unsigned long now){
 	//curNois *= 2.0;//1.8;//
 	/*20250120 new code to set noisLvl*/
 	curNois *= 1.7;
+	/*20250123 the next line was added to stop overshoot of the curNois (threshold point/value) for loud high speed Signals*/
+	if(curNois > 90000) curNois = 90000;
 	//noisLvl = ((8*noisLvl) + curNois)/9;
 	if(curNois>30000) noisLvl = ((9*noisLvl) + (curNois))/10;
 	else noisLvl = ((4*noisLvl) + (curNois))/5;
