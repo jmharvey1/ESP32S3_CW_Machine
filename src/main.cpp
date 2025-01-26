@@ -78,18 +78,19 @@ esp_event_loop_args_t event_task_args = {
 /*20241229 DcodeCW.cpp - revised approach to setting word break wait interval via the WrdBrkFtcr*/
 /*20241230 LVGLMsgBox.cpp - Added 'F7' shortcut to clear Decoded Text space/area*/
 /*20250101 AdvParser.cpp - more refinements to letter break, splitPt, & word break code*/
-/*20250107 Goertzelcpp - More tweaks to squelch/curNois/noisLvl to make it more responsive to changing signal conditions */
+/*20250107 Goertzelcpp - More tweaks to squelch/curNois/ToneThresHold to make it more responsive to changing signal conditions */
 /*20250108 AdvParser.cpp - more refinements to letter break, & DitIntrvlVal code*/
 /*20250110 Changed method of passing 'key' state from Goertzel to CW Decoder (DcodeCW.cpp), Now using a task & Queues*/
 /*20250112 DcodeCW.cpp - Refined/Debugged Queue(s) management & building KeyDwn & KeyUp data sets related to AdvParser*/
 /*20250114 main.cpp - reworked postparser delete count management code to improve overwrite/replacement */
-/*20250115 Goertzelcpp - Tweaks to squelch/curNois/noisLvl to improve weak signal tone detection */
+/*20250115 Goertzelcpp - Tweaks to squelch/curNois/ToneThresHold to improve weak signal tone detection */
 /*20250115 AdvParser.cpp - lowered 'starting point' seach for letter break */
 /*20250116 DcodeCW.cpp - Reworked BldKeyUpDwnDataSet() and other areas related to 'wrdbrkFtcr', to improve 'slow' code decoding*/
 /*20250117 DcodeCW.cpp - Added word break conditional test to BldKeyUpDwnDataSet()*/
 /*20250119 AdvParser.cpp - added code to ensure last dataset entry is treated as a letterbreak*/
-/*another  Goertzelcpp - tweak to noisLvl code, mainly intended, to improve ingnoring white noise*/
+/*another  Goertzelcpp - tweak to ToneThresHold code, mainly intended, to improve ingnoring white noise*/
 /*20250123 Goertzelcpp - reworked, yet again , how to manage tonedetect threshold level for both noisy & quiet conditions*/
+/*20250126 Goertzelcpp - more tweaks to threshold setpoint code*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -1073,6 +1074,12 @@ void AdvParserTask(void *param)
       advparser.LtrHoldr[i] = 0;
     if (advparser.Dbug)
       printf("--------\n\n");
+
+    if(advparser.AvgDahVal < 100 )
+    { // Advanced Parser indicates this is Hi-Speed CW 
+      // Make sure Goertzel.cpp (tone detection )is aligned to follow keying
+      avgDit = 1200 / 40; 
+    }  
     /*The following code is primarilry for debugging stack alocation & understanding how much time the advance parser needs*/
     // uint16_t AdvPIntrvl = (uint16_t)(pdTICKS_TO_MS(xTaskGetTickCount())-AdvPStart);
     // printf("AdvPIntrvl: %d\n", AdvPIntrvl);
@@ -1908,6 +1915,7 @@ void ProcsKeyEntry(uint8_t keyVal)
   else if ((keyVal == 0x9F))
   { // Cntrl+"P"; CW decode ADC plot Enable/Disable
     PlotFlg = !PlotFlg;
+    if(PlotFlg) printf("ToneThresHold\tCurLvl\tNoiseFlr\tKeyState\tNFkeystate\tAvgNoise\tcurNois\n"); //ltrCmplt
     // DFault.AutoTune = AutoTune;
     vTaskDelay(250);
     return;

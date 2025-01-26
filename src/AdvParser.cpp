@@ -1143,7 +1143,8 @@ void AdvParser::EvalTimeData(void)
         ModeCnt = 0; // DcodeCW.cpp use "Normal" timing
         break;
     case 6:          // Sloppy Bug
-        ModeCnt = 1; // DcodeCW.cpp use "Bug3" timing
+        //ModeCnt = 1; // DcodeCW.cpp use "Bug3" timing
+        ModeCnt = 0; // DcodeCW.cpp use "Normal" timing //switched back to this, so that the display 'replace' code works as intended, when there is a mismatch between real time decoder and the post parser
         break;
     default:
         break;

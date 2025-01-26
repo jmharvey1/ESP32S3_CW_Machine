@@ -216,7 +216,7 @@ volatile unsigned long deadTime;
 volatile unsigned long MaxDeadTime;
 volatile unsigned long LpCnt = 0;
 volatile bool wordBrkFlg = false;
-float CurNoise = 10000;
+float AvgNoise = 10000;
 float SqlchLvl = 0;
 float curRatio = 3;
 float SNR = 5.0;
@@ -833,7 +833,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 				else
 				{
 					//////////////////////////////////////////////
-					if (GudSig && period > 10) // if (SqlchLvl > (1.1 * CurNoise))
+					if (GudSig && period > 10) // if (SqlchLvl > (1.1 * AvgNoise))
 					{
 						Shrt = 1200;
 						Long1 = 0;

@@ -18,7 +18,7 @@
 extern uint8_t chkcnt;
 extern uint8_t GudSig;
 extern float SqlchLvl;
-extern float CurNoise;
+extern float AvgNoise;
 extern float TARGET_FREQUENCYC;
 extern float AvgSmblDedSpc;
 extern float wrdbrkFtcr;
