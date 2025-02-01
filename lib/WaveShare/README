@@ -1,0 +1,3 @@
+
+20250201 JMH(KW4KD)
+The files contained in this folder were largely copied from the Waveshare wiki site, 'resource' section, and was originally downloaded as 'S3-S7-libraries.zip'. Specifically folders 'ESP32_Display_Pannel' & 'ESP32_IO_Expander'. As supplied, they were a generic solution, for multiple display drivers & touch sensors. The set contained, in this folder ('WaveShare'), strips out much of the extrainious code, leaving just the files needed, to support WaveShare's ESP32s3 7"LCD dev board.
