@@ -77,6 +77,7 @@ static lv_obj_t *MemF5ta;
 lv_obj_t *label;
 lv_obj_t *label2;
 lv_obj_t *wpm_lbl;
+lv_obj_t *SN_lbl;
 lv_obj_t *Bat_Lvl_lbl;
 lv_obj_t *bar1;
 lv_obj_t *F1_Str_lbl;
@@ -120,11 +121,12 @@ static lv_style_t TASettingsStyle;
 static lv_style_t Cursorstyle;
 static lv_color_t Dflt_bg_clr;
 static	bool first_run = false;
-
+//static float Nu_SN = 0.0;
 bool flag = false;
 bool traceFlg = false;
 bool chkbxlocalevnt = true;
 char buf[50];
+char SNbuf[25];
 const char *txt;
 //static const char *TAG = "Txt_Test";
 int ta_charCnt = 0;
@@ -551,6 +553,27 @@ void lvgl_update_KyBrdWPM(const char *buf2)
 	{
 		MutexLckId = 2;
 		lv_label_set_text(wpm_lbl, buf2);
+		_lv_disp_refr_timer(NULL);
+		xSemaphoreGive(lvgl_semaphore);
+		MutexLckId = 0;
+	}
+	return;
+}
+
+void lvgl_update_SN(float sn)
+{
+	char buf2[25];
+	sprintf(buf2, "S/N: %4.1fdB", sn);
+	if (bypassMutex)
+	{
+		lv_label_set_text(SN_lbl, buf2);
+		return;
+	}
+
+	if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 20 / portTICK_PERIOD_MS))
+	{
+		MutexLckId = 2;
+		lv_label_set_text(SN_lbl, buf2);
 		_lv_disp_refr_timer(NULL);
 		xSemaphoreGive(lvgl_semaphore);
 		MutexLckId = 0;
@@ -1146,7 +1169,7 @@ void Bld_LVGL_GUI(void)
 
 		bar1 = lv_bar_create(scr_1);
 		lv_obj_set_size(bar1, 200, 15);
-		lv_obj_set_pos(bar1, 10, 23);
+		lv_obj_set_pos(bar1, 110, 23);
 		lv_bar_set_value(bar1, 10, LV_ANIM_OFF);
 		lv_obj_add_style(bar1, &style_bar, LV_PART_INDICATOR);
 		DecdTxtArea = lv_textarea_create(cont1);
@@ -1177,6 +1200,12 @@ void Bld_LVGL_GUI(void)
 		lv_obj_set_pos(wpm_lbl, 675, 400);
 		lv_label_set_long_mode(wpm_lbl, LV_LABEL_LONG_CLIP);
 		lv_label_set_text(wpm_lbl, "-- WPM");
+
+		SN_lbl = lv_label_create(scr_1);
+		lv_obj_set_size(SN_lbl, 80, 20);
+		lv_obj_set_pos(SN_lbl, 20, 23);
+		lv_label_set_long_mode(SN_lbl, LV_LABEL_LONG_CLIP);
+		lv_label_set_text(SN_lbl, "S/N:");
 
 		F1_Str_lbl = lv_label_create(cont1);
 		lv_obj_set_size(F1_Str_lbl, 100, 20);
@@ -1442,6 +1471,7 @@ LVGLMsgBox::LVGLMsgBox(char *StrdTxt)
 	ToneFlg = false;
 	SpdFlg = false;
 	KBrdWPMFlg = false;
+	SNFlg = false;
 	Bump = false;
 	PgScrld = false;
 	BGHilite = false;
@@ -2037,6 +2067,14 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		{
 			lvgl_update_KyBrdWPM(WPMbuf);
 		}
+		//if (SNFlg & !setupFlg)
+		float Nu_SN = 0.0;
+		bool readQueue = (xQueueReceive(ToneSN_que, (void *)&Nu_SN, pdMS_TO_TICKS(3)) == pdTRUE);
+        if (readQueue)
+        {
+			lvgl_update_SN(Nu_SN);
+			//SNFlg = false;
+		}
 		if((OldStrTxtFlg != StrTxtFlg) & !setupFlg)
 		{
 			OldStrTxtFlg = StrTxtFlg;
@@ -2178,6 +2216,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		TchEvnt = false;
 		//SpdFlg = false;
 		KBrdWPMFlg = false;
+		
 		int lpcnt = 0;
 		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lv_timer_handler(); Start\n");
 		/*This replaces the need for the MsgBx_lvgl_port_task */
@@ -2570,6 +2609,16 @@ void LVGLMsgBox::ShwKeybrdWPM(int wpm)
 {
 	KBrdWPMFlg = true;
 	sprintf(WPMbuf, "%d WPM", wpm);
+};
+
+void LVGLMsgBox::ShwDcodeSN(float sn)
+{
+	if(!SNFlg)
+	{ 
+		//Nu_SN = sn;
+		SNFlg = true;
+	}
+	//printf("S2N: %4.1f\n", sn);
 };
 void LVGLMsgBox::setSOTFlg(bool flg)
 {

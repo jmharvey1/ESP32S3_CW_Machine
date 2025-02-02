@@ -182,6 +182,8 @@ static const uint8_t state_que_len = 100;
 static QueueHandle_t state_que;
 static const int RxSig_que_len = 15;//50
 QueueHandle_t RxSig_que;
+static const int ToneSN_que_len = 5;//50
+QueueHandle_t ToneSN_que;
 
 static const int KeyEvnt_que_len = 2*IntrvlBufSize;//50;
 static const int KeyState_que_len = KeyEvnt_que_len;
@@ -1178,6 +1180,7 @@ void app_main()
   RxSig_que  = xQueueCreate(RxSig_que_len, sizeof(int));
   KeyEvnt_que = xQueueCreate(KeyEvnt_que_len, sizeof(unsigned long));
   KeyState_que = xQueueCreate(KeyState_que_len, sizeof(uint8_t));
+  ToneSN_que = xQueueCreate(ToneSN_que_len, sizeof(float));
   mutex = xSemaphoreCreateMutex();
   DsplUpDt_AdvPrsrTsk_mutx =  xSemaphoreCreateMutex();
   ADCread_disp_refr_timer_mutx = xSemaphoreCreateMutex();

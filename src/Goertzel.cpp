@@ -24,12 +24,13 @@
 #include <math.h>
 #include "Goertzel.h"
 #include "DcodeCW.h"
-#include "LVGLMsgBox.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
+#include <math.h>
 #define MagBSz  6//3
 AdvParser advparser;
+LVGLMsgBox *ptrmsgbx1;
 uint16_t adc_buf[Goertzel_SAMPLE_CNT];
 uint8_t LongSmplFlg =1; // controls high speed sampling VS High Sensitivity ;can not set the value here
 uint8_t NuMagData = 0x0;
@@ -141,6 +142,7 @@ float OldSigPk =0;
 int prntcnt = 0;
 float MagBuf[MagBSz];
 float NoisBuf[2*MagBSz];
+float OldLvlBuf[3];
 int NoisPtr = 0;
 float ToneThresHold = 0;
 int ClimCnt = 0;
@@ -394,6 +396,9 @@ void ComputeMags(unsigned long now){
 	NSR = NoiseFlr/SigPk;
 	/*Now use the magnitude found six samples back*/
 	CurLvl = MagBuf[MBpntr];
+	OldLvlBuf[2] = OldLvlBuf[1];
+	OldLvlBuf[1] = OldLvlBuf[0];
+	OldLvlBuf[0] = CurLvl;
 	if(CurLvl < 0) CurLvl = 0; 
 	magB = ((magB)+CurLvl)/2; //((2*magB)+CurLvl)/3; //(magC + magL + magH)/3; //
 	/* try to establish what the long term noise floor is */
@@ -625,7 +630,13 @@ void Chk4KeyDwn(float NowLvl)
 			float tmpcurnoise = ((AvgNoise - NFlrBase) / 2) + NFlrBase;
 			AvgNoise = tmpcurnoise;
 			OLDstate = state;
-			//printf("tmpcurnoise = ((CurLvl-NFlrBase)/2) + NFlrBase\n");
+			float S2N = 20*log10(OldLvlBuf[2]/OldLvlBuf[0]);
+			if (xQueueSend(ToneSN_que, &S2N, pdMS_TO_TICKS(2)) == pdFALSE)
+          	{
+            	// printf("Failed to push 'pksigH' to 'RxSig_que' \n");
+          	}
+			//ptrmsgbx1->ShwDcodeSN(S2N);
+			//printf("Tone = %8.2f; Noise = %8.2f\n", OldLvlBuf[2], OldLvlBuf[0]);
 		}
 		//OLDstate = state;
 

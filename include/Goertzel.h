@@ -10,6 +10,7 @@
 //#define Goertzel_SAMPLE_CNT   158 // @750Hz tone input & ~39Khz sample rate = 52 samples per cycle & 3 cycle sample duration. i.e. ~4ms
 #define Goertzel_SAMPLE_CNT 398//402 // 406 // @750Hz tone input & ~101.250Khz sample rate = 135 samples per cycle & 3 cycle sample duration. i.e. ~4ms
 #include "AdvParser.h"
+#include "LVGLMsgBox.h"
 #include "main.h"
 extern AdvParser advparser;
 extern bool PlotFlg;

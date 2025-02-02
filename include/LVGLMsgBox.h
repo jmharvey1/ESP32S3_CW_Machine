@@ -84,6 +84,7 @@ extern "C" {
 #define HiRes // uncomment for 480x340 screens
 #define RingBufSz 400
 extern SemaphoreHandle_t lvgl_semaphore;
+extern QueueHandle_t ToneSN_que;
 extern int MutexLckId;
 extern lv_chart_series_t * ui_Chart1_series_1;
 extern int freq_int;
@@ -220,6 +221,7 @@ private:
 	bool ToneFlg;
 	bool SpdFlg;
 	bool KBrdWPMFlg;
+	bool SNFlg;
 	bool UpdtKyBrdCrsr;
 	bool Bump;
 	bool PgScrld; // flag to indicate whether that the 'scroll' routine has ever run; i.e initially false. but always true once the process has
@@ -249,6 +251,7 @@ public:
 	void dispStat(char Msgbuf[50], uint16_t Color);
 	void showSpeed(char Msgbuf[50], uint16_t Color);
 	void ShwKeybrdWPM(int wpm);/*New for waveshare/lvgl Display*/
+	void ShwDcodeSN(float sn);
 	void setSOTFlg(bool flg);
 	void setStrTxtFlg(bool flg);
 	void SaveSettings(void);
