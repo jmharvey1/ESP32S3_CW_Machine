@@ -6,7 +6,7 @@
 #pragma once
 
 #include <assert.h>
-#include "ESP_Panel_Conf_Internal.h"
+//#include "ESP_Panel_Conf_Internal.h" //JMH Removed as part of Waveshare lib file reduction
 #if ESP_PANEL_ENABLE_LOG
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 #endif

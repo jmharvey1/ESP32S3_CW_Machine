@@ -19,7 +19,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
-#include "ESP_Panel_Conf_Internal.h"
+//#include "ESP_Panel_Conf_Internal.h"
+#include "ESP_Panel_Conf.h"
 
 #ifdef __cplusplus
 extern "C" {

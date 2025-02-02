@@ -78,8 +78,8 @@ extern "C" {
 /*end Waveshare Params*/
 
 /*Added this to aviod having to reference LVGL_port_v8.h */
-#define LVGL_PORT_DISP_WIDTH                    (ESP_PANEL_LCD_WIDTH)   // The width of the display
-#define LVGL_PORT_DISP_HEIGHT                   (ESP_PANEL_LCD_HEIGHT)  // The height of the display
+#define LVGL_PORT_DISP_WIDTH                    (MSGBX_LCD_H_RES)   // The width of the display
+#define LVGL_PORT_DISP_HEIGHT                   (MSGBX_LCD_V_RES)  // The height of the display
 
 #define HiRes // uncomment for 480x340 screens
 #define RingBufSz 400
@@ -251,7 +251,7 @@ public:
 	void dispStat(char Msgbuf[50], uint16_t Color);
 	void showSpeed(char Msgbuf[50], uint16_t Color);
 	void ShwKeybrdWPM(int wpm);/*New for waveshare/lvgl Display*/
-	void ShwDcodeSN(float sn);
+	//void ShwDcodeSN(float sn);
 	void setSOTFlg(bool flg);
 	void setStrTxtFlg(bool flg);
 	void SaveSettings(void);

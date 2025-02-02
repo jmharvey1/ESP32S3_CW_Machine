@@ -1471,7 +1471,7 @@ LVGLMsgBox::LVGLMsgBox(char *StrdTxt)
 	ToneFlg = false;
 	SpdFlg = false;
 	KBrdWPMFlg = false;
-	SNFlg = false;
+	//SNFlg = false; // not needed. Used 'ToneSN_que' instead
 	Bump = false;
 	PgScrld = false;
 	BGHilite = false;
@@ -2611,15 +2611,15 @@ void LVGLMsgBox::ShwKeybrdWPM(int wpm)
 	sprintf(WPMbuf, "%d WPM", wpm);
 };
 
-void LVGLMsgBox::ShwDcodeSN(float sn)
-{
-	if(!SNFlg)
-	{ 
-		//Nu_SN = sn;
-		SNFlg = true;
-	}
-	//printf("S2N: %4.1f\n", sn);
-};
+// void LVGLMsgBox::ShwDcodeSN(float sn)
+// {
+// 	if(!SNFlg)
+// 	{ 
+// 		//Nu_SN = sn;
+// 		SNFlg = true;
+// 	}
+// 	//printf("S2N: %4.1f\n", sn);
+// };
 void LVGLMsgBox::setSOTFlg(bool flg)
 {
 	SOTFlg = flg;
