@@ -1,6 +1,6 @@
 /*
  * LVGLMsgBox.cpp
-  *
+ *
  *  Created on: Oct 7, 2021
  *      Author: jim
  * 20230617 To support advanced DcodeCW "Bug" processes, reworked dispMsg2(void) to handle ASCII chacacter 0x8 "Backspace" symbol
@@ -18,6 +18,7 @@
 /*20241124 Modified Night mode checkbox color*/
 /*20241230 Added method ClrDcdTA(void) to support 'clear Decoded Text' space/area*/
 /*20250203 Moved S/N log calc to dispMsg2()*/
+/*20250203 Revised S/N process to show minimum value for displayed character*/
 #include <stdio.h>
 #include <math.h>
 #include "sdkconfig.h"
@@ -41,7 +42,7 @@
 #include "widgets/lv_bar.h"
 #include "widgets/lv_checkbox.h"
 /*end Waveshare & lvgl includes*/
-#include "driver/i2c_master.h" //added for waveshare touch support
+#include "driver/i2c_master.h"				//added for waveshare touch support
 #include "touch/base/esp_lcd_touch_gt911.h" //added for waveshare touch support
 
 CWSNDENGN *cwsnd;
@@ -60,15 +61,15 @@ i2c_master_bus_handle_t i2c_master_bus_handle = nullptr; // added here for waves
 i2c_master_dev_handle_t Touch_dev_handle = NULL;		 // added here for waveshare touch support
 
 /*GUI Variables*/
-lv_obj_t *win3; //help screen
+lv_obj_t *win3; // help screen
 lv_obj_t *win2;
 lv_obj_t *win1;
 static lv_obj_t *cont1;
 static lv_obj_t *cont2;
-static lv_obj_t *cont3; //help screen
+static lv_obj_t *cont3; // help screen
 lv_obj_t *DecdTxtArea;
 lv_obj_t *SendTxtArea;
-static lv_obj_t *Helpta; //help screen
+static lv_obj_t *Helpta; // help screen
 static lv_obj_t *MyCallta;
 static lv_obj_t *WPMta;
 static lv_obj_t *MemF2ta;
@@ -93,23 +94,25 @@ static lv_obj_t *Hexit_btn;
 /*added for scope Sceen*/
 int bias_int = 0;
 int freq_int = 0;
-//int NxtRngBfrNdx = 0;
+// int NxtRngBfrNdx = 0;
 bool SmplSetRdy = false;
-static lv_obj_t * ui_Scope;
-static lv_obj_t * ui_Help;
-static lv_obj_t * ui_Chart1;
-static lv_obj_t * ui_Label1;
-static lv_obj_t * ui_Label2;
-lv_obj_t * ui____initial_actions0;
-lv_chart_series_t * ui_Chart1_series_1 = NULL;;
-lv_chart_series_t * ui_Chart1_series_2 = NULL;;
+static lv_obj_t *ui_Scope;
+static lv_obj_t *ui_Help;
+static lv_obj_t *ui_Chart1;
+static lv_obj_t *ui_Label1;
+static lv_obj_t *ui_Label2;
+lv_obj_t *ui____initial_actions0;
+lv_chart_series_t *ui_Chart1_series_1 = NULL;
+;
+lv_chart_series_t *ui_Chart1_series_2 = NULL;
+;
 lv_timer_t *timer;
 static lv_indev_drv_t indev_drv; // Input device driver (Touch)
 /*Added for two screen (main & settings) support*/
 static lv_coord_t title_height = 20;
-static lv_obj_t *scr_1;// = lv_win_create(lv_scr_act(), title_height);
-static lv_obj_t *scr_2;// = lv_win_create(NULL, title_height);
-//static lv_obj_t *scrMaster;
+static lv_obj_t *scr_1; // = lv_win_create(lv_scr_act(), title_height);
+static lv_obj_t *scr_2; // = lv_win_create(NULL, title_height);
+// static lv_obj_t *scrMaster;
 static lv_style_t style_btn;
 static lv_style_t style_Slctd_bg;
 static lv_style_t style_Deslctd_bg;
@@ -121,15 +124,15 @@ static lv_style_t TAstyle;
 static lv_style_t TASettingsStyle;
 static lv_style_t Cursorstyle;
 static lv_color_t Dflt_bg_clr;
-static	bool first_run = false;
-//static float Nu_SN = 0.0;
+static bool first_run = false;
+// static float Nu_SN = 0.0;
 bool flag = false;
 bool traceFlg = false;
 bool chkbxlocalevnt = true;
 char buf[50];
 char SNbuf[25];
 const char *txt;
-//static const char *TAG = "Txt_Test";
+// static const char *TAG = "Txt_Test";
 int ta_charCnt = 0;
 int CurKyBrdCharCnt = 0;
 /* int pksig = 0;
@@ -161,7 +164,7 @@ static void screen1_event_handler(lv_event_t *e)
 	{
 	case LV_EVENT_CLICKED:
 	{
-		//printf("Main Screen (sc_1) 'Settings' button click event\n");
+		// printf("Main Screen (sc_1) 'Settings' button click event\n");
 		setupFlg = true;
 	}
 	break;
@@ -178,7 +181,7 @@ static void HelpBtn_event_handler(lv_event_t *e)
 	{
 	case LV_EVENT_CLICKED:
 	{
-		//printf("Main Screen (sc_1) 'Help' button click event\n");
+		// printf("Main Screen (sc_1) 'Help' button click event\n");
 		HelpFlg = !HelpFlg;
 	}
 	break;
@@ -209,26 +212,27 @@ static void ClrBtn_event_handler(lv_event_t *e)
 /*Actually the setting screen home/exit button call-back event handler*/
 static void Settings_Scrn_evnt_cb(lv_event_t *e)
 {
-  lv_event_code_t code = lv_event_get_code(e);
-  switch (code)
-  {
-    case LV_EVENT_CLICKED:
-    {
-      Sync_Dflt_Settings();
-      Bld_LVGL_GUI();
-    }
-    break;
+	lv_event_code_t code = lv_event_get_code(e);
+	switch (code)
+	{
+	case LV_EVENT_CLICKED:
+	{
+		Sync_Dflt_Settings();
+		Bld_LVGL_GUI();
+	}
+	break;
 
-    default: break;
-  }
+	default:
+		break;
+	}
 }
 
 static void Save_evnt_cb(lv_event_t *e)
 {
-  lv_event_code_t code = lv_event_get_code(e);
-  switch (code)
-  {
-    case LV_EVENT_CLICKED:
+	lv_event_code_t code = lv_event_get_code(e);
+	switch (code)
+	{
+	case LV_EVENT_CLICKED:
 	{
 		lv_color_t curbgclr = lv_obj_get_style_bg_color(e->current_target, LV_PART_MAIN);
 		static lv_style_t style_SaveEvnt_bg;
@@ -242,52 +246,62 @@ static void Save_evnt_cb(lv_event_t *e)
 		SaveUsrVals();
 		vTaskDelay(pdMS_TO_TICKS(250));
 		lv_style_reset(&style_SaveEvnt_bg);
-		lv_style_set_bg_color(&style_SaveEvnt_bg,curbgclr);
+		lv_style_set_bg_color(&style_SaveEvnt_bg, curbgclr);
 		lv_obj_add_style(save_btn, &style_SaveEvnt_bg, 0);
 		_lv_disp_refr_timer(NULL);
 	}
 	break;
 
-    default: break;
-  }
+	default:
+		break;
+	}
 }
 
-static void Debug_chkBx_cb(lv_event_t * e)
+static void Debug_chkBx_cb(lv_event_t *e)
 {
-    lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t * obj = lv_event_get_target(e);
-    if(code == LV_EVENT_VALUE_CHANGED) {
+	lv_event_code_t code = lv_event_get_code(e);
+	lv_obj_t *obj = lv_event_get_target(e);
+	if (code == LV_EVENT_VALUE_CHANGED)
+	{
 		chkbxlocalevnt = true;
-		const char * txt = lv_checkbox_get_text(obj);
-        const char * state = lv_obj_get_state(obj) & LV_STATE_CHECKED ? "Checked" : "Unchecked";
+		const char *txt = lv_checkbox_get_text(obj);
+		const char *state = lv_obj_get_state(obj) & LV_STATE_CHECKED ? "Checked" : "Unchecked";
 		LV_LOG_USER("LV_EVENT_VALUE_CHANGED %s: %s", txt, state);
-    }else if(code == LV_EVENT_CLICKED && !chkbxlocalevnt){
-		const char * txt = lv_checkbox_get_text(obj);
-		if(lv_obj_get_state(obj)) lv_obj_clear_state(obj, LV_STATE_CHECKED);
-		else lv_obj_add_state(obj, LV_STATE_CHECKED);
-        const char * state = lv_obj_get_state(obj) & LV_STATE_CHECKED ? "Checked" : "Unchecked";
+	}
+	else if (code == LV_EVENT_CLICKED && !chkbxlocalevnt)
+	{
+		const char *txt = lv_checkbox_get_text(obj);
+		if (lv_obj_get_state(obj))
+			lv_obj_clear_state(obj, LV_STATE_CHECKED);
+		else
+			lv_obj_add_state(obj, LV_STATE_CHECKED);
+		const char *state = lv_obj_get_state(obj) & LV_STATE_CHECKED ? "Checked" : "Unchecked";
 		LV_LOG_USER("LV_EVENT_CLICKED %s: %s", txt, state);
 	}
 }
 
-static void NiteMode_chkBx_cb(lv_event_t * e)
+static void NiteMode_chkBx_cb(lv_event_t *e)
 {
-    lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t * obj = lv_event_get_target(e);
-    if(code == LV_EVENT_VALUE_CHANGED) {
+	lv_event_code_t code = lv_event_get_code(e);
+	lv_obj_t *obj = lv_event_get_target(e);
+	if (code == LV_EVENT_VALUE_CHANGED)
+	{
 		NMchkbxVal_evnt = true;
-		const char * txt = lv_checkbox_get_text(obj);
-        const char * state = lv_obj_get_state(obj) & LV_STATE_CHECKED ? "Checked" : "Unchecked";
-		//LV_LOG_USER("LV_EVENT_VALUE_CHANGED %s: %s", txt, state);
+		const char *txt = lv_checkbox_get_text(obj);
+		const char *state = lv_obj_get_state(obj) & LV_STATE_CHECKED ? "Checked" : "Unchecked";
+		// LV_LOG_USER("LV_EVENT_VALUE_CHANGED %s: %s", txt, state);
 	}
-    if(code == LV_EVENT_CLICKED){// && !NiteMode){
-		const char * txt = lv_checkbox_get_text(obj);
-		if(!NMchkbxVal_evnt){ //we didn't get a change value event, so force a state change
-			if(NiteMode)
+	if (code == LV_EVENT_CLICKED)
+	{ // && !NiteMode){
+		const char *txt = lv_checkbox_get_text(obj);
+		if (!NMchkbxVal_evnt)
+		{ // we didn't get a change value event, so force a state change
+			if (NiteMode)
 			{
 				lv_obj_clear_state(obj, LV_STATE_CHECKED);
 				printf("Clear Check BOX; NiteMode:%d\n", (int)NiteMode);
-				if(NiteMode) NiteMode = false;
+				if (NiteMode)
+					NiteMode = false;
 			}
 			else
 			{
@@ -295,16 +309,19 @@ static void NiteMode_chkBx_cb(lv_event_t * e)
 				printf("Set Check BOX; NiteMode:%d\n", (int)NiteMode);
 			}
 		}
-		if(lv_obj_get_state(obj) && NiteMode){
+		if (lv_obj_get_state(obj) && NiteMode)
+		{
 			lv_obj_clear_state(obj, LV_STATE_CHECKED);
 			NiteMode = false;
 		}
-		else if(lv_obj_get_state(obj) && !NiteMode){
-			//lv_obj_add_state(obj, LV_STATE_CHECKED);
+		else if (lv_obj_get_state(obj) && !NiteMode)
+		{
+			// lv_obj_add_state(obj, LV_STATE_CHECKED);
 			NiteMode = true;
 			printf("Step2 NiteMode:%d\n", (int)NiteMode);
 		}
-		else if(!lv_obj_get_state(obj) && NiteMode){
+		else if (!lv_obj_get_state(obj) && NiteMode)
+		{
 			lv_obj_add_state(obj, LV_STATE_CHECKED);
 			NiteMode = true;
 			printf("Step3 NiteMode:%d\n", (int)NiteMode);
@@ -314,11 +331,11 @@ static void NiteMode_chkBx_cb(lv_event_t * e)
 		// 	NiteMode = false;
 		// }
 		NMchkbxVal_evnt = false;
-        const char * state = lv_obj_get_state(obj) & LV_STATE_CHECKED ? "Checked" : "Unchecked";
+		const char *state = lv_obj_get_state(obj) & LV_STATE_CHECKED ? "Checked" : "Unchecked";
 		LV_LOG_USER("LV_EVENT_CLICKED %s: %s; NiteMode:%d", txt, state, (int)NiteMode);
-		if (DFault.NiteMode != NiteMode) _FlipDayNiteMode();
+		if (DFault.NiteMode != NiteMode)
+			_FlipDayNiteMode();
 	}
-	 
 }
 /*Normal entry point for LVGLMsgBox::dispMsg2. The auto updater for decoded text*/
 void Update_textarea(lv_obj_t *TxtArea, char bufChar)
@@ -377,32 +394,34 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 			void *Oldp = (void *)p;
 			int max = lv_textarea_get_max_length(TxtArea);
 			ta_charCnt = strlen(p);
-			if (updateCharCnt && (TxtArea == SendTxtArea)) CurKyBrdCharCnt = ta_charCnt;
+			if (updateCharCnt && (TxtArea == SendTxtArea))
+				CurKyBrdCharCnt = ta_charCnt;
 			int del = 1 - (max - ta_charCnt);
 			if (del > 0)
 			{
 				del = 0;
-				//p += del;
+				// p += del;
 				int w = 0;
 				int lastWrdBrk = 0;
 				char *TaBuf = (char *)(Oldp);
 				lv_point_t Scrn_pt;
 				lv_draw_label_dsc_t label_dsc;
-            	lv_draw_label_dsc_init(&label_dsc);
-            	label_dsc.font = &lv_font_montserrat_18;
+				lv_draw_label_dsc_init(&label_dsc);
+				label_dsc.font = &lv_font_montserrat_18;
 				char curChr;
 				while ((*p != '\n') && (del < 98) && (w < 800)) // && (w < 760)
-				{/* Cap the number of characters deleted to 98 (i.e. ~one line of displayed text), or the 1st 'new line'*/
+				{												/* Cap the number of characters deleted to 98 (i.e. ~one line of displayed text), or the 1st 'new line'*/
 					del++;
 					p++;
 					curChr = TaBuf[del];
-					if(curChr == 0x20) lastWrdBrk = del;  
+					if (curChr == 0x20)
+						lastWrdBrk = del;
 					TaBuf[del] = '\0';
-				
-        			lv_txt_get_size(&Scrn_pt, TaBuf, label_dsc.font, label_dsc.letter_space, label_dsc.line_space, LV_COORD_MAX,
-                        label_dsc.flag);
-        			w = Scrn_pt.x;
-					//printf("del %d; X: %d; %s\n", del, w, TaBuf);
+
+					lv_txt_get_size(&Scrn_pt, TaBuf, label_dsc.font, label_dsc.letter_space, label_dsc.line_space, LV_COORD_MAX,
+									label_dsc.flag);
+					w = Scrn_pt.x;
+					// printf("del %d; X: %d; %s\n", del, w, TaBuf);
 					TaBuf[del] = curChr;
 				} // end while
 				if (*p == '\n')
@@ -410,31 +429,31 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 					del++;
 					p++;
 				}
-				else if(lastWrdBrk < del )
+				else if (lastWrdBrk < del)
 				{
 					p -= del - lastWrdBrk;
 					del = lastWrdBrk;
 				}
-				//printf("del %d\n\n", del);
+				// printf("del %d\n\n", del);
 				memcpy(Oldp, p, max - del); // shift the remaining text to the original start location
 				Oldp = (char *)realloc(Oldp, 1 + (max - del));
 				ta_charCnt = (max - del) + 1;
 				if (updateCharCnt && (TxtArea == SendTxtArea))
 					CurKyBrdCharCnt = ta_charCnt;
-				//char *TaBuf = (char *)(Oldp);
+				// char *TaBuf = (char *)(Oldp);
 				TaBuf[(max - del)] = '\0'; // terminate the newly truncated text buffer w/ a 								//a NULL
 				/*now if the send text area is being updated, need to recalc where the current letter being sent
 				 * located within the text string*/
-				if (TxtArea == SendTxtArea) KBrdCursorPntr -= del;
+				if (TxtArea == SendTxtArea)
+					KBrdCursorPntr -= del;
 				vTaskDelay(pdMS_TO_TICKS(20));
-			}/*END CAP Text stored code*/
+			} /*END CAP Text stored code*/
 			if (TxtArea != SendTxtArea)
 				lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
 			lv_textarea_add_char(TxtArea, bufChar);
 		}
 		if (!updateCharCnt)
 			lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
-		
 
 		if (updateCharCnt)
 			ta_charCnt = CurKyBrdCharCnt;
@@ -446,12 +465,12 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 			sprintf(buf2, "CharCnt: %d", ta_charCnt);
 			lv_label_set_text(label2, buf2);
 		}
-		#ifdef AutoCorrect 
+#ifdef AutoCorrect
 		if (TxtArea == DecdTxtArea)
 		{
 			printf("<%c>", bufChar);
 		}
-		#endif
+#endif
 	} // end bypass set mutex
 	else
 	{
@@ -514,7 +533,7 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 				if (trycnt > 5)
 				{
 					trycnt = 5;
-					//printf("LVGLMsgBox::update_text2 timed out; MutexLckId = %d\n", MutexLckId);
+					// printf("LVGLMsgBox::update_text2 timed out; MutexLckId = %d\n", MutexLckId);
 				}
 				vTaskDelay(pdMS_TO_TICKS(20));
 			}
@@ -584,7 +603,7 @@ void lvgl_update_SN(float sn)
 
 void lvgl_update_Bat_Lvl(uint8_t lvl)
 {
-    char buf2[50];
+	char buf2[50];
 	sprintf(buf2, "Kbrd Bat %d%%", (int)lvl);
 	if (bypassMutex)
 	{
@@ -612,50 +631,56 @@ void lvgl_UpdateToneSig(int curval)
 void lvgl_UpdateF1Mem(bool ActvFlg)
 {
 	/*this gets updated via dispMsg2(int RxSig). So does not need set/clear semaphore */
-	if(ActvFlg) lv_label_set_text(F1_Str_lbl, "F1 Active");
+	if (ActvFlg)
+		lv_label_set_text(F1_Str_lbl, "F1 Active");
 	else
 	{
 		char msg[25];
-		if(strlen(StrdTxt) == 0)
+		if (strlen(StrdTxt) == 0)
 		{
 			sprintf(msg, "F1 Mem");
 		}
 		else
 		{
 			sprintf(msg, "F1 (%s)", StrdTxt);
-		} 
-		//lv_label_set_text(F1_Str_lbl, "F1 Mem");
+		}
+		// lv_label_set_text(F1_Str_lbl, "F1 Mem");
 		lv_label_set_text(F1_Str_lbl, msg);
-	} 
+	}
 	return;
 }
 
 void lvgl_UpdateSOT(bool ActvFlg)
 {
 	/*this gets update via dispMsg2(int RxSig). So does not need set/clear semaphore */
-	if(ActvFlg) lv_label_set_text(F12_SOT_lbl, "F12 SOT ON");
-	else lv_label_set_text(F12_SOT_lbl, "F12 SOT OFF");
+	if (ActvFlg)
+		lv_label_set_text(F12_SOT_lbl, "F12 SOT ON");
+	else
+		lv_label_set_text(F12_SOT_lbl, "F12 SOT OFF");
 	return;
 }
 
 void lvgl_update_KyBrdCrsr(bool HiLight)
 {
 	lv_textarea_set_cursor_pos(SendTxtArea, KBrdCursorPntr);
-	if(HiLight){
+	if (HiLight)
+	{
 		lv_textarea_set_cursor_pos(SendTxtArea, KBrdCursorPntr);
 		lv_obj_add_state(SendTxtArea, LV_STATE_FOCUSED);
-		//printf("HiLight KBrdCursorPntr %d\n", KBrdCursorPntr);
-	}	
-	else{
-		lv_obj_clear_state(SendTxtArea, LV_STATE_FOCUSED);//hide cursor
-		//printf("        KBrdCursorPntr %d\n", KBrdCursorPntr);
+		// printf("HiLight KBrdCursorPntr %d\n", KBrdCursorPntr);
+	}
+	else
+	{
+		lv_obj_clear_state(SendTxtArea, LV_STATE_FOCUSED); // hide cursor
+		// printf("        KBrdCursorPntr %d\n", KBrdCursorPntr);
 	}
 };
 /*Updates selected setting */
 void lvgl_Update_setting(lv_obj_t *TxtArea, char bufChar)
 {
 	bool updateCharCnt = false;
-	if(SendTxtArea == TxtArea) updateCharCnt = true;
+	if (SendTxtArea == TxtArea)
+		updateCharCnt = true;
 	/*test & if needed convert to upper case*/
 	if ((bufChar >= 97) & (bufChar <= 122))
 	{
@@ -672,8 +697,8 @@ void lvgl_Update_setting(lv_obj_t *TxtArea, char bufChar)
 		else if (bufChar == 0xFF) // CW machine 'clear screen' command
 		{
 			lv_textarea_set_text(TxtArea, "");
-			if(updateCharCnt) CurKyBrdCharCnt = 0;
-			
+			if (updateCharCnt)
+				CurKyBrdCharCnt = 0;
 		}
 		else
 		{
@@ -684,7 +709,8 @@ void lvgl_Update_setting(lv_obj_t *TxtArea, char bufChar)
 			int need = 1; // strlen(buffer);
 			int max = lv_textarea_get_max_length(TxtArea);
 			ta_charCnt = strlen(p);
-			if(updateCharCnt) CurKyBrdCharCnt = ta_charCnt;
+			if (updateCharCnt)
+				CurKyBrdCharCnt = ta_charCnt;
 			int del = need - (max - ta_charCnt);
 
 			if (del > 0)
@@ -703,7 +729,8 @@ void lvgl_Update_setting(lv_obj_t *TxtArea, char bufChar)
 				memcpy(Oldp, p, max - del); // copy existing
 				Oldp = (char *)realloc(Oldp, 1 + (max - del));
 				ta_charCnt = (max - del) + 1;
-				if(updateCharCnt) CurKyBrdCharCnt = ta_charCnt;
+				if (updateCharCnt)
+					CurKyBrdCharCnt = ta_charCnt;
 				char *TaBuf = (char *)(Oldp);
 				TaBuf[(max - del)] = '\0'; // terminate the newly truncated text buffer w/ a a NULL
 				vTaskDelay(pdMS_TO_TICKS(20));
@@ -724,26 +751,26 @@ void lvgl_DeSelct_Param(int paramptr)
 	{
 	case 0:
 		lv_obj_add_style(MyCallta, &style_Deslctd_bg, 0);
-		//lv_obj_add_style(MyCallta, &TASettingsStyle, 0);
-		//printf("deselected MyCallta\n");
+		// lv_obj_add_style(MyCallta, &TASettingsStyle, 0);
+		// printf("deselected MyCallta\n");
 		break;
 	case 1:
 		lv_obj_add_style(WPMta, &style_Deslctd_bg, 0);
-		//printf("deselected WPMta\n");
+		// printf("deselected WPMta\n");
 		break;
 	case 2:
 		lv_obj_add_style(chkbx_lbl, &style_Deslctd_bg, 0);
 		lv_obj_add_style(Dbg_ChkBx, &style_chkbx, 0);
-		//printf("deselected Dbg_ChkBx\n");
+		// printf("deselected Dbg_ChkBx\n");
 		break;
 	case 3:
 		lv_obj_add_style(chkbx_lbl1, &style_Deslctd_bg, 0);
 		lv_obj_add_style(ScrnMode_ChkBx, &style_chkbx, 0);
-		//printf("deselected ScrnMode_ChkBx\n");
-		break;	
+		// printf("deselected ScrnMode_ChkBx\n");
+		break;
 	case 4:
 		lv_obj_add_style(MemF2ta, &style_Deslctd_bg, 0);
-		//printf("deselected MemF2ta\n");
+		// printf("deselected MemF2ta\n");
 		break;
 	case 5:
 		lv_obj_add_style(MemF3ta, &style_Deslctd_bg, 0);
@@ -751,84 +778,84 @@ void lvgl_DeSelct_Param(int paramptr)
 		break;
 	case 6:
 		lv_obj_add_style(MemF4ta, &style_Deslctd_bg, 0);
-		//printf("deselected MemF4ta\n");
+		// printf("deselected MemF4ta\n");
 		break;
 	case 7:
 		lv_obj_add_style(MemF5ta, &style_Deslctd_bg, 0);
-		//printf("deselected MemF5ta\n");
+		// printf("deselected MemF5ta\n");
 		break;
 	case 8:
 		lv_obj_add_style(save_btn, &style_BtnDeslctd_bg, 0);
-		//printf("deselected save_btn\n");
+		// printf("deselected save_btn\n");
 		break;
 	case 9:
 		lv_obj_add_style(exit_btn, &style_BtnDeslctd_bg, 0);
-		//printf("deselected exit_btn\n");
+		// printf("deselected exit_btn\n");
 		break;
 	}
 };
 /*Seeting Screen - Updates selected setting */
 void lvgl_HiLite_Seltcd_Param(int paramptr)
 {
-	//style_Slctd_bg
-	//lv_style_reset(&style_Slctd_bg);
+	// style_Slctd_bg
+	// lv_style_reset(&style_Slctd_bg);
 	lv_color_t bgclr = lv_palette_main(LV_PALETTE_YELLOW);
 	lv_style_set_bg_color(&style_Slctd_bg, bgclr);
-	
+
 	switch (paramptr)
 	{
 	case 0:
 		lv_obj_add_style(MyCallta, &style_Slctd_bg, 0);
-		//printf("Selected MyCallta\n\n");
+		// printf("Selected MyCallta\n\n");
 		break;
 	case 1:
 		lv_obj_add_style(WPMta, &style_Slctd_bg, 0);
-		//printf("Selected WPMta\n\n");
+		// printf("Selected WPMta\n\n");
 		break;
 	case 2:
 	{
 		lv_obj_add_style(chkbx_lbl, &style_Slctd_bg, 0);
 		lv_obj_add_style(Dbg_ChkBx, &style_chkbx, 0);
-		//printf("Selected Dbg_ChkBx\n\n");
+		// printf("Selected Dbg_ChkBx\n\n");
 		break;
 	}
 	case 3:
 	{
 		lv_obj_add_style(chkbx_lbl1, &style_Slctd_bg, 0);
 		lv_obj_add_style(ScrnMode_ChkBx, &style_chkbx, 0);
-		//printf("Selected ScrnMode_ChkBx\n\n");
+		// printf("Selected ScrnMode_ChkBx\n\n");
 		break;
 	}
 	case 4:
 		lv_obj_add_style(MemF2ta, &style_Slctd_bg, 0);
-		//printf("Selected MemF2ta\n\n");
+		// printf("Selected MemF2ta\n\n");
 		break;
 	case 5:
 		lv_obj_add_style(MemF3ta, &style_Slctd_bg, 0);
-		//printf("Selected MemF3ta\n\n");
+		// printf("Selected MemF3ta\n\n");
 		break;
 	case 6:
 		lv_obj_add_style(MemF4ta, &style_Slctd_bg, 0);
-		//printf("Selected MemF4ta\n\n");
+		// printf("Selected MemF4ta\n\n");
 		break;
 	case 7:
 		lv_obj_add_style(MemF5ta, &style_Slctd_bg, 0);
-		//printf("Selected MemF5ta\n\n");
+		// printf("Selected MemF5ta\n\n");
 		break;
 	case 8:
 		lv_obj_add_style(save_btn, &style_Slctd_bg, 0);
-		//printf("Selected save_btn\n\n");
+		// printf("Selected save_btn\n\n");
 		break;
 	case 9:
 		lv_obj_add_style(exit_btn, &style_Slctd_bg, 0);
-		//printf("Selected exit_btn\n\n");
+		// printf("Selected exit_btn\n\n");
 		break;
 	}
 }
 
 void Bld_Help_scrn(void)
 {
-	if(ui_Help == NULL)
+	if (ui_Help == NULL)
 	{
 		ui_Help = lv_obj_create(NULL);
 		lv_obj_clear_flag(ui_Help, LV_OBJ_FLAG_SCROLLABLE); /// Flags
@@ -849,7 +876,6 @@ void Bld_Help_scrn(void)
 		lv_obj_set_size(Helpta, 760, 400); // width & Height
 		lv_obj_set_pos(Helpta, 0, 0);
 		lv_textarea_set_text(Helpta, HelpText);
-		
 	}
 	/*exit button*/
 	Hexit_btn = lv_btn_create(cont3);
@@ -864,13 +890,12 @@ void Bld_Help_scrn(void)
 	lv_label_set_text(Hexit_label, "Home");
 	lv_obj_align_to(Hexit_label, Hexit_btn, LV_ALIGN_CENTER, 0, 0);
 	lv_scr_load(ui_Help);
-	lv_textarea_set_cursor_pos(Helpta, 1-strlen(HelpText));//
+	lv_textarea_set_cursor_pos(Helpta, 1 - strlen(HelpText)); //
 }
-
 
 void Bld_Scope_scrn(void)
 {
-	if(ui_Scope == NULL)
+	if (ui_Scope == NULL)
 	{
 		ui_Scope = lv_obj_create(NULL);
 		lv_obj_clear_flag(ui_Scope, LV_OBJ_FLAG_SCROLLABLE); /// Flags
@@ -922,7 +947,6 @@ void Bld_Scope_scrn(void)
 	}
 
 	lv_scr_load(ui_Scope);
-
 }
 
 void Bld_Settings_scrn(void)
@@ -1076,7 +1100,7 @@ void Bld_Settings_scrn(void)
 		chkbx_lbl = lv_textarea_create(cont2);
 		lv_obj_set_size(chkbx_lbl, 80, 24);
 		lv_obj_set_pos(chkbx_lbl, 285, 21);
-		
+
 		lv_obj_add_style(chkbx_lbl, &style_chkbx, 0);
 		Dbg_ChkBx = lv_checkbox_create(cont2);
 		lv_checkbox_set_text(Dbg_ChkBx, "DeBug");
@@ -1092,7 +1116,7 @@ void Bld_Settings_scrn(void)
 		chkbx_lbl1 = lv_textarea_create(cont2);
 		lv_obj_set_size(chkbx_lbl1, 145, 24);
 		lv_obj_set_pos(chkbx_lbl1, 390, 21);
-		
+
 		ScrnMode_ChkBx = lv_checkbox_create(cont2);
 		lv_checkbox_set_text(ScrnMode_ChkBx, "Scrn Dark Mode");
 		lv_obj_add_event_cb(ScrnMode_ChkBx, NiteMode_chkBx_cb, LV_EVENT_ALL, NULL);
@@ -1120,10 +1144,10 @@ void Bld_LVGL_GUI(void)
 {
 	if (scr_1 == NULL)
 	{
-	scr_1 = lv_obj_create(NULL);
-	//printf("scr_1 = lv_obj_create(NULL)\n");
+		scr_1 = lv_obj_create(NULL);
+		// printf("scr_1 = lv_obj_create(NULL)\n");
 	}
-	
+
 	if (!first_run)
 	{
 		lv_style_init(&style_bar);
@@ -1139,7 +1163,8 @@ void Bld_LVGL_GUI(void)
 	/*Part of 2 screen support*/
 	lv_style_reset(&style_btn);
 	lv_style_reset(&style_label);
-	if (!NiteMode) lv_style_reset(&style_bar);
+	if (!NiteMode)
+		lv_style_reset(&style_bar);
 
 	lv_style_set_text_font(&style_label, &lv_font_montserrat_18);
 	lv_style_set_text_opa(&style_label, LV_OPA_100);
@@ -1151,21 +1176,21 @@ void Bld_LVGL_GUI(void)
 
 	lv_style_set_text_font(&TAstyle, &lv_font_montserrat_16);
 	/*style settings for night view */
-	//lv_style_set_bg_color(&style_win, lv_palette_main(LV_PALETTE_NONE));
-	// lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
+	// lv_style_set_bg_color(&style_win, lv_palette_main(LV_PALETTE_NONE));
+	//  lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
 	/*end night view setup*/
 	lv_style_set_bg_color(&Cursorstyle, lv_palette_main(LV_PALETTE_YELLOW)); // set cursor color
 	if (win1 == NULL)
 	{
 		char Title[100];
-		char RevDate[12] =  TODAY;
-		//printf("win1 = lv_win_create(scr_1, title_height);\n");
+		char RevDate[12] = TODAY;
+		// printf("win1 = lv_win_create(scr_1, title_height);\n");
 		title_height = 20;
 		win1 = lv_win_create(scr_1, title_height);
 		sprintf(Title, " ESP32s3 CW Machine (%s)", RevDate);
 		lv_win_add_title(win1, Title);
 		lv_obj_set_size(win1, 800, 480);
-		//lv_obj_add_style(win1, &style_win, 0);
+		// lv_obj_add_style(win1, &style_win, 0);
 		cont1 = lv_win_get_content(win1); /*Content can be added here*/
 
 		bar1 = lv_bar_create(scr_1);
@@ -1193,7 +1218,7 @@ void Bld_LVGL_GUI(void)
 		lv_label_set_text(label, "Decoder Status");
 		label2 = lv_label_create(cont1);
 		lv_obj_set_size(label2, 350, 20);
-		lv_obj_set_pos(label2, 660, 180);//410
+		lv_obj_set_pos(label2, 660, 180); // 410
 		lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
 
 		wpm_lbl = lv_label_create(cont1);
@@ -1225,12 +1250,10 @@ void Bld_LVGL_GUI(void)
 		lv_obj_set_pos(Bat_Lvl_lbl, 550, 400);
 		lv_label_set_long_mode(Bat_Lvl_lbl, LV_LABEL_LONG_CLIP);
 		lv_label_set_text(Bat_Lvl_lbl, "-- %");
-
-		
 	}
 	else
 	{
-		//printf("SKIP win1 = lv_win_create(scr_1, title_height);\n");
+		// printf("SKIP win1 = lv_win_create(scr_1, title_height);\n");
 	}
 
 	/*Setup settings button at bottom of display*/
@@ -1267,13 +1290,14 @@ void Bld_LVGL_GUI(void)
 	lv_obj_t *ClrTxt_btn_label = lv_label_create(ClrTxt_btn);
 	lv_obj_add_style(ClrTxt_btn_label, &style_label, 0);
 	lv_label_set_text(ClrTxt_btn_label, "Clear Text");
-	//lv_obj_align_to(ClrTxt_btn_label, ClrTxt_btn, LV_ALIGN_CENTER, 10, 2);
+	// lv_obj_align_to(ClrTxt_btn_label, ClrTxt_btn, LV_ALIGN_CENTER, 10, 2);
 	lv_obj_align_to(ClrTxt_btn_label, ClrTxt_btn, LV_ALIGN_CENTER, 0, 0);
 	lv_scr_load(scr_1);
 
-	if (scr_2 != NULL){
+	if (scr_2 != NULL)
+	{
 		printf("[APP] Free memory: %d bytes\n", (int)esp_get_free_heap_size());
-    	printf ("Hide Screen2:\n");
+		printf("Hide Screen2:\n");
 		setupFlg = false;
 	}
 }
@@ -1378,12 +1402,13 @@ static void lvgl_touch_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
 	{
 		data->state = LV_INDEV_STATE_REL;
 	}
-	//printf("vgl_touch_cb\n");
+	// printf("vgl_touch_cb\n");
 }
 
 void _FlipDayNiteMode(void)
 {
-	if(DFault.NiteMode == NiteMode) return;// added this test to abort rerunning this code when moving from main screen to settings screen
+	if (DFault.NiteMode == NiteMode)
+		return; // added this test to abort rerunning this code when moving from main screen to settings screen
 	_lv_theme_t *_theme = lv_theme_default_get();
 	lv_style_reset(&TAstyle);
 	lv_style_reset(&style_bar);
@@ -1393,15 +1418,15 @@ void _FlipDayNiteMode(void)
 	lv_style_set_text_opa(&style_label, LV_OPA_100);
 	lv_style_set_text_color(&style_label, lv_color_black());
 	if (NiteMode)
-	{/*style settings for night view */
+	{ /*style settings for night view */
 		_theme = lv_theme_default_init(_theme->disp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
-                                            1, LV_FONT_DEFAULT);
-		
+									   1, LV_FONT_DEFAULT);
+
 		lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
 		lv_style_set_bg_color(&style_bar, lv_palette_main(LV_PALETTE_BROWN));
 		lv_style_set_bg_color(&style_Deslctd_bg, Dflt_bg_clr);
 		lv_style_set_text_color(&style_Deslctd_bg, lv_color_white());
-		//lv_style_set_text_color(&TASettingsStyle, lv_color_white());// Dflt_bg_clr);
+		// lv_style_set_text_color(&TASettingsStyle, lv_color_white());// Dflt_bg_clr);
 		lv_style_set_text_color(&style_Slctd_bg, lv_color_black());
 		lv_style_set_text_color(&style_chkbx, lv_color_black());
 		/*end night view setup*/
@@ -1409,9 +1434,8 @@ void _FlipDayNiteMode(void)
 	else
 	{
 		_theme = lv_theme_default_init(_theme->disp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
-                                            0, LV_FONT_DEFAULT);
+									   0, LV_FONT_DEFAULT);
 		lv_style_set_bg_color(&style_Deslctd_bg, lv_color_white());
-											
 	}
 	DFault.NiteMode = NiteMode;
 };
@@ -1452,7 +1476,7 @@ static esp_err_t i2c_master_init(void)
 
 LVGLMsgBox::LVGLMsgBox(char *StrdTxt)
 {
-	
+
 	pStrdTxt = StrdTxt;
 	txtpos = 0;
 	RingbufPntr1 = 0;
@@ -1472,7 +1496,7 @@ LVGLMsgBox::LVGLMsgBox(char *StrdTxt)
 	ToneFlg = false;
 	SpdFlg = false;
 	KBrdWPMFlg = false;
-	//SNFlg = false; // not needed. Used 'ToneSN_que' instead
+	// SNFlg = false; // not needed. Used 'ToneSN_que' instead
 	Bump = false;
 	PgScrld = false;
 	BGHilite = false;
@@ -1483,16 +1507,16 @@ LVGLMsgBox::LVGLMsgBox(char *StrdTxt)
 void LVGLMsgBox::InitDsplay(void)
 {
 	static const char *TAG = "LVGLMsgBox::Init";
-	//cwsnd = cwsnd_ptr;
+	// cwsnd = cwsnd_ptr;
 	UpdtKyBrdCrsr = false;
-	static lv_disp_draw_buf_t disp_buf;		 // contains internal graphic buffer(s) called draw buffer(s)
-	static lv_disp_drv_t disp_drv;			 // contains callback functions
-	//esp_log_level_set("*", ESP_LOG_VERBOSE); // ESP_LOG_NONE,       /*!< No log output */
-											 // ESP_LOG_ERROR,      /*!< Critical errors, software module can not recover on its own */
-											 // ESP_LOG_WARN,       /*!< Error conditions from which recovery measures have been taken */
-											 // ESP_LOG_INFO,       /*!< Information messages which describe normal flow of events */
-											 // ESP_LOG_DEBUG,      /*!< Extra information which is not necessary for normal use (values, pointers, sizes, etc). */
-											 // ESP_LOG_VERBOSE     /*!< Bigger chunks of debugging information, or frequent messages which can potentially flood the output. */
+	static lv_disp_draw_buf_t disp_buf; // contains internal graphic buffer(s) called draw buffer(s)
+	static lv_disp_drv_t disp_drv;		// contains callback functions
+										// esp_log_level_set("*", ESP_LOG_VERBOSE); // ESP_LOG_NONE,       /*!< No log output */
+	//  ESP_LOG_ERROR,      /*!< Critical errors, software module can not recover on its own */
+	//  ESP_LOG_WARN,       /*!< Error conditions from which recovery measures have been taken */
+	//  ESP_LOG_INFO,       /*!< Information messages which describe normal flow of events */
+	//  ESP_LOG_DEBUG,      /*!< Extra information which is not necessary for normal use (values, pointers, sizes, etc). */
+	//  ESP_LOG_VERBOSE     /*!< Bigger chunks of debugging information, or frequent messages which can potentially flood the output. */
 
 #if CONFIG_MSGBX_AVOID_TEAR_EFFECT_WITH_SEM
 	ESP_LOGI(TAG, "Create semaphores");
@@ -1663,13 +1687,13 @@ void LVGLMsgBox::InitDsplay(void)
 	disp->refr_timer = NULL;
 	/*Note: Call '_lv_disp_refr_timer(NULL);'
 	whenever you want to refresh the dirty areas */
-/*Only doing this to supress warning timer message from lv_timer.c; 
-In this application LVGLMsgBox::dispMsg2 actually manages the scan & display refresh */
-/*in this project this will fire 10 time a second, mainly to keep the display 'touch' working*/
+	/*Only doing this to supress warning timer message from lv_timer.c;
+	In this application LVGLMsgBox::dispMsg2 actually manages the scan & display refresh */
+	/*in this project this will fire 10 time a second, mainly to keep the display 'touch' working*/
 	ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, LV_TICK_PERIOD_MS * 1000)); // here time is in micro seconds
 																						  // Tick Interface for LVGL using esp_timer to generate 2ms periodic event
 
-	//static lv_indev_drv_t indev_drv; // Input device driver (Touch)
+	// static lv_indev_drv_t indev_drv; // Input device driver (Touch)
 	lv_indev_drv_init(&indev_drv);
 	/*Set project/application specific parameters*/
 	indev_drv.type = LV_INDEV_TYPE_POINTER;
@@ -1678,7 +1702,7 @@ In this application LVGLMsgBox::dispMsg2 actually manages the scan & display ref
 	indev_drv.user_data = tp;
 
 	lv_indev_drv_register(&indev_drv);
-	//lv_timer_del(indev_drv.read_timer);
+	// lv_timer_del(indev_drv.read_timer);
 	indev_drv.read_timer->paused = true;
 	ESP_LOGI(TAG, "indev_drv.read_timer %p  read_cb: %p", indev_drv.read_timer, indev_drv.read_cb);
 	ESP_LOGI(TAG, "Bld LVGL GUI");
@@ -1700,7 +1724,7 @@ void LVGLMsgBox::ReBldDsplay(void)
 	ReStrSettings();
 	// TODO this may need more thought
 	RingbufPntr2 = 0;
-	
+
 	/*reset pointers & counters*/
 	cursorX = cursorY = curRow = cnt = offset = CursorPntr = 0;
 	RingbufPntr1--;
@@ -1721,8 +1745,9 @@ void LVGLMsgBox::ReBldDsplay(void)
  */
 void LVGLMsgBox::KBentry(char Ascii, int paramptr)
 {
-	if (setupFlg){
-		//printf("LVGLMsgBox::KBentry(char Ascii)\n");
+	if (setupFlg)
+	{
+		// printf("LVGLMsgBox::KBentry(char Ascii)\n");
 		SettingsKBrdNtry(Ascii, paramptr);
 		return;
 	}
@@ -1744,7 +1769,7 @@ void LVGLMsgBox::KBentry(char Ascii, int paramptr)
 	/*Removed for lvgl/waveshare cursor management*/
 	// if (CursorPntr == 0)
 	// 	CursorPntr = cnt;
-	//printf("Ascii:'%c'; AsciiVal %d\n", Ascii, (int)Ascii);
+	// printf("Ascii:'%c'; AsciiVal %d\n", Ascii, (int)Ascii);
 	traceFlg = true;
 	dispKeyBrdTxt(buf, color);
 };
@@ -1784,10 +1809,10 @@ void LVGLMsgBox::SettingsKBrdNtry(char Ntry, int paramptr)
 		case 1:
 			lvgl_Update_setting(WPMta, Ntry);
 			break;
-		case 2: //user updating the debug checkbox status
+		case 2: // user updating the debug checkbox status
 			if (Ntry == 0x95 || Ntry == 0x96 || Ntry == 0x0d)
 			{
-				//lv_arc_set_value(obj, lv_arc_get_value(obj) + 1);
+				// lv_arc_set_value(obj, lv_arc_get_value(obj) + 1);
 				chkbxlocalevnt = false;
 				lv_res_t res = lv_event_send(Dbg_ChkBx, LV_EVENT_CLICKED, NULL);
 				if (res != LV_RES_OK)
@@ -1799,10 +1824,10 @@ void LVGLMsgBox::SettingsKBrdNtry(char Ntry, int paramptr)
 			}
 			// lvgl_Update_setting(Dbg_ChkBx, Ntry);
 			break;
-		case 3: //user updating the ScrnMode checkbox status
+		case 3: // user updating the ScrnMode checkbox status
 			if (Ntry == 0x95 || Ntry == 0x96 || Ntry == 0x0d)
 			{
-				//NiteMode = false;
+				// NiteMode = false;
 				lv_res_t res = lv_event_send(ScrnMode_ChkBx, LV_EVENT_CLICKED, NULL);
 				if (res != LV_RES_OK)
 					printf("ScrnMode_ChkBx event processed\n");
@@ -1812,7 +1837,7 @@ void LVGLMsgBox::SettingsKBrdNtry(char Ntry, int paramptr)
 				printf("KeyBrd Ntry: %02x\n", Ntry);
 			}
 			// lvgl_Update_setting(Dbg_ChkBx, Ntry);
-			break;	
+			break;
 		case 4:
 			lvgl_Update_setting(MemF2ta, Ntry);
 			break;
@@ -1837,8 +1862,8 @@ void LVGLMsgBox::SettingsKBrdNtry(char Ntry, int paramptr)
 				printf("KeyBrd Ntry: %02x\n", Ntry);
 			}
 			break;
-		case 9: // exit button has focus
-			if (Ntry == 0x0d) //enter key was hit
+		case 9:				  // exit button has focus
+			if (Ntry == 0x0d) // enter key was hit
 			{
 				lv_res_t res = lv_event_send(exit_btn, LV_EVENT_CLICKED, NULL);
 				if (res != LV_RES_OK)
@@ -1848,13 +1873,13 @@ void LVGLMsgBox::SettingsKBrdNtry(char Ntry, int paramptr)
 			{
 				printf("KeyBrd Ntry: %02x\n", Ntry);
 			}
-			break;		
+			break;
 		}
 		xSemaphoreGive(lvgl_semaphore);
 	}
 };
-/* Typically called when exiting a settins session 
-passes back to the Defaults collection the current values of the params shown 
+/* Typically called when exiting a settins session
+passes back to the Defaults collection the current values of the params shown
 on the settings screen at exit */
 void LVGLMsgBox::syncDfltwSettings(void)
 {
@@ -1917,10 +1942,10 @@ void LVGLMsgBox::dispDeCdrTxt(char Msgbuf[50], uint16_t Color)
 {
 	int msgpntr = 0;
 
-	/* Add the contents of the Msgbuf to ringbuffer */
-	#ifdef AutoCorrect
-	printf("[%s]",Msgbuf);
-	#endif	
+/* Add the contents of the Msgbuf to ringbuffer */
+#ifdef AutoCorrect
+	printf("[%s]", Msgbuf);
+#endif
 	while (Msgbuf[msgpntr] != 0)
 	{
 		if (RingbufPntr1 < RingBufSz - 1)
@@ -1928,11 +1953,12 @@ void LVGLMsgBox::dispDeCdrTxt(char Msgbuf[50], uint16_t Color)
 		else
 			DeCdrRingbufChar[0] = 0;
 		DeCdrRingbufChar[RingbufPntr1] = Msgbuf[msgpntr];
-		/*Added for lvgl*/
-		#ifdef AutoCorrect
-		if(DeCdrRingbufChar[RingbufPntr1] == ' ') printf("%c; RingbufPntr1 %d\n",DeCdrRingbufChar[RingbufPntr1], RingbufPntr1);
-		#endif
-		//printf("%c; RingbufPntr1 %d\n",Msgbuf[msgpntr], RingbufPntr1);
+/*Added for lvgl*/
+#ifdef AutoCorrect
+		if (DeCdrRingbufChar[RingbufPntr1] == ' ')
+			printf("%c; RingbufPntr1 %d\n", DeCdrRingbufChar[RingbufPntr1], RingbufPntr1);
+#endif
+		// printf("%c; RingbufPntr1 %d\n",Msgbuf[msgpntr], RingbufPntr1);
 		/*Not needed for vlgl display*/
 		// DeCdrRingbufClr[RingbufPntr1] = Color;
 		RingbufPntr1++;
@@ -1948,26 +1974,27 @@ void LVGLMsgBox::dispKeyBrdTxt(char Msgbuf[50], uint16_t Color)
 {
 	int msgpntr = 0;
 	int ChrCnt = strlen(Msgbuf);
-	//printf("%d\n", ChrCnt);
-	if(ChrCnt == 2){
-		if(Msgbuf[0] == 0x08 && Msgbuf[1] == 0x20) Msgbuf[1] = 0;
+	// printf("%d\n", ChrCnt);
+	if (ChrCnt == 2)
+	{
+		if (Msgbuf[0] == 0x08 && Msgbuf[1] == 0x20)
+			Msgbuf[1] = 0;
 	}
 	/* Add the contents of the Msgbuf to ringbuffer */
 
 	while (Msgbuf[msgpntr] != 0)
 	{
-		//printf("%d. bufChar '%c'; Val %d\n", msgpntr,  Msgbuf[msgpntr], (int)Msgbuf[msgpntr]);
+		// printf("%d. bufChar '%c'; Val %d\n", msgpntr,  Msgbuf[msgpntr], (int)Msgbuf[msgpntr]);
 		if (KeyBrdPntr1 < RingBufSz - 1)
 			KeyBrdRingbufChar[KeyBrdPntr1 + 1] = 0;
 		else
 			KeyBrdRingbufChar[0] = 0;
 		KeyBrdRingbufChar[KeyBrdPntr1] = Msgbuf[msgpntr];
-		//KeyBrdRingbufClr[KeyBrdPntr1] = Color;
+		// KeyBrdRingbufClr[KeyBrdPntr1] = Color;
 		KeyBrdPntr1++;
 		if (KeyBrdPntr1 == RingBufSz)
 			KeyBrdPntr1 = 0;
 		msgpntr++;
-		
 	}
 };
 
@@ -1982,8 +2009,8 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 	bool JstDoIt = true;
 	char bias[24];
 	char freq[24];
-	if(ScopeActive)
-	{ //ready to refresh "scope" view
+	if (ScopeActive)
+	{ // ready to refresh "scope" view
 		if (SmplSetRdy)
 		{
 			sprintf(bias, "ADC Bias: %d", bias_int);
@@ -2007,231 +2034,217 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		int Hght = 15;
 		// ptft->fillRect(StusBxX - 15, StusBxY + 10, Wdth, Hght, ToneColor);
 	}
-	
-	// if (((RingbufPntr2 != RingbufPntr1) || NuToneVal || SpdFlg || JstDoIt || KBrdWPMFlg || UpdtKyBrdCrsr))
-	// {
-		// NuTxt = true;
-		bool tryagn = true;
-		int trycnt = 0;
-		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  xSemaphoreTake;  Start\n");
-		while (tryagn)
-		{
-			if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
-			{
-				MutexLckId = 6;
-				tryagn = false;
-				report = false;
-				bypassMutex = true;
-				Msg2Actv = true;
-			}
-			else
-			{
-				trycnt++;
-				if (trycnt > 5)
-				{
-					trycnt = 5;
-					report = true;
-					printf("LVGLMsgBox::dispMsg2 timed out; MutexLckId = %d; timerID = %d\n", MutexLckId, timerID);
-				}
-				// vTaskDelay(pdMS_TO_TICKS(5));
-			}
-		}
-		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  xSemaphoreTake; Sucess\n");
-		/*Test to see if touch sensing can be managed under the normal screen refresh task*/
-		if(!indev_drv.read_timer->paused) printf("indev_drv.read_timer No longer 'PAUSED'\n");
-		//if (xSemaphoreTake(Touch_mutex, pdMS_TO_TICKS(5)) == pdTRUE) // Most of the time this will be true. But NOT while a BLE connect operation is happening
-		if (Touch_mutex)
-		{
-			lv_indev_read_timer_cb(indev_drv.read_timer);
-			//xSemaphoreGive(Touch_mutex);
-		}
 
-		if (NuToneVal & !setupFlg)
+	bool tryagn = true;
+	int trycnt = 0;
+	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  xSemaphoreTake;  Start\n");
+	while (tryagn)
+	{
+		if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
 		{
+			MutexLckId = 6;
+			tryagn = false;
+			report = false;
+			bypassMutex = true;
+			Msg2Actv = true;
+		}
+		else
+		{
+			trycnt++;
+			if (trycnt > 5)
+			{
+				trycnt = 5;
+				report = true;
+				printf("LVGLMsgBox::dispMsg2 timed out; MutexLckId = %d; timerID = %d\n", MutexLckId, timerID);
+			}
+			// vTaskDelay(pdMS_TO_TICKS(5));
+		}
+	}
+	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  xSemaphoreTake; Sucess\n");
+	/*Test to see if touch sensing can be managed under the normal screen refresh task*/
+	if (!indev_drv.read_timer->paused)
+		printf("indev_drv.read_timer No longer 'PAUSED'\n");
+	// if (xSemaphoreTake(Touch_mutex, pdMS_TO_TICKS(5)) == pdTRUE) // Most of the time this will be true. But NOT while a BLE connect operation is happening
+	if (Touch_mutex)
+	{
+		lv_indev_read_timer_cb(indev_drv.read_timer);
+		// xSemaphoreGive(Touch_mutex);
+	}
 
-			// printf("RxSig %d\n", RxSig);
-			lvgl_UpdateToneSig(RxSig);
-		}
-		if (SpdFlg & !setupFlg)
-		{
-			SpdFlg = false;
-			// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lvgl_update_RxStats; Start\n");
-			lvgl_update_RxStats(SpdBuf);
-			// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lvgl_update_RxStats; Complete\n");
-		}
-		if(OldBat_Lvl != Get_KyBrdBat_level())
-		{
-			OldBat_Lvl = Get_KyBrdBat_level();
-			lvgl_update_Bat_Lvl(OldBat_Lvl);
-		}
-		if (KBrdWPMFlg & !setupFlg)
-		{
-			lvgl_update_KyBrdWPM(WPMbuf);
-		}
-		//if (SNFlg & !setupFlg)
+	if (NuToneVal & !setupFlg)
+	{
+
+		// printf("RxSig %d\n", RxSig);
+		lvgl_UpdateToneSig(RxSig);
+	}
+	if (SpdFlg & !setupFlg)
+	{
+		SpdFlg = false;
+		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lvgl_update_RxStats; Start\n");
+		lvgl_update_RxStats(SpdBuf);
+		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lvgl_update_RxStats; Complete\n");
+	}
+	if (OldBat_Lvl != Get_KyBrdBat_level())
+	{
+		OldBat_Lvl = Get_KyBrdBat_level();
+		lvgl_update_Bat_Lvl(OldBat_Lvl);
+	}
+	if (KBrdWPMFlg & !setupFlg)
+	{
+		lvgl_update_KyBrdWPM(WPMbuf);
+	}
+	if (RingbufPntr2 != RingbufPntr1)
+	{ //we have a decoded character to print, So, from the accumulated keyup events(ratios), find the minimum S/N used in the construction of this character
 		float Nu_SN = 0.0;
-		bool readQueue = (xQueueReceive(ToneSN_que, (void *)&Nu_SN, pdMS_TO_TICKS(3)) == pdTRUE);
-        if (readQueue)
-        {
-			//lvgl_update_SN(Nu_SN);
-			lvgl_update_SN(20*log10(Nu_SN));
-		}
-		if((OldStrTxtFlg != StrTxtFlg) & !setupFlg)
+		float Min_SN = 1000; //equivalent to S/N = 60db
+		while(xQueueReceive(ToneSN_que, (void *)&Nu_SN, pdMS_TO_TICKS(3)) == pdTRUE)
 		{
-			OldStrTxtFlg = StrTxtFlg;
-			lvgl_UpdateF1Mem(OldStrTxtFlg);
+			if(Nu_SN < Min_SN) Min_SN = Nu_SN;
 		}
-		if((OldSOTFlg != SOTFlg) & !setupFlg)
-		{
-			OldSOTFlg = SOTFlg;
-			if(SOTFlg) KBrdCursorPntr = SOToffCursorPntr;
-			else SOToffCursorPntr = KBrdCursorPntr; //save keyboard cursor pointer when SOT was turned off. will be used later to set the cursor back
-			lvgl_UpdateSOT(OldSOTFlg);
-		}
-		if((UpdtKyBrdCrsr) & !setupFlg)
-		{
-			lvgl_update_KyBrdCrsr(BGHilite);
-			UpdtKyBrdCrsr = false;
-		}
-		
-		//if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, pdMS_TO_TICKS(1)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
-		if(!BlkDcdUpDts)
-		{
-			while (RingbufPntr2 != RingbufPntr1)
-			{
-				NuTxt = true;
-				/*test if this next entry is going to generate a scroll page event
-				& are we in the middle of sending a letter; if true, skip this update.
-				This was done to fix an issue with the esp32 & not being able to give the dotclock ISR
-				priority over the display ISR */
-				/*Not needed for lvgl display*/
-				// if (CWActv && (((cnt + 1) - offset) * fontW >= displayW) && (curRow + 1 == ROW))
-				// {
-				// 	// char buf[50];
-				// 	// sprintf(buf, "currow: %d; row: %d", curRow, row);
-				// 	// dispStat(buf, TFT_GREENYELLOW);//update status line
-				// 	// setSOTFlg(false);//changes status square to yellow
-				// 	break;
-				// }
-				// ptft->setCursor(cursorX, cursorY);
-				//if(NxtRngBfrNdx != RingbufPntr2) printf("RingbufPntr2 ERROR\n");
-				char curChar = DeCdrRingbufChar[RingbufPntr2];
-				Pgbuf[0] = curChar;
-				// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Start\n");
-				//  post  this character at the end of text shown in the decoded text space on the waveshare display
-				Update_textarea(DecdTxtArea, curChar);
-				// printf("Decoded textarea char %c\n", curChar);
-				//  sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Complete\n");
-				if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
-				{
-					// sprintf(LogBuf,"Msg2 Delete Initiated/n");
-					// if (!this->Delete(true, 1))
-					// 	printf("Msg2 Delete FAILED!!!/n");
-					// sprintf(LogBuf,"Msg2 Delete Completed/n");
-				}
-				else if (curChar == 10)
-				{	// test for "line feed" character
-					/*LVGL version shouldn't  a /DisplCrLf() function*/
-					// DisplCrLf();
-					//  printf("cnt:%d; \n", cnt);
-				}
-				else // at this point, whatever is left shoud be regular text
-				{
-					//
-				}
+		if(Min_SN != 1000) lvgl_update_SN(20 * log10(Min_SN));//calculate S/N in dBs, & pass the found value to lvgl display 
+	}
+	if ((OldStrTxtFlg != StrTxtFlg) & !setupFlg)
+	{
+		OldStrTxtFlg = StrTxtFlg;
+		lvgl_UpdateF1Mem(OldStrTxtFlg);
+	}
+	if ((OldSOTFlg != SOTFlg) & !setupFlg)
+	{
+		OldSOTFlg = SOTFlg;
+		if (SOTFlg)
+			KBrdCursorPntr = SOToffCursorPntr;
+		else
+			SOToffCursorPntr = KBrdCursorPntr; // save keyboard cursor pointer when SOT was turned off. will be used later to set the cursor back
+		lvgl_UpdateSOT(OldSOTFlg);
+	}
+	if ((UpdtKyBrdCrsr) & !setupFlg)
+	{
+		lvgl_update_KyBrdCrsr(BGHilite);
+		UpdtKyBrdCrsr = false;
+	}
 
-				RingbufPntr2++;
-				if (RingbufPntr2 == RingBufSz)
-					RingbufPntr2 = 0;
-				//NxtRngBfrNdx = 	RingbufPntr2;
-			} // End while (RingbufPntr2 != RingbufPntr1)
-		//	xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
-		}
-		/*now update any pending keyboard text entries*/
-		while (KeyBrdRingbufPntr2 != KeyBrdPntr1)
+	// if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, pdMS_TO_TICKS(1)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+	if (!BlkDcdUpDts)
+	{
+		while (RingbufPntr2 != RingbufPntr1)
 		{
 			NuTxt = true;
-			/*test if this next entry is going to generate a scroll page event
-			& are we in the middle of sending a letter; if true, skip this update.
-			This was done to fix an issue with the esp32 & not being able to give the dotclock ISR
-			priority over the display ISR */
-			if (CWActv && (((cnt + 1) - offset) * fontW >= displayW) && (curRow + 1 == ROW))
-			{
-				// char buf[50];
-				// sprintf(buf, "currow: %d; row: %d", curRow, row);
-				// dispStat(buf, TFT_GREENYELLOW);//update status line
-				// setSOTFlg(false);//changes status square to yellow
-				break;
-			}
-			// ptft->setCursor(cursorX, cursorY);
-			char curChar = KeyBrdRingbufChar[KeyBrdRingbufPntr2];
-			//printf("bufChar '%c'; Val %d\n", curChar, (int)curChar);
+			char curChar = DeCdrRingbufChar[RingbufPntr2];
+			Pgbuf[0] = curChar;
 			// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Start\n");
 			//  post  this character at the end of text shown in the decoded text space on the waveshare display
-			Update_textarea(SendTxtArea, curChar);
-			// printf("%c", curChar);
-			// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Complete\n");
-			// if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
-			// {
-			// 	// sprintf(LogBuf,"Msg2 Delete Initiated/n");
-			// 	if (!this->Delete(false, 1))
-			// 		printf("Msg2 Delete FAILED!!!/n");
-			// 	// sprintf(LogBuf,"Msg2 Delete Completed/n");
-			// }
-			// // else if (curChar == 10)
-			// // {	// test for "line feed" character
-			// // 	/*LVGL version shouldn't  a /DisplCrLf() function*/
-			// // 	// DisplCrLf();
-			// // 	//  printf("cnt:%d; \n", cnt);
-			// // }
-			// else // at this point, whatever is left shoud be regular text
-			// {
+			Update_textarea(DecdTxtArea, curChar);
+			// printf("Decoded textarea char %c\n", curChar);
+			//  sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Complete\n");
+			if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
+			{
+				// sprintf(LogBuf,"Msg2 Delete Initiated/n");
+				// if (!this->Delete(true, 1))
+				// 	printf("Msg2 Delete FAILED!!!/n");
+				// sprintf(LogBuf,"Msg2 Delete Completed/n");
+			}
+			else if (curChar == 10)
+			{	// test for "line feed" character
+				/*LVGL version shouldn't  a /DisplCrLf() function*/
+				// DisplCrLf();
+				//  printf("cnt:%d; \n", cnt);
+			}
+			else // at this point, whatever is left shoud be regular text
+			{
+				//
+			}
 
-			// 	cnt++;
-			// }
-
-			KeyBrdRingbufPntr2++;
-			if (KeyBrdRingbufPntr2 == RingBufSz)
-				KeyBrdRingbufPntr2 = 0;
-		} // End while (KeyBrdRingbufPntr2 != KeyBrdPntr1)
-		////////////////////////////////////////////////////////////////////////////////////////
-		// if ((MutexLckId == 6) && (NuTxt || NuToneVal || SpdFlg))
-		// {
-		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  _lv_disp_refr_timer(); Start\n");
-		if (xSemaphoreTake(ADCread_disp_refr_timer_mutx, pdMS_TO_TICKS(15)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+			RingbufPntr2++;
+			if (RingbufPntr2 == RingBufSz)
+				RingbufPntr2 = 0;
+			// NxtRngBfrNdx = 	RingbufPntr2;
+		} // End while (RingbufPntr2 != RingbufPntr1)
+		//	xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
+	}
+	/*now update any pending keyboard text entries*/
+	while (KeyBrdRingbufPntr2 != KeyBrdPntr1)
+	{
+		NuTxt = true;
+		/*test if this next entry is going to generate a scroll page event
+		& are we in the middle of sending a letter; if true, skip this update.
+		This was done to fix an issue with the esp32 & not being able to give the dotclock ISR
+		priority over the display ISR */
+		if (CWActv && (((cnt + 1) - offset) * fontW >= displayW) && (curRow + 1 == ROW))
 		{
-			//if(setupFlg) printf("_lv_disp_refr_timer(NULL)\n");
-			_lv_disp_refr_timer(NULL);
-			/* We have finished accessing the shared resource.  Release the
-				 semaphore. */
-			xSemaphoreGive(ADCread_disp_refr_timer_mutx);
+			// char buf[50];
+			// sprintf(buf, "currow: %d; row: %d", curRow, row);
+			// dispStat(buf, TFT_GREENYELLOW);//update status line
+			// setSOTFlg(false);//changes status square to yellow
+			break;
 		}
-		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  _lv_disp_refr_timer(); Complete\n");
-		// }
-		// else
+		// ptft->setCursor(cursorX, cursorY);
+		char curChar = KeyBrdRingbufChar[KeyBrdRingbufPntr2];
+		// printf("bufChar '%c'; Val %d\n", curChar, (int)curChar);
+		//  sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Start\n");
+		//   post  this character at the end of text shown in the decoded text space on the waveshare display
+		Update_textarea(SendTxtArea, curChar);
+		// printf("%c", curChar);
+		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Complete\n");
+		// if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
 		// {
-		/* printf("MutexLckId %d;  NuTxt %d;  NuToneVal %d;  SpdFlg %d; RxSig %d\n" \
-		 , MutexLckId, (int)NuTxt, (int)NuToneVal, (int)SpdFlg, RxSig);
-		*/
+		// 	// sprintf(LogBuf,"Msg2 Delete Initiated/n");
+		// 	if (!this->Delete(false, 1))
+		// 		printf("Msg2 Delete FAILED!!!/n");
+		// 	// sprintf(LogBuf,"Msg2 Delete Completed/n");
 		// }
-		TchEvnt = false;
-		//SpdFlg = false;
-		KBrdWPMFlg = false;
-		
-		int lpcnt = 0;
-		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lv_timer_handler(); Start\n");
-		/*This replaces the need for the MsgBx_lvgl_port_task */
-		uint32_t task_delay_ms = lv_timer_handler();
-		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lv_timer_handler(); Complete\n");
-		xSemaphoreGive(lvgl_semaphore);
-		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  xSemaphoreGive(); Complete\n");
-		Msg2Actv = false;
-		MutexLckId = 0;
-		bypassMutex = false;
-		vTaskDelay(pdMS_TO_TICKS(2)); // was 20 changed to 2
-									  // sprintf(LogBuf,"LVGLMsgBox::dispMsg2 vTaskDelay(); Complete\n");
+		// // else if (curChar == 10)
+		// // {	// test for "line feed" character
+		// // 	/*LVGL version shouldn't  a /DisplCrLf() function*/
+		// // 	// DisplCrLf();
+		// // 	//  printf("cnt:%d; \n", cnt);
+		// // }
+		// else // at this point, whatever is left shoud be regular text
+		// {
 
-	//} // end if (RingbufPntr2 != RingbufPntr1)
+		// 	cnt++;
+		// }
+
+		KeyBrdRingbufPntr2++;
+		if (KeyBrdRingbufPntr2 == RingBufSz)
+			KeyBrdRingbufPntr2 = 0;
+	} // End while (KeyBrdRingbufPntr2 != KeyBrdPntr1)
+	////////////////////////////////////////////////////////////////////////////////////////
+	// if ((MutexLckId == 6) && (NuTxt || NuToneVal || SpdFlg))
+	// {
+	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  _lv_disp_refr_timer(); Start\n");
+	if (xSemaphoreTake(ADCread_disp_refr_timer_mutx, pdMS_TO_TICKS(15)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+	{
+		// if(setupFlg) printf("_lv_disp_refr_timer(NULL)\n");
+		_lv_disp_refr_timer(NULL);
+		/* We have finished accessing the shared resource.  Release the
+			 semaphore. */
+		xSemaphoreGive(ADCread_disp_refr_timer_mutx);
+	}
+	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  _lv_disp_refr_timer(); Complete\n");
+	// }
+	// else
+	// {
+	/* printf("MutexLckId %d;  NuTxt %d;  NuToneVal %d;  SpdFlg %d; RxSig %d\n" \
+	 , MutexLckId, (int)NuTxt, (int)NuToneVal, (int)SpdFlg, RxSig);
+	*/
+	// }
+	TchEvnt = false;
+	// SpdFlg = false;
+	KBrdWPMFlg = false;
+
+	int lpcnt = 0;
+	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lv_timer_handler(); Start\n");
+	/*This replaces the need for the MsgBx_lvgl_port_task */
+	uint32_t task_delay_ms = lv_timer_handler();
+	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lv_timer_handler(); Complete\n");
+	xSemaphoreGive(lvgl_semaphore);
+	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  xSemaphoreGive(); Complete\n");
+	Msg2Actv = false;
+	MutexLckId = 0;
+	bypassMutex = false;
+	vTaskDelay(pdMS_TO_TICKS(2)); // was 20 changed to 2
+								  // sprintf(LogBuf,"LVGLMsgBox::dispMsg2 vTaskDelay(); Complete\n");
+
 	if (Bump) // Bump gets set only when coming back from settings screen
 	{
 		Bump = false;
@@ -2250,21 +2263,21 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		IntrCrsr(BlkStateVal[blks - BlkStateCntr]);
 		BlkStateCntr--;
 	}
-	//printf("[APP] Free memory: %d bytes\n", (int)esp_get_free_heap_size());
-	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2(); Complete\n");
+	// printf("[APP] Free memory: %d bytes\n", (int)esp_get_free_heap_size());
+	//  sprintf(LogBuf,"LVGLMsgBox::dispMsg2(); Complete\n");
 };
 //////////////////////////////////////////////////////////////////////
 /*Normally called via dispMsg2()
-*BUT the AdvParserTask (main.cpp) can also call this direct as part of the overwirte process
-* Note: On lvgl displays the ''DeCdTxtFlg' controls which text area the delete applies to
-*/
+ *BUT the AdvParserTask (main.cpp) can also call this direct as part of the overwirte process
+ * Note: On lvgl displays the ''DeCdTxtFlg' controls which text area the delete applies to
+ */
 bool LVGLMsgBox::Delete(bool DeCdTxtFlg, int ChrCnt)
 {
 	bool tryagn = true;
 	int trycnt = 0;
 	bool DeltCmplt = false;
 	int lpcnt = 0;
-	
+
 	while (tryagn && !Msg2Actv)
 	{
 		if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
@@ -2289,11 +2302,11 @@ bool LVGLMsgBox::Delete(bool DeCdTxtFlg, int ChrCnt)
 	{ // delete display of ever how many characters were printed in the last decodeval (may be more than one letter generated)
 		// first,buzz thru the pgbuf array until we find the the last character (delete the last character in the pgbuf)
 		/*not needed for lvgl displays*/
-		//int TmpPntr = 0;
-		// while (Pgbuf[TmpPntr] != 0)
-		// 	TmpPntr++;
-		// if (TmpPntr > 0)
-		// 	Pgbuf[TmpPntr - 1] = 0; // delete last character in the array by replacing it with a "0"
+		// int TmpPntr = 0;
+		//  while (Pgbuf[TmpPntr] != 0)
+		//  	TmpPntr++;
+		//  if (TmpPntr > 0)
+		//  	Pgbuf[TmpPntr - 1] = 0; // delete last character in the array by replacing it with a "0"
 		cnt--;
 		// int xoffset = cnt;
 		// // use xoffset to locate the character position (on the display's x axis)
@@ -2310,7 +2323,8 @@ bool LVGLMsgBox::Delete(bool DeCdTxtFlg, int ChrCnt)
 		// printf("DELETE\n");
 		if (DeCdTxtFlg)
 			Update_textarea(DecdTxtArea, (char)0x08); // Ascii value for 'Back-Space'
-		else{
+		else
+		{
 			Update_textarea(SendTxtArea, (char)0x08);
 		}
 		--ChrCnt;
@@ -2365,7 +2379,7 @@ void LVGLMsgBox::DisplCrLf(void)
 	// 		// ptft->setCursor(cursorX, cursorY);
 	// 		if (curRow + 1 > ROW)
 	// 		{
-	 			scrollpg();
+	scrollpg();
 	// 			return;
 	// 		}
 	// 	}
@@ -2430,13 +2444,12 @@ void LVGLMsgBox::scrollpg()
 	// 	}
 
 	// } // end While Loop
-	
+
 	// /* And if needed, move the CursorPntr up one line*/
 	// if (CursorPntr - CPL > 0)
 	// 	CursorPntr = CursorPntr - CPL;
-	
+
 	// BlkState = false;
-	
 };
 /*Manage highlighting the CW character currently being sent*/
 /*this routine gets executed everytime the dotclockgenerates an interrupt*/
@@ -2471,7 +2484,7 @@ void LVGLMsgBox::IntrCrsr(int state)
 	case 0: // No activity
 		// if (SOTFlg)
 		/*Added for lvgl/waveshare keybrd cursor management*/
-		KBrdCursorPntr = CurKyBrdCharCnt+1;
+		KBrdCursorPntr = CurKyBrdCharCnt + 1;
 		break; // do nothing
 	case 1:	   // Processing
 		/*Removed for lvgl/waveshare keybrd cursor management*/
@@ -2481,36 +2494,36 @@ void LVGLMsgBox::IntrCrsr(int state)
 	case 2:			 // Letter Complete
 		RestoreBG(); // restore normal Background
 		break;
-	case 3:			// Start Space
-		
+	case 3: // Start Space
+
 		HiLiteBG(); // Highlight Background
 		break;
 	case 4: // Start Letter
 		/*Removed for lvgl/waveshare keybrd cursor management*/
 		// if (CursorPntr >= cnt)
 		// 	CursorPntr = cnt - 1;
-		
+
 		HiLiteBG(); // Highlight Background
 		break;
 	case 5: // restore Backgound & Highlight Next Character or Space
 		/*Removed for lvgl/waveshare keybrd cursor management*/
 		// if (CursorPntr + 1 >= cnt)
 		// 	CursorPntr = cnt - 1; // test, just in case something got screwed up
-		RestoreBG();			  // restore normal Background
-		HiLiteBG();				  // Highlight Background
+		RestoreBG(); // restore normal Background
+		HiLiteBG();	 // Highlight Background
 		break;
 	case 6:			 // Abort restore Backgound & Highlight Next Character or Space
 		RestoreBG(); // restore normal Background
-		//CursorPntr = cnt;
+		// CursorPntr = cnt;
 		/*Added for lvgl/waveshare keybrd cursor management*/
-		KBrdCursorPntr = CurKyBrdCharCnt+1;
+		KBrdCursorPntr = CurKyBrdCharCnt + 1;
 		break;
 	}
 	return;
 };
 void LVGLMsgBox::HiLiteBG(void)
 {
-	
+
 	PosHiLiteCusr();
 	// ptft->setTextColor(PgbufColor[CursorPntr - CPL], TFT_RED);
 	// ptft->print(Pgbuf[CursorPntr - CPL]);
@@ -2521,21 +2534,21 @@ void LVGLMsgBox::HiLiteBG(void)
 };
 void LVGLMsgBox::RestoreBG(void)
 {
-	//PosHiLiteCusr(); //in the lvgl world, this does nothing
-	// ptft->setTextColor(PgbufColor[CursorPntr - CPL], TFT_BLACK);
-	// ptft->print(Pgbuf[CursorPntr - CPL]);
+	// PosHiLiteCusr(); //in the lvgl world, this does nothing
+	//  ptft->setTextColor(PgbufColor[CursorPntr - CPL], TFT_BLACK);
+	//  ptft->print(Pgbuf[CursorPntr - CPL]);
 	/*following was added to support lvgl/waveshare cursor management*/
 	KBrdCursorPntr++;
-	if(KBrdCursorPntr > CurKyBrdCharCnt+1)  KBrdCursorPntr = CurKyBrdCharCnt+1;  
+	if (KBrdCursorPntr > CurKyBrdCharCnt + 1)
+		KBrdCursorPntr = CurKyBrdCharCnt + 1;
 	BGHilite = false;
 	UpdtKyBrdCrsr = true;
 	// if(CursorPntr == cnt) CursorPntr = 0;
 };
-void LVGLMsgBox::PosHiLiteCusr(void)
-{
+void LVGLMsgBox::PosHiLiteCusr(void) {
 	/* figure out where the HighLight Y cursor needs to be set */
 	/*lvgl/waveshare display doesn't use this method*/
-	
+
 	// int HLY = 0;
 	// int HLX = 0;
 	// int tmppntr = 0;
@@ -2615,7 +2628,7 @@ void LVGLMsgBox::ShwKeybrdWPM(int wpm)
 // void LVGLMsgBox::ShwDcodeSN(float sn)
 // {
 // 	if(!SNFlg)
-// 	{ 
+// 	{
 // 		//Nu_SN = sn;
 // 		SNFlg = true;
 // 	}
@@ -2651,15 +2664,15 @@ void LVGLMsgBox::setStrTxtFlg(bool flg)
 	// int Hght = 15;
 	if (!StrTxtFlg && SOTFlg)
 	{
-		return;	//color = TFT_GREEN;
-	}		
+		return; // color = TFT_GREEN;
+	}
 	else if (!StrTxtFlg && !SOTFlg)
 	{
-		return;	//color = TFT_YELLOW;
+		return; // color = TFT_YELLOW;
 	}
 	else
 	{
-		//color = TFT_WHITE;
+		// color = TFT_WHITE;
 		pStrdTxt[0] = 0;
 		txtpos = 0;
 	}
@@ -2718,14 +2731,14 @@ char LVGLMsgBox::GetLastChar(void)
 {
 	/*Modified for lvgl*/
 	return Pgbuf[0];
-	//return Pgbuf[cnt - (CPL + 1)];
+	// return Pgbuf[cnt - (CPL + 1)];
 };
 /*Not used inlvgl version */
 void LVGLMsgBox::UpdateToneSig(int curval)
 {
 	return;
-	
-	//return;
+
+	// return;
 };
 void LVGLMsgBox::BldSettingScreen(void)
 {
@@ -2842,15 +2855,15 @@ void LVGLMsgBox::FlipDayNiteMode(void)
 			}
 		}
 	}
-	DFault.NiteMode = !NiteMode;//forcing the DFault value to be the opsite of its stored value to force lvglmsgbx.FlipDayNiteMode to update
-  	_FlipDayNiteMode();
-	
+	DFault.NiteMode = !NiteMode; // forcing the DFault value to be the opsite of its stored value to force lvglmsgbx.FlipDayNiteMode to update
+	_FlipDayNiteMode();
+
 	xSemaphoreGive(lvgl_semaphore);
 	MutexLckId = 0;
 };
 void LVGLMsgBox::ReStrtMainScrn(void)
 {
-  bool tryagn = true;
+	bool tryagn = true;
 	int trycnt = 0;
 	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  xSemaphoreTake;  Start\n");
 	while (tryagn)
@@ -2906,8 +2919,8 @@ void LVGLMsgBox::ClrDcdTA(void)
 		}
 	}
 	/*insert line space in decoded text area*/
-	Update_textarea(DecdTxtArea, '\n');//lv_textarea_set_text(DecdTxtArea, "");
-	Update_textarea(DecdTxtArea, '\n');//lv_textarea_set_text(DecdTxtArea, "");
+	Update_textarea(DecdTxtArea, '\n'); // lv_textarea_set_text(DecdTxtArea, "");
+	Update_textarea(DecdTxtArea, '\n'); // lv_textarea_set_text(DecdTxtArea, "");
 	MutexLckId = 0;
 	xSemaphoreGive(lvgl_semaphore);
 };
@@ -2942,7 +2955,6 @@ void LVGLMsgBox::HiLite_Seltcd_Setting(int paramptr, int oldparamptr)
 	lvgl_HiLite_Seltcd_Param(paramptr);
 	xSemaphoreGive(lvgl_semaphore);
 	MutexLckId = 0;
-	
 };
 void LVGLMsgBox::Exit_Settings(int paramptr)
 {
@@ -2971,40 +2983,40 @@ void LVGLMsgBox::Exit_Settings(int paramptr)
 		}
 	}
 	lvgl_DeSelct_Param(paramptr);
-	//lvgl_HiLite_Seltcd_Param(paramptr);
+	// lvgl_HiLite_Seltcd_Param(paramptr);
 	xSemaphoreGive(lvgl_semaphore);
 	MutexLckId = 0;
-	
 };
 
 bool LVGLMsgBox::TestRingBufPtrs(void)
 {
-	if(RingbufPntr1 == RingbufPntr2) return true;
-	else return false;
+	if (RingbufPntr1 == RingbufPntr2)
+		return true;
+	else
+		return false;
 };
 int LVGLMsgBox::XferRingbuf(char Bfr[50])
 {
 	/*find end of Buffer*/
-	int i =0;
-	//printf("ringbuf content:%c",'"');
-	//while(Bfr[i] !=0) i++;
-	while(RingbufPntr1 != RingbufPntr2)
+	int i = 0;
+	// printf("ringbuf content:%c",'"');
+	// while(Bfr[i] !=0) i++;
+	while (RingbufPntr1 != RingbufPntr2)
 	{
 		Bfr[i] = DeCdrRingbufChar[RingbufPntr2];
-		//printf("%c", DeCdrRingbufChar[RingbufPntr2]);
+		// printf("%c", DeCdrRingbufChar[RingbufPntr2]);
 		i++;
-		//Bfr[i] = 0;
-		//if(i == 49){// not likely to ever happen
+		// Bfr[i] = 0;
+		// if(i == 49){// not likely to ever happen
 		//	Bfr[i-1] = 0;
 		//	return;
-		//} 	
+		// }
 		RingbufPntr2++;
-		if(RingbufPntr2 == RingBufSz)
-				RingbufPntr2 = 0;
+		if (RingbufPntr2 == RingBufSz)
+			RingbufPntr2 = 0;
 	}
-	//printf("%c\n",'"');
-	return i; 
-
+	// printf("%c\n",'"');
+	return i;
 };
 /*This executes when the 'Home' button event fires*/
 void Sync_Dflt_Settings(void)
@@ -3070,7 +3082,7 @@ void SaveUsrVals(void)
 	Rstat = Write_NVS_Str("MyCall", call);
 	if (Rstat != 1)
 		GudFlg = false;
-	/*Set up to save MemF2*/	
+	/*Set up to save MemF2*/
 	zeroFlg = false;
 	for (i = 0; i < sizeof(mem); i++)
 	{
@@ -3169,8 +3181,8 @@ void SaveUsrVals(void)
 	DFault.NiteMode = NiteMode;
 	Rstat = Write_NVS_Val("NiteMode", (int)DFault.NiteMode);
 	if (Rstat != 1)
-		GudFlg = false;	
-	/*Save WPM Setting*/	
+		GudFlg = false;
+	/*Save WPM Setting*/
 	Rstat = Write_NVS_Val("WPM", DFault.WPM);
 	if (Rstat != 1)
 		GudFlg = false;
@@ -3178,7 +3190,7 @@ void SaveUsrVals(void)
 	Rstat = Write_NVS_Val("ModeCnt", DFault.ModeCnt);
 	if (Rstat != 1)
 		GudFlg = false;
-    /* Save current Decoder AutoTune value */
+	/* Save current Decoder AutoTune value */
 	Rstat = Write_NVS_Val("AutoTune", (int)DFault.AutoTune);
 	if (Rstat != 1)
 		GudFlg = false;
@@ -3196,39 +3208,39 @@ void SaveUsrVals(void)
 		GudFlg = false;
 	/* Save current Grtzl_Gain value; Note this is an unsigned factional (1.0 or smaller) float value. But NVS library can't handle floats,
 	so 1st convert to unsigned 64bit int    */
-	//uint64_t intGainVal = uint64_t(10000000 * DFault.Grtzl_Gain);
+	// uint64_t intGainVal = uint64_t(10000000 * DFault.Grtzl_Gain);
 	int intGainVal = (int)(10000000 * DFault.Grtzl_Gain);
-    Rstat = Write_NVS_Val("Grtzl_Gain", intGainVal);
+	Rstat = Write_NVS_Val("Grtzl_Gain", intGainVal);
 	if (Rstat != 1)
 		GudFlg = false;
 	if (GudFlg)
 	{
 		sprintf(buf, "User Params SAVED");
-		 if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE)
-      {
-        /* We were able to obtain the semaphore and can now access the
-        shared resource. */
-        mutexFLG = true;
-		/*TODO need to come up with some alturnative method signifying that the save was successful*/
-		///ptftmsgbx->dispStat(buf, TFT_GREEN);
-		 /* We have finished accessing the shared resource.  Release the semaphore. */
-        xSemaphoreGive(mutex);
-        mutexFLG = false;
-      }
+		if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE)
+		{
+			/* We were able to obtain the semaphore and can now access the
+			shared resource. */
+			mutexFLG = true;
+			/*TODO need to come up with some alturnative method signifying that the save was successful*/
+			/// ptftmsgbx->dispStat(buf, TFT_GREEN);
+			/* We have finished accessing the shared resource.  Release the semaphore. */
+			xSemaphoreGive(mutex);
+			mutexFLG = false;
+		}
 	}
 	else
 	{
 		sprintf(buf, "SAVE FAILED");
-		 if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE)
-      {
-        /* We were able to obtain the semaphore and can now access the
-        shared resource. */
-		/*TODO need to come up with some alturnative method signifying that the save FAILED*/
-        mutexFLG = true;
-		//ptftmsgbx->dispStat(buf, TFT_RED);
-		 /* We have finished accessing the shared resource.  Release the semaphore. */
-        xSemaphoreGive(mutex);
-        mutexFLG = false;
-      }
+		if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE)
+		{
+			/* We were able to obtain the semaphore and can now access the
+			shared resource. */
+			/*TODO need to come up with some alturnative method signifying that the save FAILED*/
+			mutexFLG = true;
+			// ptftmsgbx->dispStat(buf, TFT_RED);
+			/* We have finished accessing the shared resource.  Release the semaphore. */
+			xSemaphoreGive(mutex);
+			mutexFLG = false;
+		}
 	}
 }
