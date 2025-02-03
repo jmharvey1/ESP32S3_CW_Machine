@@ -17,8 +17,9 @@
 /*20241115 Added Night mode to saved settings*/
 /*20241124 Modified Night mode checkbox color*/
 /*20241230 Added method ClrDcdTA(void) to support 'clear Decoded Text' space/area*/
-
+/*20250203 Moved S/N log calc to dispMsg2()*/
 #include <stdio.h>
+#include <math.h>
 #include "sdkconfig.h"
 #include "LVGLMsgBox.h"
 #include "main.h"
@@ -2072,8 +2073,8 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		bool readQueue = (xQueueReceive(ToneSN_que, (void *)&Nu_SN, pdMS_TO_TICKS(3)) == pdTRUE);
         if (readQueue)
         {
-			lvgl_update_SN(Nu_SN);
-			//SNFlg = false;
+			//lvgl_update_SN(Nu_SN);
+			lvgl_update_SN(20*log10(Nu_SN));
 		}
 		if((OldStrTxtFlg != StrTxtFlg) & !setupFlg)
 		{

@@ -20,6 +20,7 @@
 /*20250122 added tweak to code to better handle low noise signals & at low levels*/
 /*20250123 reworked, yet again , how to manage tonedetect threshold level for both noisy & quiet conditions*/
 /*20250126 more tweaks to threshold setpoint code */
+/*20250203 Moved S/N log calc to LVGLMsgBox.pp dispMsg2()*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -27,7 +28,6 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
-#include <math.h>
 #define MagBSz  6//3
 AdvParser advparser;
 LVGLMsgBox *ptrmsgbx1;
@@ -630,7 +630,7 @@ void Chk4KeyDwn(float NowLvl)
 			float tmpcurnoise = ((AvgNoise - NFlrBase) / 2) + NFlrBase;
 			AvgNoise = tmpcurnoise;
 			OLDstate = state;
-			float S2N = 20*log10(OldLvlBuf[2]/OldLvlBuf[0]);
+			float S2N = OldLvlBuf[2]/OldLvlBuf[0];//20*log10(OldLvlBuf[2]/OldLvlBuf[0]);
 			if (xQueueSend(ToneSN_que, &S2N, pdMS_TO_TICKS(2)) == pdFALSE)
           	{
             	// printf("Failed to push 'pksigH' to 'RxSig_que' \n");
