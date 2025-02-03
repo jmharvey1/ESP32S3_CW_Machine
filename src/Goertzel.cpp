@@ -21,6 +21,7 @@
 /*20250123 reworked, yet again , how to manage tonedetect threshold level for both noisy & quiet conditions*/
 /*20250126 more tweaks to threshold setpoint code */
 /*20250203 Moved S/N log calc to LVGLMsgBox.pp dispMsg2()*/
+/*20250203 Changed method for selecting S/N KeyDwn & KeyUp sample values */
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -142,13 +143,14 @@ float OldSigPk =0;
 int prntcnt = 0;
 float MagBuf[MagBSz];
 float NoisBuf[2*MagBSz];
-float OldLvlBuf[3];
+float OldLvlBuf[4];
 int NoisPtr = 0;
 float ToneThresHold = 0;
 int ClimCnt = 0;
 int KeyDwnCnt = 0;
 int GData[Goertzel_SAMPLE_CNT];
 bool prntFlg; //used for debugging
+bool SndS_N = false;
 ////////////////////////////////////////
 void CurMdStng(int MdStng){
 	ModeVal = MdStng;
@@ -312,7 +314,7 @@ void ComputeMags(unsigned long now){
 	}
 	/*End of preload process */
 	CurLvl = (magC + magL + magH)/3;
-	if(CurLvl<100) CurLvl = NowLvl;// something went wrong use last datapoint
+	if(CurLvl<50) CurLvl = NowLvl;// something went wrong use last datapoint
 	NowLvl = CurLvl;//'NowLvl will be used later for showing current LED state
 	/* ESP32 Plot code to do a simple look at the sampling & conversion process */
     // char buf[20];
@@ -396,9 +398,21 @@ void ComputeMags(unsigned long now){
 	NSR = NoiseFlr/SigPk;
 	/*Now use the magnitude found six samples back*/
 	CurLvl = MagBuf[MBpntr];
+	if(SndS_N)
+	{
+		SndS_N = false;
+		float S2N = OldLvlBuf[2] / NowLvl;
+		if (xQueueSend(ToneSN_que, &S2N, pdMS_TO_TICKS(2)) == pdFALSE)
+		{
+			// printf("Failed to push 'pksigH' to 'RxSig_que' \n");
+		}
+	}
+	//OldLvlBuf[3] = OldLvlBuf[2];
 	OldLvlBuf[2] = OldLvlBuf[1];
 	OldLvlBuf[1] = OldLvlBuf[0];
 	OldLvlBuf[0] = CurLvl;
+	
+
 	if(CurLvl < 0) CurLvl = 0; 
 	magB = ((magB)+CurLvl)/2; //((2*magB)+CurLvl)/3; //(magC + magL + magH)/3; //
 	/* try to establish what the long term noise floor is */
@@ -630,13 +644,12 @@ void Chk4KeyDwn(float NowLvl)
 			float tmpcurnoise = ((AvgNoise - NFlrBase) / 2) + NFlrBase;
 			AvgNoise = tmpcurnoise;
 			OLDstate = state;
-			float S2N = OldLvlBuf[2]/OldLvlBuf[0];//20*log10(OldLvlBuf[2]/OldLvlBuf[0]);
-			if (xQueueSend(ToneSN_que, &S2N, pdMS_TO_TICKS(2)) == pdFALSE)
-          	{
-            	// printf("Failed to push 'pksigH' to 'RxSig_que' \n");
-          	}
-			//ptrmsgbx1->ShwDcodeSN(S2N);
-			//printf("Tone = %8.2f; Noise = %8.2f\n", OldLvlBuf[2], OldLvlBuf[0]);
+			SndS_N = true;
+			// float S2N = OldLvlBuf[2]/OldLvlBuf[0];
+			// if (xQueueSend(ToneSN_que, &S2N, pdMS_TO_TICKS(2)) == pdFALSE)
+          	// {
+            // 	// printf("Failed to push 'pksigH' to 'RxSig_que' \n");
+          	// }
 		}
 		//OLDstate = state;
 

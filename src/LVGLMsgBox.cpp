@@ -2096,12 +2096,12 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 	if (RingbufPntr2 != RingbufPntr1)
 	{ //we have a decoded character to print, So, from the accumulated keyup events(ratios), find the minimum S/N used in the construction of this character
 		float Nu_SN = 0.0;
-		float Min_SN = 1000; //equivalent to S/N = 60db
+		float Min_SN = 10000; //equivalent to S/N = 80db
 		while(xQueueReceive(ToneSN_que, (void *)&Nu_SN, pdMS_TO_TICKS(3)) == pdTRUE)
 		{
 			if(Nu_SN < Min_SN) Min_SN = Nu_SN;
 		}
-		if(Min_SN != 1000) lvgl_update_SN(20 * log10(Min_SN));//calculate S/N in dBs, & pass the found value to lvgl display 
+		if(Min_SN != 10000) lvgl_update_SN(20 * log10(Min_SN));//calculate S/N in dBs, & pass the found value to lvgl display 
 	}
 	if ((OldStrTxtFlg != StrTxtFlg) & !setupFlg)
 	{
