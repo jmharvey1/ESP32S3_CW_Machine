@@ -43,6 +43,7 @@ struct SrchRplc_stuct
 };
 
 extern bool DbgWrdBrkFtcr;
+
 class AdvParser
 {
 private:
@@ -847,6 +848,7 @@ private:
 	Buckt_t KeyUpBuckts[15];
     Buckt_t KeyDwnBuckts[15];
     uint8_t SameSymblWrdCnt = 0;
+    int SortdPtr = 0;
     int KeyUpBucktPtr = 0;
     int KeyDwnBucktPtr = 0;
     int TmpUpIntrvlsPtr = 0;
@@ -857,6 +859,8 @@ private:
     float KeyupVarPrcnt; //added 20241117
     uint16_t TmpUpIntrvls[IntrvlBufSize];
     uint16_t TmpDwnIntrvls[IntrvlBufSize];
+    uint16_t SortdUpIntrvls[IntrvlBufSize];
+    uint16_t SortdDwnIntrvls[IntrvlBufSize];
     uint8_t DitIntrvlPtr = 0; //added 20241120
     uint8_t bgPdlCd = 0; //moved here 20241210 to allow previous bgPdlCd val to used in next data set
     uint16_t DitIntrvlRingBuf[6]; //added 20241120
@@ -865,16 +869,27 @@ private:
     uint16_t AvgDahKeyUpVal;
     uint16_t LtrBrkVal;
     uint16_t NuSpltVal = 0;
+    uint16_t BucktAvg = 0;
+    uint8_t LtrBrkPtr = 0;
+    uint8_t bstltrbrkptr = 0;
     uint8_t MaxKeyUpBckt;
+    uint8_t TopPtr = 0;
+    uint8_t BtmPtr = 0;
     //uint16_t DitIntrvlVal; //used as sanity test/check in 'bug' letterbrk rule set; 20240129 running average of the last 6 dits
     uint16_t WrdBrkVal; // serves in post parser as the value to insert a space in the reconstructed character string
     bool  WrdBrkValid;
+    bool calc;
     unsigned int SymbSet; //bit-bucket that holds a collection of 0's & 1's where 1 = a dah & a 0 = a dit; so "C" = 1010
     unsigned int LstLtrBrkCnt = 0;//track the number of keyevents since last letterbreak.
     //uint16_t UnitIntvrlx2r5; //basic universal symbol interval; i.e. a standard dit X 2.4; used in b1 rule set to find letter breaks
     uint16_t Bg1SplitPt; //bug1 rule set dit/dah decision value; derived from UnitIntvrlx2r5
     char BrkFlg;
     /* Methods */
+    bool GlitchChk(void);
+    void FindBtmPtr(void);
+    void FindTopPtr(void);
+    void BldKyUpBktTbl(void);
+    void BldKyDwnBktTbl(void);
     void CalAvgDeadIntvrl(void);
     bool Tst4LtrBrk(int& n);
     bool PadlRules(int& n);
@@ -916,6 +931,7 @@ public:
     uint16_t DitIntrvlVal;//20240521 moved this from privat to public so Goertzel.cpp could see it
     uint16_t KeyUpIntrvls[IntrvlBufSize];
     uint16_t KeyDwnIntrvls[IntrvlBufSize];
+    float KeyDwnSN[IntrvlBufSize];
     uint16_t UnitIntvrlx2r5; //basic universal symbol interval; i.e. a standard dit X 2.4; used in b1 rule set to find letter breaks
     uint16_t AvgDahVal;
     int KeyUpPtr = 0;

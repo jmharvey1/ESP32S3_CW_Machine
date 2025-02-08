@@ -1496,7 +1496,6 @@ LVGLMsgBox::LVGLMsgBox(char *StrdTxt)
 	ToneFlg = false;
 	SpdFlg = false;
 	KBrdWPMFlg = false;
-	// SNFlg = false; // not needed. Used 'ToneSN_que' instead
 	Bump = false;
 	PgScrld = false;
 	BGHilite = false;

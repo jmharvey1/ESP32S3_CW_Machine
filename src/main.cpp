@@ -185,7 +185,7 @@ static const int RxSig_que_len = 15;//50
 QueueHandle_t RxSig_que;
 static const int ToneSN_que_len = 25;//50
 QueueHandle_t ToneSN_que;
-
+QueueHandle_t ToneSN_que2;
 static const int KeyEvnt_que_len = 2*IntrvlBufSize;//50;
 static const int KeyState_que_len = KeyEvnt_que_len;
 QueueHandle_t KeyEvnt_que;
@@ -986,6 +986,7 @@ void AdvParserTask(void *param)
       /*need to block display update task during this 'if()' code */
       if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
       {
+        bool abort = false;
 #ifdef DeBgQueue
         printf("advparser.Msgbuf;'%s'; GetLastChar('%c') \n", advparser.Msgbuf, (char)LstChr);
 #endif        
@@ -1025,44 +1026,53 @@ void AdvParserTask(void *param)
           char DelStr[30];
           if (deletCnt > 29)
           {
+            abort = true;
             deletCnt = 29;
             printf("\n deletCnt capped @ 29\n");
           }
-
-          for (int i = 0; i < deletCnt; i++)
+          if(!abort)
           {
-            DelStr[i] = 0x8;
+            for (int i = 0; i < deletCnt; i++)
+            {
+              DelStr[i] = 0x8;
+            }
+            DelStr[deletCnt] = 0x0;
+            /*Now copy the new advparser character string/set to a temp buffer 'tmpbuf'*/
+            int ptr = 0;
+            while (advparser.Msgbuf[ptr] != 0 && ptr < 28)
+            {
+              tmpbuf[ptr] = advparser.Msgbuf[ptr];
+              ptr++;
+            }
+            tmpbuf[ptr] = 0;
+            /*reassemble 'Msgbuf' with new adparser character set prefixed with the number of deletes
+             needed to remove the original text.
+             Due to RTOS Variances in process sequencing/timing, there can be 3 different states in the Decoded text area
+             ringbuffer the following 'if' code addresses each of the 3 cases
+            */
+            if (bufcharcnt == 1 && ringbuf[0] != ' ')
+              sprintf(advparser.Msgbuf, "%s%s %s", DelStr, tmpbuf, ringbuf); // AdvParser running behind schedule
+            else if (bufcharcnt > 1)
+              sprintf(advparser.Msgbuf, "%s%s%s ", ringbuf, DelStr, tmpbuf); // AdvParser running faster than expected
+            else
+              sprintf(advparser.Msgbuf, "%s%s ", DelStr, tmpbuf); // normal/expected case
+            /*for test/debug, show/print the before & after results*/
+            // printf("old txt:%s;  new txt:%s\n\tdelete cnt: %d; advparser.LtrPtr %d; new txt length: %d; RingBufTst=%c; bufcharcnt: %d; ringbuf: %c%s%c; Space Corrected = %c(%d/%c%c%C) \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, ptr, RingBufTst, bufcharcnt, '"', ringbuf, '"', spacemarker, LstChr, '"', LstChr, '"');
           }
-          DelStr[deletCnt] = 0x0;
-          /*Now copy the new advparser character string/set to a temp buffer 'tmpbuf'*/
-          int ptr = 0;
-          while (advparser.Msgbuf[ptr] != 0 && ptr < 28)
-          {
-            tmpbuf[ptr] = advparser.Msgbuf[ptr];
-            ptr++;
-          }
-          tmpbuf[ptr] = 0;
-          /*reassemble 'Msgbuf' with new adparser character set prefixed with the number of deletes
-           needed to remove the original text.
-           Due to RTOS Variances in process sequencing/timing, there can be 3 different states in the Decoded text area
-           ringbuffer the following 'if' code addresses each of the 3 cases
-          */
-          if(bufcharcnt ==1 && ringbuf[0] != ' ') sprintf(advparser.Msgbuf,"%s%s %s", DelStr, tmpbuf, ringbuf); // AdvParser running behind schedule
-          else if(bufcharcnt>1) sprintf(advparser.Msgbuf,"%s%s%s ", ringbuf, DelStr, tmpbuf); // AdvParser running faster than expected
-          else sprintf(advparser.Msgbuf,"%s%s ", DelStr, tmpbuf); // normal/expected case
-          /*for test/debug, show/print the before & after results*/
-          // printf("old txt:%s;  new txt:%s\n\tdelete cnt: %d; advparser.LtrPtr %d; new txt length: %d; RingBufTst=%c; bufcharcnt: %d; ringbuf: %c%s%c; Space Corrected = %c(%d/%c%c%C) \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, ptr, RingBufTst, bufcharcnt, '"', ringbuf, '"', spacemarker, LstChr, '"', LstChr, '"');
         }
-        if (advparser.Dbug)
-          printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
+        if(!abort)
+        {
+          if (advparser.Dbug)
+            printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
 #ifdef AutoCorrect
-        printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
+          printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
 #endif
-        CptrTxt = false;
-        lvglmsgbx.dispDeCdrTxt(advparser.Msgbuf, TFT_GREEN); // Added for lvgl; Note: color value is meaningless
-        CptrTxt = true;
-        //dletechar = oldDltState;
-        /*now should be safe resume displayupdate task*/
+          CptrTxt = false;
+          lvglmsgbx.dispDeCdrTxt(advparser.Msgbuf, TFT_GREEN); // Added for lvgl; Note: color value is meaningless
+          CptrTxt = true;
+          // dletechar = oldDltState;
+          /*now should be safe resume displayupdate task*/
+        }
         xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
       }
       // printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
@@ -1182,6 +1192,7 @@ void app_main()
   KeyEvnt_que = xQueueCreate(KeyEvnt_que_len, sizeof(unsigned long));
   KeyState_que = xQueueCreate(KeyState_que_len, sizeof(uint8_t));
   ToneSN_que = xQueueCreate(ToneSN_que_len, sizeof(float));
+  ToneSN_que2 = xQueueCreate(IntrvlBufSize, sizeof(float));
   mutex = xSemaphoreCreateMutex();
   DsplUpDt_AdvPrsrTsk_mutx =  xSemaphoreCreateMutex();
   ADCread_disp_refr_timer_mutx = xSemaphoreCreateMutex();

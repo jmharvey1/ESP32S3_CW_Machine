@@ -64,6 +64,7 @@ extern TaskHandle_t GoertzelTaskHandle;
 extern TaskHandle_t CWDecodeTaskHandle;
 extern TaskHandle_t BLEscanTask_hndl;
 extern QueueHandle_t RxSig_que;
+extern QueueHandle_t ToneSN_que2;
 extern DF_t DFault;
 extern char StrdTxt[20];
 extern char MyCall[10];

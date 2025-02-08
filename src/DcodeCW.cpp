@@ -269,107 +269,6 @@ void KeyEvntTask(void *param)
 	while (1)
 	{
 		void BldKeyUpDwnDataSet();
-		// bool lpagn = true;
-		
-		// uint8_t Kstate;
-		// uint16_t interval = 0;
-		// while (lpagn) //(TickType_t)10
-		// {
-		// 	if (xQueueReceive(KeyEvnt_que, (void *)&EvntTime, pdMS_TO_TICKS(1)) == pdTRUE)
-		// 	{
-		// 		if (xQueueReceive(KeyState_que, (void *)&Kstate, pdMS_TO_TICKS(10)) == pdTRUE)
-		// 		{
-		// 			interval = (uint16_t)(EvntTime - OldEvntTime );
-		// 			OldEvntTime = EvntTime;
-		// 			if (interval < 750)
-		// 			{
-		// 				if (Kstate)// Key Down
-		// 				{
-		// 					KeyDwnIntrvls[DeCd_KeyDwnPtr] = interval;
-		// 					#ifdef DeBgQueue
-		// 					printf("%d- %d; ", DeCd_KeyDwnPtr, interval);
-		// 					#endif
-		// 					DeCd_KeyUpPtr = DeCd_KeyDwnPtr; //make sure we keep the two index pointers in sync
-		// 					if(DeCd_KeyDwnPtr < (IntrvlBufSize-1)) DeCd_KeyDwnPtr++;
-		// 				}
-		// 				else if(DeCd_KeyDwnPtr >0)
-		// 				{
-		// 					KeyUpIntrvls[DeCd_KeyUpPtr] = interval;
-		// 					#ifdef DeBgQueue
-		// 					printf("%d+ %d\n", DeCd_KeyUpPtr, interval);
-		// 					#endif
-		// 					if(DeCd_KeyUpPtr < (IntrvlBufSize-1)) DeCd_KeyUpPtr++;
-		// 				}
-		// 				else if(DeCd_KeyDwnPtr == 0)
-		// 				{ //This is the actual 'sender' wordbreak interval
-		// 				    //TODO use this interval to guide/set future word break intervals 
-		// 					#ifdef DeBgQueue
-		// 					printf(" NdX-reset:%d\n", interval);
-		// 					#endif
-		// 				}
-		// 				if(DeCd_KeyUpPtr> DeCd_KeyDwnPtr+1 || DeCd_KeyUpPtr < DeCd_KeyDwnPtr-1 )
-		// 				{
-		// 					/*last time I checked, this was no longer happening*/
-		// 					DeCd_KeyUpPtr = DeCd_KeyDwnPtr = 0;
-		// 					#ifdef DeBgQueue
-		// 					printf("<---->\n");
-		// 					#endif
-		// 				}
-		// 				else KeyEvntSR(Kstate, EvntTime);
-		// 			}
-		// 			else
-		// 			{
-		// 				if (Kstate)// Key Down
-		// 				{
-		// 					#ifdef DeBgQueue
-		// 					printf("Key DOWN NdX-reset; interval:%d > 750\n", interval);
-		// 					#endif
-		// 					DeCd_KeyUpPtr = DeCd_KeyDwnPtr = 0;
-		// 				}
-		// 				else
-		// 				{
-		// 					#ifdef DeBgQueue
-		// 					printf("Key UP NdX-reset; interval:%d > 750\n", interval);
-		// 					#endif
-		// 					if(DeCd_KeyDwnPtr>=4)
-		// 					{
-		// 						LclKeyState = 1;
-		// 						Dbg = true;
-		// 						letterBrk = pdTICKS_TO_MS(xTaskGetTickCount()) - 10;
-		// 						//KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)wordBrk;
-		// 						//DeCd_KeyUpPtr++;
-		// 						DeCodeVal = 0;
-		// 						bool gud = chkChrCmplt();
-		// 						Dbg = false;
-		// 						if(gud)
-		// 						{
-		// 							#ifdef DeBgQueue
-		// 							printf("done = true; NdX-reset\n");
-		// 							#endif
-		// 							DeCd_KeyUpPtr = DeCd_KeyDwnPtr = 0;
-		// 						}
-		// 						else
-		// 						{
-		// 							#ifdef DeBgQueue
-		// 							printf("done = false; Replaced KeyUp interval%d with Cur wordBrk:%d\n", KeyUpIntrvls[DeCd_KeyUpPtr-1], (uint16_t)wordBrk);
-		// 							#endif
-		// 							KeyUpIntrvls[DeCd_KeyUpPtr-1] = (uint16_t)wordBrk;
-		// 						}
-		// 					}
-		// 				}
-						
-		// 			}
-		// 		}
-		// 		else
-		// 		{
-		// 			lpagn = false;
-		// 		}
-		// 	}
-		// 	else
-		// 	{
-		// 		lpagn = false;
-		// 	}
-		// }
 		vTaskSuspend(KeyEvntTaskTaskHandle);
 	}
 }
@@ -426,6 +325,11 @@ void BldKeyUpDwnDataSet(void)
 						{
 							/*last time I checked, this was no longer happening*/
 							DeCd_KeyUpPtr = DeCd_KeyDwnPtr = 0;
+							float dummy;
+							while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+							{
+								// printf("ToneSN_que2 flush 1\n");
+							}
 							#ifdef DeBgQueue
 							printf("<---->\n");
 							#endif
@@ -441,6 +345,11 @@ void BldKeyUpDwnDataSet(void)
 							printf("Key DOWN NdX-reset; interval:%d > ResetInterval:%d\n", interval, (uint16_t)ResetInterval);
 							#endif
 							DeCd_KeyUpPtr = DeCd_KeyDwnPtr = 0;
+							float dummy;
+							while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+							{
+								// printf("ToneSN_que2 flush 5\n");
+							}
 						}
 						else
 						{
@@ -466,6 +375,11 @@ void BldKeyUpDwnDataSet(void)
 									printf("done = true; NdX-reset\n");
 									#endif
 									DeCd_KeyUpPtr = DeCd_KeyDwnPtr = 0;
+									float dummy;
+									while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+									{
+										// printf("ToneSN_que2 flush 6\n");
+									}
 								}
 								else
 								{
@@ -1637,39 +1551,7 @@ bool chkChrCmplt(void)
 		}	
 		// else printf("chkcnt%d != DeCd_KeyDwnPt:%d\n", chkcnt, DeCd_KeyDwnPtr);
 		chkcnt = 0;
-		// /*1st take one final peek at the queues to validate this loooks like a real word break*/
-		// unsigned long EvntTime;
-		// uint8_t Kstate;
-		// if (xQueueReceive(KeyEvnt_que, (void *)&EvntTime, pdMS_TO_TICKS(1)) == pdTRUE)
-		// {
-		// 	if (xQueueReceive(KeyState_que, (void *)&Kstate, pdMS_TO_TICKS(10)) == pdTRUE)
-		// 	{
-		// 		// printf("%d ", Kstate);
-		// 		uint16_t interval = (uint16_t)(EvntTime - OldEvntTime);
-		// 		OldEvntTime = EvntTime;
-		// 		if (interval < wordBrk && !Kstate)
-		// 		{
-		// 			KeyUpIntrvls[DeCd_KeyUpPtr] = interval;
-		// 			#ifdef DeBgQueue
-		// 			printf("%d+ %d!!!\n", DeCd_KeyUpPtr, interval);
-		// 			#endif
-		// 			DeCd_KeyUpPtr++;
-		// 			KeyEvntSR(Kstate, EvntTime);
-		// 			ValidWrdBrk = false;
-		// 		}
-		// 		else if(Kstate)
-		// 		{
-		// 			/*Last check, this was not happening*/
-		// 			#ifdef DeBgQueue
-		// 			printf("ERROR UNEXPECTED KEYDWN, %d\n", interval);
-		// 			#endif
-		// 			KDwnFnd = true;
-		// 			KDwnIntrvl = interval;
-		// 			//DeCd_KeyDwnPtr++;
-		// 			//ValidWrdBrk = false;
-		// 		}
-		// 	}
-		// }
+		
 		if (ValidWrdBrk)
 		{
 			if (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5))
@@ -1681,7 +1563,7 @@ bool chkChrCmplt(void)
 				#ifdef DeBgQueue
 				printf("%d+ *%d\n", DeCd_KeyUpPtr, (uint16_t)noKeySig);
 				#endif
-				DeCd_KeyUpPtr++;
+				if(DeCd_KeyUpPtr < (IntrvlBufSize-1)) DeCd_KeyUpPtr++;
 				// DBtrace = DBtrace | 0b1;
 			}
 			// Ok just detected a new wordbreak interval; So Now need/can evaluate
@@ -1730,12 +1612,21 @@ bool chkChrCmplt(void)
 					/*Sync advparser.wrdbrkFtcr to current wrdbrkFtcr*/
 					advparser.wrdbrkFtcr = wrdbrkFtcr;
 					/*Perpare advparser, by 1st copying current decoder symbol sets into local advparser arrays*/
+					int IndxPtr = 0;
 #if USE_TST_DATA
 					DeCd_KeyUpPtr = DeCd_KeyDwnPtr = testSize;
 					for (int i = 0; i < DeCd_KeyDwnPtr; i++)
 					{
 						advparser.KeyUpIntrvls[i] = testKeyUp[i];
 						advparser.KeyDwnIntrvls[i] = testKeyDwn[i];
+						if(i==100) advparser.KeyDwnSN[i] = 1.2;
+						else advparser.KeyDwnSN[i] = 10;
+					} 
+					
+					float dummy;
+					while(xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+					{
+						IndxPtr++;
 					}
 #else
 					for (int i = 0; i <= DeCd_KeyDwnPtr; i++)
@@ -1743,7 +1634,13 @@ bool chkChrCmplt(void)
 						advparser.KeyUpIntrvls[i] = KeyUpIntrvls[i];
 						advparser.KeyDwnIntrvls[i] = KeyDwnIntrvls[i];
 					}
-#endif /* USE_TST_DATA*/
+					while(xQueueReceive(ToneSN_que2, (void *)&advparser.KeyDwnSN[IndxPtr], pdMS_TO_TICKS(3)) == pdTRUE)
+					{
+						IndxPtr++;
+					}
+#endif /* USE_TST_DATA*/					
+					// if(IndxPtr != DeCd_KeyUpPtr) printf("Error!! - IndxPtr: %d; DeCd_KeyUpPtr: %d\n\n", IndxPtr, DeCd_KeyUpPtr);
+					// else printf("\n\n");
 					advparser.KeyUpPtr = DeCd_KeyUpPtr;
 					advparser.KeyDwnPtr = DeCd_KeyDwnPtr;
 					DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // reset pointers here just make sure we dont miss anything in the next data set
@@ -1780,6 +1677,11 @@ bool chkChrCmplt(void)
 				else if (wpm >= 36)
 				{
 					DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // resetbuffer pntrs
+					float dummy;
+					while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+					{
+						// printf("ToneSN_que2 flush 2\n");
+					}
 					/*20241209 added the following 2 lines*/
 					if (!LckHiSpd)
 					{
@@ -1810,7 +1712,7 @@ bool chkChrCmplt(void)
 					while (DeCd_KeyDwnPtr != DeCd_KeyUpPtr)
 					{
 						KeyUpIntrvls[DeCd_KeyUpPtr] = 0;
-						DeCd_KeyUpPtr++;
+						if(DeCd_KeyUpPtr < (IntrvlBufSize-1)) DeCd_KeyUpPtr++;
 					}
 #ifdef DeBgQueue
 					for (int i = 0; i < DeCd_KeyDwnPtr; i++)
@@ -1819,6 +1721,11 @@ bool chkChrCmplt(void)
 					}
 					#endif
 					DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // resetbuffer pntrs
+					float dummy;
+					while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+					{
+						// printf("ToneSN_que2 flush 3\n");
+					}
 					
 				}
 				// else if ((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && LtrPtr == 1)
@@ -1835,6 +1742,11 @@ bool chkChrCmplt(void)
 				printf("advparser SKIPPED - no usable KeyUpIntrvls[0],KeyDwnIntrvls[0] data; DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
 				#endif
 				DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // resetbuffer pntrs
+				float dummy;
+				while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+				{
+					// printf("ToneSN_que2 flush 4\n");
+				}
 			}
 			for (int i = 0; i < LtrPtr; i++)
 				LtrHoldr[i] = 0;
@@ -1858,7 +1770,7 @@ bool chkChrCmplt(void)
 				#ifdef DeBgQueue
 				printf("\nNewWrd %d- %d\n", DeCd_KeyDwnPtr, KDwnIntrvl);
 				#endif
-				DeCd_KeyDwnPtr++;
+				if(DeCd_KeyDwnPtr < (IntrvlBufSize-1)) DeCd_KeyDwnPtr++;
 			}
 		} // End if ValidWrdBrk = true
 		else if(Dbg) printf("step2\n");
