@@ -885,6 +885,7 @@ private:
     uint16_t Bg1SplitPt; //bug1 rule set dit/dah decision value; derived from UnitIntvrlx2r5
     char BrkFlg;
     /* Methods */
+    void InitDah_SplitPt(void);
     bool GlitchChk(void);
     void FindBtmPtr(void);
     void FindTopPtr(void);
