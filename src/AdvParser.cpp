@@ -270,7 +270,7 @@ void AdvParser::BldKyUpBktTbl(void)
     KeyUpBuckts[KeyUpBucktPtr].Intrvl = this->SortdUpIntrvls[0]; // At this point KeyUpBucktPtr = 0
     KeyUpBuckts[KeyUpBucktPtr].Cnt = 1;
     LtrBrkPtr = 0;
-    uint8_t UprHlf = (SortdPtr + 1) / 3;// changed from 2 to 3 because some datasets still had a poor/bad start point
+    uint8_t UprHlf = (SortdPtr + 1) / 3; // changed from 2 to 3 because some datasets still had a poor/bad start point
     // if(UprHlf == 1) UprHlf = 0;
     // if(UprHlf > 1) UprHlf--;
     if (UprHlf < 4)
@@ -285,35 +285,35 @@ void AdvParser::BldKyUpBktTbl(void)
     bstltrbrkptr = 0;
     float MaxLtrBrkSlope = 0;
     float CurLtrBrkSlope = 0;
+    float OldSlope = 0;
+    float TmpSlope = 0;
     int stop = SortdPtr; // KeyUpPtr
     if (SortdPtr > 4)
         stop--;
     // for (int i = 1; i < KeyUpPtr; i++)
     bool DoSlopeChk = true;
     uint16_t stopchkval = (int)(1.7 * this->AvgDahVal);
-    for (int i = 0; i < SortdPtr-1; i++)
-    //for (int i = UprHlf; i < SortdPtr; i++)
+    for (int i = 0; i < SortdPtr - 1; i++)
+    // for (int i = UprHlf; i < SortdPtr; i++)
     {
-        if (this->SortdUpIntrvls[i + 1] > stopchkval) //KeyDwnBuckts[TopPtr].Intrvl
+        if (this->SortdUpIntrvls[i + 1] > stopchkval) // KeyDwnBuckts[TopPtr].Intrvl
         {
             if (Dbug && DoSlopeChk)
                 printf("EXIT Letter Break - test exceeded 1.7*CurrentDahVal: %d; UpIntrvl: %d\n", stopchkval, this->SortdUpIntrvls[i + 1]);
             DoSlopeChk = false;
         }
-        CurLtrBrkSlope = ((float)((float)this->SortdUpIntrvls[i + 1] / (float)this->SortdUpIntrvls[i]));
-        // if(check && i>=UprHlf && i< (KeyUpPtr-1) && (this->KeyUpIntrvls[i]>35) && (CurLtrBrkSlope > 1.5))
-        // {
-        //     LtrBrkPtr =i;
-        //     check = false;
-        //     if (Dbug) printf("i:%d; %d/%d = %5.1f STOP\n", i, this->KeyUpIntrvls[i+1], this->KeyUpIntrvls[i], CurLtrBrkSlope );
-        // }
-        // if(check && i>=UprHlf && i< stop)
-        if (i >= UprHlf && i < stop && this->SortdUpIntrvls[i]>35)// we're looking for a letter break for code between 12 &35 WPM, so skip intervals that don't make sense 
+        TmpSlope = CurLtrBrkSlope;
+        if ((this->SortdUpIntrvls[i + 1] - this->SortdUpIntrvls[i]) <= 8)
+            CurLtrBrkSlope = 1.0; // ignore entries that differ less than the sample period (8ms)
+        else
+            CurLtrBrkSlope = ((float)((float)this->SortdUpIntrvls[i + 1] / (float)this->SortdUpIntrvls[i]));
+        if (i >= UprHlf && i < stop && this->SortdUpIntrvls[i] > 35) // we're looking for a letter break for code between 12 &35 WPM, so skip intervals that don't make sense
         {
             if (Dbug)
                 printf("i:%d; %d/%d = %5.1f\n", i, this->SortdUpIntrvls[i + 1], this->SortdUpIntrvls[i], CurLtrBrkSlope);
-            if (CurLtrBrkSlope > MaxLtrBrkSlope && DoSlopeChk)
+            if (CurLtrBrkSlope >= MaxLtrBrkSlope && DoSlopeChk)
             {
+                OldSlope = TmpSlope;
                 MaxLtrBrkSlope = CurLtrBrkSlope;
                 bstltrbrkptr = i;
             }
@@ -343,6 +343,27 @@ void AdvParser::BldKyUpBktTbl(void)
             KeyUpBuckts[KeyUpBucktPtr].Intrvl = this->SortdUpIntrvls[i];
             KeyUpBuckts[KeyUpBucktPtr].Cnt = 1;
         }
+    } // end build keyup buckets code
+    ///////////////////////////////////////////////////////////////////
+    /*Now using the slope result found above Do quick letterbreak find*/
+    LtrBrkPtr = bstltrbrkptr+1; // this value just got set in the above 'BldKyUpBktTbl()' function/method
+    if (KeyUpBucktPtr >= 1)
+    {
+        char method = ' ';
+        if (OldSlope != 1)
+        {
+
+            this->LtrBrkVal = this->SortdUpIntrvls[LtrBrkPtr];
+            method = 'Q';
+        }
+        else
+        { // this is for paddle/keyboard where the sender is using large spacing between letter
+            method = 'X';
+            this->LtrBrkVal = this->SortdUpIntrvls[LtrBrkPtr] + (uint16_t)((float)(this->SortdUpIntrvls[LtrBrkPtr+1] - this->SortdUpIntrvls[LtrBrkPtr]) / 2.0);
+        }
+
+        if (Dbug)
+            printf("quick letterbreak find Method %c- this->LtrBrkVal: %d; LtrBrkPtr: %d; OldSlope: %4.2f; SortdUpIntrvls[LtrBrkPtr+1]:%d; SortdUpIntrvls[LtrBrkPtr]:%d \n\n", method, this->LtrBrkVal, LtrBrkPtr, OldSlope, SortdUpIntrvls[LtrBrkPtr+1], SortdUpIntrvls[LtrBrkPtr]);
     }
 };
 /*Build the Key down Bucket table*/
@@ -527,24 +548,24 @@ void AdvParser::EvalTimeData(void)
 
         /*Build the Key Up Bucket table*/
         BldKyUpBktTbl();
-        /*Do quick letterbreak find*/
-        if (KeyUpBucktPtr >= 1)
-        {
-            char method = ' ';
-            int strt = 0;
-            // if(check)
-            // {
-            LtrBrkPtr = bstltrbrkptr; // this value just got set in the above 'BldKyUpBktTbl()' function/method
-            method = 'Q';
-            // }
-            // else method = '?';
-            // int launchStrt = LtrBrkPtr; //0;
-            // this->LtrBrkVal = this->KeyUpIntrvls[LtrBrkPtr]+ (uint16_t)((float)(this->KeyUpIntrvls[LtrBrkPtr+1]-this->SortdUpIntrvls[LtrBrkPtr])/2.0);
-            this->LtrBrkVal = this->SortdUpIntrvls[LtrBrkPtr + 1];
+        // /*Do quick letterbreak find*/
+        // if (KeyUpBucktPtr >= 1)
+        // {
+        //     char method = ' ';
+        //     int strt = 0;
+        //     // if(check)
+        //     // {
+        //     LtrBrkPtr = bstltrbrkptr; // this value just got set in the above 'BldKyUpBktTbl()' function/method
+        //     method = 'Q';
+        //     // }
+        //     // else method = '?';
+        //     // int launchStrt = LtrBrkPtr; //0;
+        //     // this->LtrBrkVal = this->KeyUpIntrvls[LtrBrkPtr]+ (uint16_t)((float)(this->KeyUpIntrvls[LtrBrkPtr+1]-this->SortdUpIntrvls[LtrBrkPtr])/2.0);
+        //     this->LtrBrkVal = this->SortdUpIntrvls[LtrBrkPtr + 1];
 
-            if (Dbug)
-                printf("quick letterbreak find Method %c- this->LtrBrkVal: %d; LtrBrkPtr: %d; END strt: %d\n\n", method, this->LtrBrkVal, LtrBrkPtr, strt);
-        }
+        //     if (Dbug)
+        //         printf("quick letterbreak find Method %c- this->LtrBrkVal: %d; LtrBrkPtr: %d; END strt: %d\n\n", method, this->LtrBrkVal, LtrBrkPtr, strt);
+        // }
         /*now, if earlier, it looked like the keydwn collection was all dahs, or all dits, use OLD DitDahSplitVal,
         to decide if the keydown collection is a set of dahs or dits*/
         if (this->AllDah || this->AllDit)
@@ -1505,14 +1526,14 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                         MaxSpltPtSlope = CurSpltPtSlope;
                         bstSpltPtptr = i;
                     }
-                    if (MaxSpltPtSlope > 1.5)
+                    if (MaxSpltPtSlope > 1.5 && ((float)((float)this->SortdDwnIntrvls[stop] / (float)this->SortdDwnIntrvls[stop-1])) < 1.2)
                         stop -= 1; // KeyDwnPtr - 2; // we found an apparent step change, So no need look at the last 2 intervals
                 }
                 else
                     keepLookng = false; /*20250120 stop when you're getting into noise events */
             }
-            if (MaxSpltPtSlope < 1.2)
-            {
+            if (MaxSpltPtSlope < 1.2 )
+            { 
                 stop = start + 1;
                 start--;
                 if (Dbug)
@@ -1575,7 +1596,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
             printf("EXIT8; bstSpltPtptr=%d; this->NuSpltVal: %d; this->SortdDwnIntrvls[bstSpltPtptr]:%d; this->DitIntrvlVal:%d\n", bstSpltPtptr, this->NuSpltVal, this->SortdDwnIntrvls[bstSpltPtptr], this->DitIntrvlVal);
         AllDah = AllDit = false;
         return;
-    }
+    } // end if (SortdPtr >= 10)
     /*Ok, there's not enough keydown events to use the simple "split point" method, so do/try the following: */
     if (arr[n].Intrvl > 1.5 * arr[0].Intrvl)
     {
