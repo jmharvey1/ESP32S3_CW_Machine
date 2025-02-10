@@ -232,6 +232,7 @@ bool KEISRwaiting = false;
 bool LckHiSpd = false; //20241209 added to support ensuring decoder is configure for paddle/keyboard for speeds in excees of 36WPM
 unsigned long OldEvntTime = 0;
 uint8_t chkcnt = 0;
+uint8_t ShrtLtrBrkCnt = 0;
 //  End of CW Decoder Global Variables
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -1619,7 +1620,7 @@ bool chkChrCmplt(void)
 					{
 						advparser.KeyUpIntrvls[i] = testKeyUp[i];
 						advparser.KeyDwnIntrvls[i] = testKeyDwn[i];
-						if(i==100) advparser.KeyDwnSN[i] = 1.2;
+						if(i==0) advparser.KeyDwnSN[i] = 1.2;
 						else advparser.KeyDwnSN[i] = 10;
 					} 
 					
@@ -1801,6 +1802,19 @@ bool chkChrCmplt(void)
 
 			if (DeCodeVal >= 2)
 			{
+				if(DeCodeVal==2 || DeCodeVal==3) ShrtLtrBrkCnt++;// copied either a 'T' or 'E'
+				else ShrtLtrBrkCnt = 0;
+				if(ShrtLtrBrkCnt>5) //had more than 5 E's & T's in a row. Check/verify letterbrk timing
+				{
+					
+					uint16_t NuLtrBrkVal = advparser.Get_LtrBrkVal();
+					printf("Too Many Ts & Es- Resetting ltrBrk Val; Old value %d; new value %d \n", (uint16_t)ltrBrk, NuLtrBrkVal);
+					ltrBrk = NuLtrBrkVal;
+					avgDit = ltrBrk/2;
+					avgDah = 3*avgDit;
+					wpm = 1200/avgDit;
+					ShrtLtrBrkCnt = 0;
+				}
 				int i = 0;
 				while (CodeValBuf[i] > 0)
 				{

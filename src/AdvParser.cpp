@@ -92,18 +92,22 @@ AdvParser::AdvParser(void) // TFT_eSPI *tft_ptr, char *StrdTxt
 Otherwise use last pass avgdah value*/
 void AdvParser::InitDah_SplitPt(void)
 {
-    if (KeyDwnBucktPtr > 1)
+    if (KeyDwnBucktPtr >= 1)
     { // we have enough buckets to at least attempt the evaluation
         int start = 0;
-        while (KeyDwnBuckts[start].Intrvl < 25)
-            start++;
         int end = KeyDwnBucktPtr;
-        while (3 * KeyDwnBuckts[start].Intrvl <= KeyDwnBuckts[end].Intrvl)
+        /*move the 'start' bucket up above any garbage(noise) entries*/
+        while (KeyDwnBuckts[start].Intrvl < 25 && start+1 < end)
+            start++;
+        /*Now converge on where the transition from 'dit' buckets are to 'dah' buckets*/
+        bool stuck = false;
+        while (!stuck && 3 * KeyDwnBuckts[start].Intrvl <= KeyDwnBuckts[end].Intrvl)
         {
-            /*now let try a little to see if its usefull to step up bottom end of the bucket comparison*/
-            if (3 * KeyDwnBuckts[start + 1].Intrvl <= KeyDwnBuckts[end].Intrvl)
+            /*now let's see if its usefull to step up bottom end of the bucket comparison*/
+            if (2.3 * KeyDwnBuckts[start + 1].Intrvl <= KeyDwnBuckts[end].Intrvl && start+1 < end)
                 start++;
-            end--;
+            if(end-1 > start) end--;
+            else stuck = true;
         }
         if (2 * KeyDwnBuckts[start].Intrvl <= KeyDwnBuckts[end].Intrvl)
         { // keep going, we appear to have a mix set of dits & dahs
@@ -259,7 +263,7 @@ void AdvParser::FindTopPtr(void)
         }
     }
 };
-/*Build the Key Up Bucket table
+/*Build the Key Up Bucket table.
  Plus scan for letter break interval*/
 void AdvParser::BldKyUpBktTbl(void)
 {
@@ -293,35 +297,55 @@ void AdvParser::BldKyUpBktTbl(void)
     // for (int i = 1; i < KeyUpPtr; i++)
     bool DoSlopeChk = true;
     uint16_t stopchkval = (int)(1.7 * this->AvgDahVal);
-    for (int i = 0; i < SortdPtr - 1; i++)
-    // for (int i = UprHlf; i < SortdPtr; i++)
+    uint16_t MinltrBrkVal = (int)(0.75 * this->AvgDahVal);
+    for (int i = 0; i <= SortdPtr - 1; i++)
     {
         if (this->SortdUpIntrvls[i + 1] > stopchkval) // KeyDwnBuckts[TopPtr].Intrvl
         {
             if (Dbug && DoSlopeChk)
-                printf("EXIT Letter Break - test exceeded 1.7*CurrentDahVal: %d; UpIntrvl: %d\n", stopchkval, this->SortdUpIntrvls[i + 1]);
+                printf("EXIT Letter Break - test exceeded 1.7*CurrentDahVal: %d; UpIntrvl[%d]: %d\n", stopchkval, i + 1, this->SortdUpIntrvls[i + 1]);
             DoSlopeChk = false;
+            // if(CurLtrBrkSlope == 1.0 && i-1 == bstltrbrkptr)//sender was likely sending with unusually long letter gaps. So advance bstltrbrkptr
+            // {
+            //     bstltrbrkptr++;
+            //     if (Dbug)
+            //         printf("long letter gap detected; bstltrbrkptr = %d\n", bstltrbrkptr);
+            // }    
         }
-        TmpSlope = CurLtrBrkSlope;
-        if ((this->SortdUpIntrvls[i + 1] - this->SortdUpIntrvls[i]) <= 8)
-            CurLtrBrkSlope = 1.0; // ignore entries that differ less than the sample period (8ms)
-        else
-            CurLtrBrkSlope = ((float)((float)this->SortdUpIntrvls[i + 1] / (float)this->SortdUpIntrvls[i]));
-        if (i >= UprHlf && i < stop && this->SortdUpIntrvls[i] > 35) // we're looking for a letter break for code between 12 &35 WPM, so skip intervals that don't make sense
+        if (i < SortdPtr)
         {
-            if (Dbug)
-                printf("i:%d; %d/%d = %5.1f\n", i, this->SortdUpIntrvls[i + 1], this->SortdUpIntrvls[i], CurLtrBrkSlope);
-            if (CurLtrBrkSlope >= MaxLtrBrkSlope && DoSlopeChk)
+            TmpSlope = CurLtrBrkSlope;
+            if ((this->SortdUpIntrvls[i + 1] - this->SortdUpIntrvls[i]) <= 9)
+                CurLtrBrkSlope = 1.0; // ignore entries that differ less than the sample period (8ms)
+            else if ((this->SortdUpIntrvls[i + 1]) <= MinltrBrkVal)
             {
-                OldSlope = TmpSlope;
-                MaxLtrBrkSlope = CurLtrBrkSlope;
+                CurLtrBrkSlope = 1.0; // ignore entries that are less than the 75% of a dah
                 bstltrbrkptr = i;
             }
-            if (MaxLtrBrkSlope >= 1.6 && bstltrbrkptr >= 2)
-                stop = i;
+            else
+                CurLtrBrkSlope = ((float)((float)this->SortdUpIntrvls[i + 1] / (float)this->SortdUpIntrvls[i]));
+            if (i >= UprHlf && i < stop && this->SortdUpIntrvls[i] > 35) // we're looking for a letter break for code between 12 &35 WPM, so skip intervals that don't make sense
+            {
+                if (Dbug)
+                    printf("i:%d; %d/%d = %5.1f\n", i, this->SortdUpIntrvls[i + 1], this->SortdUpIntrvls[i], CurLtrBrkSlope);
+                if (CurLtrBrkSlope >= MaxLtrBrkSlope && DoSlopeChk)
+                {
+                    OldSlope = TmpSlope;
+                    MaxLtrBrkSlope = CurLtrBrkSlope;
+                    bstltrbrkptr = i;
+                }
+                else if ((this->SortdUpIntrvls[i] - this->SortdUpIntrvls[bstltrbrkptr]) <= 9)
+                {
+                    CurLtrBrkSlope = 1.0;
+                    bstltrbrkptr = i;
+                }
+                if (MaxLtrBrkSlope >= 1.6 && bstltrbrkptr >= 2)
+                    stop = i;
+            }
         }
         bool match = false;
-        if ((float)this->SortdUpIntrvls[i] <= (4 + (1.2 * KeyUpBuckts[KeyUpBucktPtr].Intrvl)))
+        // printf("this->SortdUpIntrvls[%d]=%d; (4 + (1.2 * KeyUpBuckts[%d].Intrvl) = %d\n", i, this->SortdUpIntrvls[i], KeyUpBucktPtr, (uint16_t)(4 + (1.2 * KeyUpBuckts[KeyUpBucktPtr].Intrvl)));
+        if ((float)this->SortdUpIntrvls[i] <= (float)(4 + (1.2 * KeyUpBuckts[KeyUpBucktPtr].Intrvl)))
         {
             KeyUpBuckts[KeyUpBucktPtr].Cnt++;
             match = true;
@@ -341,19 +365,21 @@ void AdvParser::BldKyUpBktTbl(void)
                 break;
             }
             KeyUpBuckts[KeyUpBucktPtr].Intrvl = this->SortdUpIntrvls[i];
-            KeyUpBuckts[KeyUpBucktPtr].Cnt = 1;
+             KeyUpBuckts[KeyUpBucktPtr].Cnt = 1;
         }
     } // end build keyup buckets code
+    //printf("KeyUpBucktPtr:%d; KeyUpBuckts[KeyUpBucktPtr].Cnt = %d\n", KeyUpBucktPtr, KeyUpBuckts[KeyUpBucktPtr].Cnt);
     ///////////////////////////////////////////////////////////////////
     /*Now using the slope result found above Do quick letterbreak find*/
-    LtrBrkPtr = bstltrbrkptr+1; // this value just got set in the above 'BldKyUpBktTbl()' function/method
+    LtrBrkPtr = bstltrbrkptr; // this value just got set in the above 'BldKyUpBktTbl()' function/method
     if (KeyUpBucktPtr >= 1)
     {
         char method = ' ';
         if (OldSlope != 1)
         {
 
-            this->LtrBrkVal = this->SortdUpIntrvls[LtrBrkPtr];
+            this->LtrBrkVal = this->SortdUpIntrvls[LtrBrkPtr+1];
+            //this->LtrBrkVal = this->SortdUpIntrvls[LtrBrkPtr] + (uint16_t)((float)(this->SortdUpIntrvls[LtrBrkPtr+1] - this->SortdUpIntrvls[LtrBrkPtr]) / 2.0);
             method = 'Q';
         }
         else
@@ -1627,15 +1653,16 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
             }
         }
         if(MaxSpltPtSlope> 1.2)
-        { 
-        this->NuSpltVal = this->SortdDwnIntrvls[bstSpltPtptr] + ((this->SortdDwnIntrvls[bstSpltPtptr + 1] - this->SortdDwnIntrvls[bstSpltPtptr]) / 2);
-        if (Dbug)
-            printf("Initial this->NuSpltVal; i=%d \n", this->NuSpltVal);
+        {
+            this->NuSpltVal = this->SortdDwnIntrvls[bstSpltPtptr] + ((this->SortdDwnIntrvls[bstSpltPtptr + 1] - this->SortdDwnIntrvls[bstSpltPtptr]) / 2);
+            if (Dbug)
+                printf("Initial this->NuSpltVal; i=%d \n", this->NuSpltVal);
         }
         else
         {
-            printf("SKIPPED 1st atttempt to set 'NuSpltVal'. Dataset appears to be ALLDITS or ALLDAHS\n");
-        }    
+            if (Dbug)
+                printf("SKIPPED 1st atttempt to set 'NuSpltVal'. Dataset appears to be ALLDITS or ALLDAHS\n");
+        }
         /*do a quick scan to find the bucket with the most dits*/
         for (i = 0; i < n; i++)
         {

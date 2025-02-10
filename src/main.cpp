@@ -1205,7 +1205,7 @@ void app_main()
   xTaskCreatePinnedToCore(
       AdvParserTask, /* Function to implement the task */
       "AdvParser Task", /* Name of the task */
-      4096,  /* Stack size in words */
+      5148,  /*old Stack size in words 4096*/
       NULL,  /* Task input parameter */
       2,  /* Priority of the task */
       &AdvParserTaskHandle,  /* Task handle. */
