@@ -92,6 +92,9 @@ AdvParser::AdvParser(void) // TFT_eSPI *tft_ptr, char *StrdTxt
 Otherwise use last pass avgdah value*/
 void AdvParser::InitDah_SplitPt(void)
 {
+    if (Dbug)
+            printf("START - InitDah_SplitPt(void)\n");
+    
     if (KeyDwnBucktPtr >= 1)
     { // we have enough buckets to at least attempt the evaluation
         int start = 0;
@@ -132,10 +135,13 @@ void AdvParser::InitDah_SplitPt(void)
                 printf("New AvgDahVal: %d. Based on new DitDahSplitVal: %d and top:%d & bottom:%d Buckets\n", AvgDahVal, this->DitDahSplitVal, end, start);
         }
         else if (Dbug)
+        {
             printf("Dataset looks to be just Dits or Dahs, using last pass dah val: %d, & this->DitDahSplitVal: %d\n", AvgDahVal, this->DitDahSplitVal);
+            printf("For reference: 2*KeyDwnBuckts[start:%d].Intrvl: %d was NOT<= KeyDwnBuckts[end:%d].Intrvl: %d\n", start, KeyDwnBuckts[start].Intrvl, end, KeyDwnBuckts[end].Intrvl);
+        }
     }
     else if (Dbug)
-        printf("Data set just 1 KeyDwn Bucket, using last pass dah val: %d, & this->DitDahSplitVal: %d\n", AvgDahVal, this->DitDahSplitVal);
+        printf("Data set has just 1 KeyDwn Bucket, using last pass dah val: %d, & this->DitDahSplitVal: %d\n", AvgDahVal, this->DitDahSplitVal);
 };
 
 void AdvParser::FindBtmPtr(void)
@@ -162,9 +168,10 @@ bool AdvParser::GlitchChk(void)
     float AvgElmntIntrvl = (float)DitIntrvlVal + AvgSmblDedSpc;
     bool GudVal = true;
     bool GLitchFlg = false;
+    uint8_t passcnt = 0;
     while (rScanPtr < TmpUpIntrvlsPtr && GudVal) // ''n' initially is 0
     {
-        // if (TmpDwnIntrvls[rScanPtr] < 0.80 * DitIntrvlVal)
+        // if (TmpDwnIntrvls[rScanPtr] < 0.80 * DitIntrvlVal) 
         //  if (TmpDwnIntrvls[rScanPtr] < 0.64 * DitIntrvlVal)
         { // we have a glitch, so add this 'key down' time. & its 'key up' time, to the previous keyup time
 
@@ -183,7 +190,7 @@ bool AdvParser::GlitchChk(void)
             // else if ((ThisElmntIntrvl < 0.72 * AvgElmntIntrvl))
             // else if((TmpDwnIntrvls[rScanPtr]<  0.6 * DitIntrvlVal) || (TmpUpIntrvls[rScanPtr] < 0.6* AvgSmblDedSpc))
             /*20250114 removed the keyup qualifer/test because new tonedetect code can return in very small (but valid) time interval*/
-            else if ((TmpDwnIntrvls[rScanPtr] < 0.6 * DitIntrvlVal))
+            else if ((TmpDwnIntrvls[rScanPtr] < 0.6 * DitIntrvlVal) && (KeyDwnSN[passcnt] < 3)) //greater than ~ 2 'S' units)
             { /*this looks like 'glitch' because its combined time interval is either to big or too small to be part of this data set */
                 if (Dbug)
                     printf("\t'GLITCH' Entry(Deleted): TmpDwnIntrvls[%d] %d;  TmpUpIntrvls[%d] %d; DitIntrvlVal %d; AvgSmblDedSpc %d\n", rScanPtr, TmpDwnIntrvls[rScanPtr], rScanPtr, TmpUpIntrvls[rScanPtr], (uint16_t)DitIntrvlVal, (uint16_t)AvgSmblDedSpc);
@@ -213,6 +220,7 @@ bool AdvParser::GlitchChk(void)
             }
         }
         rScanPtr++;
+        passcnt++;
     }
     return GLitchFlg;
 };
@@ -339,9 +347,16 @@ void AdvParser::BldKyUpBktTbl(void)
                     CurLtrBrkSlope = 1.0;
                     bstltrbrkptr = i;
                 }
-                if (MaxLtrBrkSlope >= 1.6 && bstltrbrkptr >= 2)
+                else if (CurLtrBrkSlope >= 1.4 && i == bstltrbrkptr+1)
+                {
+                    CurLtrBrkSlope = 1.0;
+                    bstltrbrkptr = i;
+                }
+                if (MaxLtrBrkSlope >= 1.75 && bstltrbrkptr >= 2)
                     stop = i;
             }
+            else if (Dbug && i >= UprHlf && this->SortdUpIntrvls[i] > 35)
+                printf(" i:%d; %d/%d = %5.1f\n", i, this->SortdUpIntrvls[i + 1], this->SortdUpIntrvls[i], CurLtrBrkSlope);
         }
         bool match = false;
         // printf("this->SortdUpIntrvls[%d]=%d; (4 + (1.2 * KeyUpBuckts[%d].Intrvl) = %d\n", i, this->SortdUpIntrvls[i], KeyUpBucktPtr, (uint16_t)(4 + (1.2 * KeyUpBuckts[KeyUpBucktPtr].Intrvl)));
@@ -447,13 +462,13 @@ void AdvParser::CalAvgDeadIntvrl(void)
     // printf(" oldval: %d; TmpUpIntrvlsPtr: %d; stop:%d \n", (uint16_t)oldval, TmpUpIntrvlsPtr, stop);
     while ((EvntCnt < stop) && KpGg)
     {
-        oldval = this->KeyUpIntrvls[EvntCnt];
+        oldval = this->SortdUpIntrvls[EvntCnt];
         // printf(" oldval: %d\n",(uint16_t)oldval);
         RuningTotal += oldval;
         EvntCnt++;
-        if ((this->KeyUpIntrvls[EvntCnt] > 1.7 * oldval))
+        if ((this->SortdUpIntrvls[EvntCnt] > 1.7 * oldval))
             KpGg = false;
-        if (!KpGg && (EvntCnt < TmpUpIntrvlsPtr / 2) && (this->KeyUpIntrvls[EvntCnt] < this->DitDahSplitVal))
+        if (!KpGg && (EvntCnt < TmpUpIntrvlsPtr / 2) && (this->SortdUpIntrvls[EvntCnt] < this->DitDahSplitVal))
             KpGg = true;
     }
     if (EvntCnt > 0)
@@ -1535,6 +1550,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         float MaxSpltPtSlope = 0;
         float CurSpltPtSlope = 0;
         int start = SortdPtr / 4;
+        if(start >= 2) start--;
         int stop = SortdPtr - 1;
         /*20250118 added while loop, in case initial pass didn't find a dit/dah split point*/
         bool keepLookng = true;
@@ -1713,7 +1729,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                 }
             }
             /*Test if the change interval between these keydwn groups is bigger than anything we've seen before (in this symbol set)*/
-            if (arr[i].Intrvl > 34)
+            if (arr[i].Intrvl > 30)
             { /*only consider intervals that represent keying below 35 wpm. Anything faster is likely just noise*/
                 runngCnt += arr[i].Cnt;
                 if (FindFrstNtryPtr)
@@ -3747,7 +3763,7 @@ bool AdvParser::SKRules(int &n)
     /*Middle keyup test to see this keyup is greater than 'UnitIntvrlx2r5',
     If it is then call this one a letter break*/
     // if (n > 0 && (TmpUpIntrvls[n] > 2.0 * TmpUpIntrvls[n - 1]))
-    if (n > 0 && ((float)TmpUpIntrvls[n] > (float)(0.9 * UnitIntvrlx2r5))) // 20241125 added the 0.9 factor based on one slow SK sender's spacing
+    if (n > 0 && ((float)TmpUpIntrvls[n] > (float)(1.1 * UnitIntvrlx2r5))) // 20241125 added the 0.9 factor based on one slow SK sender's spacing
     {
         ExitPath[n] = 100;
         BrkFlg = '+';
@@ -4249,7 +4265,7 @@ int AdvParser::DitDahBugTst(void)
         }
         else if (WrdBkCnt > 1) // 20240407 added WrdBkCnt qualifier(Has streched KeyUps)
         {
-            if (this->DahVarPrcnt < 0.15)
+            if (this->DahVarPrcnt < 0.17) //20250210 changed from 0.15 to 0.17 based on test code from W1AW
             {
                 if (Dbug)
                     printf("\nPaddle EXIT C dahDwncnt %d; DahVarPrcnt %4.2f\n", dahDwncnt, this->DahVarPrcnt);

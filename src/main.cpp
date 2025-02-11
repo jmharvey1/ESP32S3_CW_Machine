@@ -473,7 +473,7 @@ k = (int)decimated;
             /*if here, we just had a shift in the incoming tone of more than 15hz, 
             so assume new 'sender', & force a wordbreak in the decoded text
             by setting the expected wordbreak time to 0 */
-            //ForcedWrdBrk = true;
+            ForcedWrdBrk = true;
             //lvglmsgbx.ClrDcdTA(); // start new line when sender (frequency) changes
           }
           DmodFrqOld = (4*TARGET_FREQUENCYC + DemodFreq)/5;

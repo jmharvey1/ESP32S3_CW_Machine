@@ -1505,6 +1505,26 @@ bool chkChrCmplt(void)
 	unsigned long Now = pdTICKS_TO_MS(xTaskGetTickCount()); //(GetTimr5Cnt()/10);
 	if ((Now - letterBrk1) > 35000)
 		letterBrk1 = Now - 10000; // keep "letterBrk1" from becoming an absurdly large value
+	/*if true key is 'up' and looks like a change in sender has occured. So force a word break*/
+	bool SndrChng = false;
+	if (LclKeyState == 1 && ForcedWrdBrk)
+	{
+		if(LtrPtr >= 1)
+		{
+		ForcedWrdBrk = false;
+		letterBrk = Now -10;
+		wordBrkFlg = false;
+		SndrChng = true;
+		char NuLine[3];
+		NuLine[0] = 13; //carriage return
+		NuLine[1] = 10; // line feed
+		NuLine[2] = 0;
+		ptrmsgbx->dispDeCdrTxt(NuLine, TFT_GREENYELLOW);
+		}
+		else ForcedWrdBrk = false; //false alarm no real info available. reset and wait for another flag
+	} 
+	
+	
 	// check to see if enough time has passed since the last key closure to signify that the character is complete
 	if (LclKeyState == 0) // if this is the case, key is closed & should not be doing a letter complete
 	{
@@ -1539,8 +1559,8 @@ bool chkChrCmplt(void)
 	if (((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0)) 
 		|| (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5)) 
 		|| ((LtrPtr >= 6) && (LtrHoldr[LtrPtr - 2] == 'D') && (LtrHoldr[LtrPtr - 1] == 'E')) 
-		|| ((LtrPtr >= 12)))
-		//|| ForcedWrdBrk)
+		|| ((LtrPtr >= 12))
+		|| SndrChng)
 	{
 		if(Dbg) printf("step1\n");
 		BldKeyUpDwnDataSet();
@@ -1620,7 +1640,7 @@ bool chkChrCmplt(void)
 					{
 						advparser.KeyUpIntrvls[i] = testKeyUp[i];
 						advparser.KeyDwnIntrvls[i] = testKeyDwn[i];
-						if(i==0) advparser.KeyDwnSN[i] = 1.2;
+						if(i==100) advparser.KeyDwnSN[i] = 1.2;
 						else advparser.KeyDwnSN[i] = 10;
 					} 
 					
@@ -1669,6 +1689,7 @@ bool chkChrCmplt(void)
 					// 	DisplayChar(CodeValBuf[0]);
 					// }
 					/*now we can start/resart the post parsing process */
+					if(SndrChng) printf("\nSender Changed induced Wrd Break\n");
 					vTaskResume(AdvParserTaskHandle);
 					/*Pause here to ensure the newly inserted word break (space) gets sent to the display*/
 					//vTaskDelay(pdMS_TO_TICKS(100));
@@ -1814,6 +1835,14 @@ bool chkChrCmplt(void)
 					avgDah = 3*avgDit;
 					wpm = 1200/avgDit;
 					ShrtLtrBrkCnt = 0;
+					/*reset Keyup/down timing & S/N data sets */
+					DeCd_KeyUpPtr = DeCd_KeyDwnPtr = 0;
+					float dummy;
+					int IndxPtr = 0;
+					while(xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+					{
+						IndxPtr++;
+					}
 				}
 				int i = 0;
 				while (CodeValBuf[i] > 0)
