@@ -20,7 +20,7 @@ extern bool SlwFlg;
 extern bool GltchFlg;    
 extern bool NoisFlg;
 extern bool CalGtxlParamFlg;
-extern int DemodFreq;
+extern int AvgToneFreq;
 
 float GetMagnitudeSquared(float q1, float q2, float Coeff, int SmplCnt);
 void CurMdStng(int MdStng);//added 20230104

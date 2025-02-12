@@ -54,6 +54,7 @@
  * 20250108 more refinements to letter break, & DitIntrvlVal code
  * 20250115 lowered 'starting point' seach fof letter break
  * 20250119 added code to ensure last dataset entry was treated as a letterbreak, & other code to ensure alldit & alldah flags are cleared when appropriate
+ * 20250210 added S/N checks to use only 'valid' time interval
  * */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"

@@ -29,7 +29,8 @@
  * 20250112 Refined/Debugged Queue(s) management & building KeyDwn & KeyUp data sets related to AdvParser
  * 20250116 reworked BldKeyUpDwnDataSet() and other areas related to 'wrdbrkFtcr' to improve 'slow' code decoding
  * 20250117 Added word break conditional test to BldKeyUpDwnDataSet()
- *   */
+ * 20250210 Automatic 'new line' when Sender change is detected
+ */
  
 
 // #include <SetUpCwDecoder.h>
@@ -155,6 +156,8 @@ bool XspctHi = false;
 bool XspctLo = true;
 bool Prtflg = false; // added for diagnostic keyISR testing
 bool Dbg = false;
+bool SndrChng = false;
+	
 int exitCD = 0;		 // added for diagnostic keyISR testing
 int DitDahCD = 0;	 // added for diagnostic keyISR testing
 int glitchCnt = 0;	 // added to recover from slow CW shifting to high speed cw ({~>25WPM})
@@ -1506,23 +1509,23 @@ bool chkChrCmplt(void)
 	if ((Now - letterBrk1) > 35000)
 		letterBrk1 = Now - 10000; // keep "letterBrk1" from becoming an absurdly large value
 	/*if true key is 'up' and looks like a change in sender has occured. So force a word break*/
-	bool SndrChng = false;
-	if (LclKeyState == 1 && ForcedWrdBrk)
-	{
-		if(LtrPtr >= 1)
-		{
-		ForcedWrdBrk = false;
-		letterBrk = Now -10;
-		wordBrkFlg = false;
-		SndrChng = true;
-		char NuLine[3];
-		NuLine[0] = 13; //carriage return
-		NuLine[1] = 10; // line feed
-		NuLine[2] = 0;
-		ptrmsgbx->dispDeCdrTxt(NuLine, TFT_GREENYELLOW);
-		}
-		else ForcedWrdBrk = false; //false alarm no real info available. reset and wait for another flag
-	} 
+	// if (LclKeyState == 1 && ForcedWrdBrk)
+	// { /*Added 20250210 */
+	// 	// if(LtrPtr >= 1)
+	// 	// {
+	// 	ForcedWrdBrk = false;
+	// 	letterBrk = Now -10;
+	// 	wordBrkFlg = false;
+	// 	SndrChng = true;
+	// 	char NuLine[4];
+	// 	NuLine[0] = 13; //carriage return
+	// 	NuLine[1] = 10; // line feed
+	// 	NuLine[1] = ' ';
+	// 	NuLine[2] = 0;
+	// 	ptrmsgbx->dispDeCdrTxt(NuLine, TFT_GREENYELLOW);
+	// 	// }
+	// 	// else ForcedWrdBrk = false; //false alarm no real info available. reset and wait for another flag
+	// } 
 	
 	
 	// check to see if enough time has passed since the last key closure to signify that the character is complete
@@ -1564,7 +1567,6 @@ bool chkChrCmplt(void)
 	{
 		if(Dbg) printf("step1\n");
 		BldKeyUpDwnDataSet();
-		//ForcedWrdBrk = false;
 		if(chkcnt == DeCd_KeyDwnPtr)
 		{
 			// printf("chkcnt%d == DeCd_KeyDwnPt:%d\n", chkcnt, DeCd_KeyDwnPtr);
@@ -1671,11 +1673,8 @@ bool chkChrCmplt(void)
 					{
 						advparser.LtrHoldr[i] = LtrHoldr[i];
 					}
+					
 					/*Make Sure a 'space' has been inserted after this text data set*/
-					// int i = 0;
-					// while (CodeValBuf[i] > 0)
-					// 	++i;			 // move buffer pointer to 1st available empty array position
-					// CodeValBuf[i] = 255; // insert space in text to create a word break
 					#ifdef AutoCorrect
 					printf("Insert Wordbreak Space\n");
 					#endif
@@ -1689,7 +1688,11 @@ bool chkChrCmplt(void)
 					// 	DisplayChar(CodeValBuf[0]);
 					// }
 					/*now we can start/resart the post parsing process */
-					if(SndrChng) printf("\nSender Changed induced Wrd Break\n");
+					if (SndrChng)
+					{
+						printf("Sender Changed induced Wrd Break\n");
+						SndrChng = false;
+					}
 					vTaskResume(AdvParserTaskHandle);
 					/*Pause here to ensure the newly inserted word break (space) gets sent to the display*/
 					//vTaskDelay(pdMS_TO_TICKS(100));

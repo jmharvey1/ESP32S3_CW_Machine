@@ -92,6 +92,8 @@ esp_event_loop_args_t event_task_args = {
 /*20250123 Goertzelcpp - reworked, yet again , how to manage tonedetect threshold level for both noisy & quiet conditions*/
 /*20250126 Goertzelcpp - more tweaks to threshold setpoint code*/
 /*20250203 Added code & queue to manage/display S/N log calc */
+/*20250210 Added Automatic 'new line' when Sender change(i.e., tone frequency change +/-15Hz) is detected*/
+/*20250211 reworked Sender changed & tone Frequency filter code*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -173,7 +175,7 @@ bool adcON =false;
 bool SkippDotClkISR = false;
 bool ScopeArm = false;
 bool ScopeTrigr = true;
-bool ForcedWrdBrk = false;
+bool NuSender = false;
 uint8_t QueFullstate;
 float BiasError = 0;
 int Smplcnt = 0;
@@ -243,8 +245,12 @@ uint32_t SmplCNt = 0;
 uint32_t NoTnCntr = 0;
 uint8_t PeriodCntr = 0;
 int Oldk = 0; //used in the addsmpl() as part of the auto-tune/freq measurement process 
-int DemodFreq = 0;
-int DmodFrqOld = 0;
+int DemodFreq = (int)TARGET_FREQUENCYC;
+float CurSendrFreq = (float)DemodFreq;
+int AvgToneFreq = DemodFreq;
+float intrglerr = 0.0;
+uint8_t OutofBndCnt = 0;
+
 bool TstNegFlg = false;
 bool CalGtxlParamFlg = false;
 ////////////////////
@@ -376,45 +382,42 @@ void addSmpl(int k, int i, int *pCntrA)
 
   /*Calculate Tone frequency*/
   /*the following is part of the auto tune process */
-  if(!SmplSetDone){
-    BiasError += k; 
+  if (!SmplSetDone)
+  {
+    BiasError += k;
     Smplcnt++;
-    if(Smplcnt == 200000)
+    if (Smplcnt == 200000)
     {
-      BiasError = BiasError/200000;
+      BiasError = BiasError / 200000;
       Smplcnt = 0;
       SmplSetDone = true;
     }
   }
 
   /*IIR manual method */
-float decimated = float(k);
-float IIRBPOut =
-    a0 * decimated
-    + a1 * in_z1
-    + a2 * in_z2
-    - b1 * out_z1
-    - b2 * out_z2;
-in_z2 = in_z1;
-in_z1 = decimated;
-out_z2 = out_z1;
-out_z1 = IIRBPOut;
-decimated = IIRBPOut;
+  float decimated = float(k);
+  float IIRBPOut =
+      a0 * decimated + a1 * in_z1 + a2 * in_z2 - b1 * out_z1 - b2 * out_z2;
+  in_z2 = in_z1;
+  in_z1 = decimated;
+  out_z2 = out_z1;
+  out_z1 = IIRBPOut;
+  decimated = IIRBPOut;
 
-		/*2nd stage */
-// IIRBPOut =
-// 	a0 * decimated
-// 	+ a1 * in_z3
-// 	+ a2 * in_z4
-// 	- b1 * out_z3
-// 	- b2 * out_z4;
-// 	in_z4 = in_z3;
-// in_z3 = decimated;
-// out_z4 = out_z3;
-// out_z3 = IIRBPOut;
-// decimated = IIRBPOut;
-k = (int)decimated;
-  const int ToneThrsHld = 100;//100; // minimum usable peak tone value; Anything less is noise
+  /*2nd stage */
+  // IIRBPOut =
+  // 	a0 * decimated
+  // 	+ a1 * in_z3
+  // 	+ a2 * in_z4
+  // 	- b1 * out_z3
+  // 	- b2 * out_z4;
+  // 	in_z4 = in_z3;
+  // in_z3 = decimated;
+  // out_z4 = out_z3;
+  // out_z3 = IIRBPOut;
+  // decimated = IIRBPOut;
+  k = (int)decimated;
+  const int ToneThrsHld = 100; // 100; // minimum usable peak tone value; Anything less is noise
   if (AutoTune)
   {
     /*if we have a usable signal; start counting the number of samples needed capture 40 periods of the incoming tone;
@@ -436,7 +439,7 @@ k = (int)decimated;
       NoTnCntr++; // increment "No Tone Counter"
       if (TstNegFlg)
       { // looking for the signal to go negative
-        //if ((k < -ToneThrsHld) && (Oldk >= -ToneThrsHld))
+        // if ((k < -ToneThrsHld) && (Oldk >= -ToneThrsHld))
         if ((k < -ToneThrsHld))
         {               /*this one just went negative*/
           NoTnCntr = 0; // reset "No Tone Counter" to zero
@@ -445,7 +448,7 @@ k = (int)decimated;
       }
       else
       { //  TstNegFlg = false ; Now looking for the signal to go positve
-        //if ((k > ToneThrsHld) && (Oldk <= ToneThrsHld))
+        // if ((k > ToneThrsHld) && (Oldk <= ToneThrsHld))
         if ((k > ToneThrsHld))
         {               /* this one just went positive*/
           PeriodCntr++; // we've lived one complete cycle of some unknown frequency
@@ -461,30 +464,54 @@ k = (int)decimated;
     else if (PeriodCntr == 40)
     {
       /*if here, we have a usable signal; calculate its frequency*/
-      DemodFreq = ((int)PeriodCntr * (int)SAMPLING_RATE) / (int)SmplCNt;
+      DemodFreq = (int)((float)PeriodCntr * (float)SAMPLING_RATE) / (float)SmplCNt;
+      // printf("DemodFreq: %d;\tAvgToneFreq: %d\tTARGET_FREQUENCYC: %d;\tCurSendrFreq: %d\n", DemodFreq, (uint16_t)AvgToneFreq, (uint16_t)TARGET_FREQUENCYC, (int)CurSendrFreq);
       freq_int = DemodFreq;
       if (DemodFreq > 450)
       {
-        
-        if ((DemodFreq > DmodFrqOld - 2) && (DemodFreq < DmodFrqOld + 2))
-        {/*OK we got essentially the same freq twice in row, so it must be valid*/
-          if((TARGET_FREQUENCYC - DemodFreq) > 15 || (DemodFreq - TARGET_FREQUENCYC ) > 15 )
+        /*20250211 reworked Sender changed & tone Frequency filter code*/
+        if (abs(DemodFreq-AvgToneFreq) < 3)
+        {
+          /*OK we got essentially the same freq twice in row, so it must be valid*/
+          CalGtxlParamFlg = true;
+          Calc_IIR_BPFltrCoef((float)AvgToneFreq, SAMPLING_RATE, 3.7071);
+        }
+        else
+        {
+          //AvgToneFreq = DemodFreq;
+          AvgToneFreq = (int)((1+(4 * AvgToneFreq + DemodFreq) / 5));
+        }
+        /*Now test/check for sender change based on 'DemodFreq' freq change */
+        if ((abs((int)CurSendrFreq - DemodFreq) >= 7))
+        {
+          OutofBndCnt++;
+          //printf("DemodFreq: %d;\tCurSendrFreq: %d\tOutofBndCnt: %d\n", DemodFreq, CurSendrFreq, OutofBndCnt);
+
+          if (OutofBndCnt >= 6)
           {
-            /*if here, we just had a shift in the incoming tone of more than 15hz, 
+            OutofBndCnt = 0;
+            CurSendrFreq = (float)AvgToneFreq;
+            intrglerr = 0.0; //reset error term
+            /*if here, we just had a shift in the incoming tone of more than 15hz,
             so assume new 'sender', & force a wordbreak in the decoded text
             by setting the expected wordbreak time to 0 */
-            ForcedWrdBrk = true;
-            //lvglmsgbx.ClrDcdTA(); // start new line when sender (frequency) changes
+            NuSender = true;
+          //  printf("\nFreq Change; Step 1\tCurSendrFreq: %d\n", (int)CurSendrFreq);
           }
-          DmodFrqOld = (4*TARGET_FREQUENCYC + DemodFreq)/5;
-          //sprintf(Title, "Tone: %d\t%d\n", DemodFreq, (int)SmplCNt);
-          //printf(Title);
-          CalGtxlParamFlg = true;
-          Calc_IIR_BPFltrCoef((float)DmodFrqOld, SAMPLING_RATE, 3.7071);
-          
         }
-        DmodFrqOld = DemodFreq;
-      }
+        else
+        {
+          OutofBndCnt = 0;
+        }
+        float tempval   = ((float)AvgToneFreq - CurSendrFreq )/100;
+        if(tempval>0.1) tempval = 0.1;
+        if(tempval< -0.1) tempval = -0.1;
+        CurSendrFreq =CurSendrFreq+ tempval;
+        // float tempval   = ((((11.0 *(float)CurSendrFreq) + (float)AvgToneFreq) / 12.0));
+        // CurSendrFreq =(int)tempval;// add correction for current sender slow drift in freq
+        // if((tempval - (float)CurSendrFreq) > 0.5) CurSendrFreq++; 
+        
+      } // end if (DemodFreq > 450)
 
       /*reset for next round of samples*/
       SmplCNt = 0;
@@ -495,7 +522,7 @@ k = (int)decimated;
   {
     if (!SmplSetRdy && !ScopeArm && (k < 50)) //&& (k < ToneThrsHld/2))
       ScopeArm = true;
-    if (!SmplSetRdy && ScopeArm && (k > 50))  //&& (k > ToneThrsHld/2)) 
+    if (!SmplSetRdy && ScopeArm && (k > 50)) //&& (k > ToneThrsHld/2))
       ScopeTrigr = true;
     if (ScopeTrigr)
     {
@@ -1092,7 +1119,25 @@ void AdvParserTask(void *param)
     { // Advanced Parser indicates this is Hi-Speed CW 
       // Make sure Goertzel.cpp (tone detection )is aligned to follow keying
       avgDit = 1200 / 40; 
-    }  
+
+    }
+    /*Added 20250211 */
+    if (NuSender)/* ADC tone processing 'addSmpl()' detected Sender change - Start following text on a new line*/
+    {                                                                        
+      if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+      {
+        NuSender = false;
+        char NuLine[5];
+        NuLine[0] = 13; // carriage return
+        NuLine[1] = '>';
+        NuLine[2] = '>';
+        NuLine[3] = ' ';
+        NuLine[4] = 0;
+        lvglmsgbx.dispDeCdrTxt(NuLine, TFT_GREENYELLOW);
+        //printf("Sender Changed induced Wrd Break\n");
+        xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
+      }
+    }
     /*The following code is primarilry for debugging stack alocation & understanding how much time the advance parser needs*/
     // uint16_t AdvPIntrvl = (uint16_t)(pdTICKS_TO_MS(xTaskGetTickCount())-AdvPStart);
     // printf("AdvPIntrvl: %d\n", AdvPIntrvl);

@@ -814,7 +814,7 @@ void Chk4KeyDwn(float NowLvl)
 		if (CalGtxlParamFlg)
 		{
 			CalGtxlParamFlg = false;
-			CalcFrqParams((float)DemodFreq); // recalculate Goertzel parameters, for the newly selected target grequency
+			CalcFrqParams((float)AvgToneFreq); // recalculate Goertzel parameters, for the newly selected target grequency
 			showSpeed();
 		}
 	}
