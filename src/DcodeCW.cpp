@@ -30,6 +30,7 @@
  * 20250116 reworked BldKeyUpDwnDataSet() and other areas related to 'wrdbrkFtcr' to improve 'slow' code decoding
  * 20250117 Added word break conditional test to BldKeyUpDwnDataSet()
  * 20250210 Automatic 'new line' when Sender change is detected
+ * 20250213 - New code to manage display when 'sender' change has been detected
  */
  
 
@@ -1505,6 +1506,47 @@ bool chkChrCmplt(void)
 	bool DataSetRdy = false;
 	uint16_t KDwnIntrvl = 0;
 	Pstate = 0;
+	////////////////////////////////////////////////////////////////////
+	/*20250213 - New code to manage display when 'sender' change has been detected*/
+	/*The following Code effectively inserts a new line and 'New Sender' markers to denote a change in sender*/
+	if (NuSender) /* ADC tone processing 'addSmpl()' detected Sender change - Start following text on a new line*/
+	{
+		int i = 0;
+		char DelStr[15];
+		char NuLineStr[65];
+		for (i = 0; i < LtrPtr; i++)
+		{
+			if(i<14)
+			{
+			DelStr[i] = 0x8;
+			}
+		}
+		// for (i = LtrPtr; i < 2*LtrPtr; i++)
+		// {
+		// 	if(i<29)
+		// 	{
+
+		// 		DelStr[i] = LtrHoldr[i-LtrPtr];
+		// 	} 
+		// }
+		if(i<14) DelStr[i] = 0x0;
+		else DelStr[14] = 0x0;
+		
+		if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+		{
+			NuSender = false;
+			char NuLine[5];
+			NuLine[0] = 13; // carriage return
+			NuLine[1] = '>';
+			NuLine[2] = '>';
+			NuLine[3] = ' ';
+			NuLine[4] = 0;
+			sprintf(NuLineStr, "%s%s %s", DelStr, NuLine, LtrHoldr);
+			ptrmsgbx->dispDeCdrTxt(NuLineStr, TFT_GREEN);
+			xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
+		}
+	}
+	////////////////////////////////////////////////////////////////////
 	unsigned long Now = pdTICKS_TO_MS(xTaskGetTickCount()); //(GetTimr5Cnt()/10);
 	if ((Now - letterBrk1) > 35000)
 		letterBrk1 = Now - 10000; // keep "letterBrk1" from becoming an absurdly large value
@@ -1643,7 +1685,7 @@ bool chkChrCmplt(void)
 						advparser.KeyUpIntrvls[i] = testKeyUp[i];
 						advparser.KeyDwnIntrvls[i] = testKeyDwn[i];
 						if(i==100) advparser.KeyDwnSN[i] = 1.2;
-						else advparser.KeyDwnSN[i] = 10;
+						else advparser.KeyDwnSN[i] = 20;
 					} 
 					
 					float dummy;
@@ -1701,6 +1743,21 @@ bool chkChrCmplt(void)
 				}
 				else if (wpm >= 36)
 				{
+					// if (NuSender) /* ADC tone processing 'addSmpl()' detected Sender change - Start following text on a new line*/
+					// {
+					// 	if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+					// 	{
+					// 		NuSender = false;
+					// 		char NuLine[5];
+					// 		NuLine[0] = 13; // carriage return
+					// 		NuLine[1] = '>';
+					// 		NuLine[2] = '>';
+					// 		NuLine[3] = ' ';
+					// 		NuLine[4] = 0;
+					// 		ptrmsgbx->dispDeCdrTxt(NuLine, TFT_GREENYELLOW);
+					// 		xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
+					// 	}
+					// }
 					DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // resetbuffer pntrs
 					float dummy;
 					while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)

@@ -93,7 +93,7 @@ static lv_obj_t *exit_btn;
 static lv_obj_t *Hexit_btn;
 /*added for scope Sceen*/
 int bias_int = 0;
-int freq_int = 0;
+int freq_int = 0;// used in the scope view as current tone frequency
 // int NxtRngBfrNdx = 0;
 bool SmplSetRdy = false;
 static lv_obj_t *ui_Scope;

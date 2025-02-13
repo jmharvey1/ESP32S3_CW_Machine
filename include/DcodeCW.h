@@ -29,6 +29,7 @@ extern SemaphoreHandle_t  mutex;
 extern volatile unsigned long noSigStrt;
 extern volatile unsigned long wordBrk;
 extern bool AutoTune;
+extern bool NuSender;
 extern int ModeCnt;
 extern int ltrCmplt;
 /*adv post parser variables*/
@@ -46,35 +47,13 @@ extern QueueHandle_t KeyEvnt_que;
 extern QueueHandle_t KeyState_que;
 extern TaskHandle_t KeyEvntTaskTaskHandle;
 #define USE_TST_DATA 0 //set to 1, if debug with testKeyDwn & testKeyUp data is desired
-#define testSize 11 /*set this value to match the size of testKeyDwn & testKeyUp datasets/arrays*/
+#define testSize 4 /*set this value to match the size of testKeyDwn & testKeyUp datasets/arrays*/
 /*Use copy and paste of advanceparser debug serial output, to populate the 2 following arrays*/
 static uint16_t testKeyDwn[testSize]={
-62,
-58,
-57,
-62,
-191,
-220,
-220,
-62,
-57,
-220,
-220
-};
+76, 19, 15, 96};
 
 static uint16_t testKeyUp[testSize]={
-  578,
-  100,
-  101,
-  606,
-  573,
-  100,
-  100,
-  101,
-  100,
-  100,
-  1023
-};
+  105, 43, 23, 370};
 
 
 //extern unsigned long EvntStart;

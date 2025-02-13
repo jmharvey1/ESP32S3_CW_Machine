@@ -23,6 +23,7 @@ extern "C" {
 #include <lv_conf.h>
 #include "lvgl.h"
 #define TODAY __DATE__
+
 /*Waveshare 800x480 display & touch specific parameters*/
 #define LV_TICK_PERIOD_MS (100) //JMH chnaged this from 2 to 100; In this application, this timer does nothing usueful
 
@@ -87,7 +88,7 @@ extern SemaphoreHandle_t lvgl_semaphore;
 extern QueueHandle_t ToneSN_que;
 extern int MutexLckId;
 extern lv_chart_series_t * ui_Chart1_series_1;
-extern int freq_int;
+extern int freq_int;// used in the scope view as current tone frequency
 extern int bias_int;
 extern bool SmplSetRdy;
 extern bool ScopeFlg;

@@ -94,6 +94,8 @@ esp_event_loop_args_t event_task_args = {
 /*20250203 Added code & queue to manage/display S/N log calc */
 /*20250210 Added Automatic 'new line' when Sender change(i.e., tone frequency change +/-15Hz) is detected*/
 /*20250211 reworked Sender changed & tone Frequency filter code*/
+/*20250212 Created seperate task/process to freq Calc & detect sender change*/
+/*20250213 DcodeCW.cpp - New code to manage display when 'sender' change has been detected*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -192,9 +194,9 @@ static const int KeyEvnt_que_len = 2*IntrvlBufSize;//50;
 static const int KeyState_que_len = KeyEvnt_que_len;
 QueueHandle_t KeyEvnt_que;
 QueueHandle_t KeyState_que;
-//static const uint8_t Sampl_que_len = 6 * Goertzel_SAMPLE_CNT;
-//static QueueHandle_t Sampl_que;
-
+static const int ToneFrq_que_len = 10;//50
+QueueHandle_t ToneFrq_que;
+SemaphoreHandle_t IIR_Coef_mutx;
 SemaphoreHandle_t mutex;
 SemaphoreHandle_t DsplUpDt_AdvPrsrTsk_mutx;
 SemaphoreHandle_t ADCread_disp_refr_timer_mutx;
@@ -235,20 +237,22 @@ bool BlkDcdUpDts = false;
 //static TaskHandle_t UpDtRxSigTaskHandle = NULL;
 TaskHandle_t BLEscanTask_hndl = NULL;
 TaskHandle_t HKdotclkHndl;
+TaskHandle_t ToneFreqTaskHandle = NULL;
 
 static const char *TAG1 = "ADC_Config";
 static const char *TAG2 = "PAIR_EVT";
 uint32_t ret_num = 0;
 uint8_t result[Goertzel_SAMPLE_CNT * SOC_ADC_DIGI_RESULT_BYTES] = {0};
 /*tone freq calc variables */
-uint32_t SmplCNt = 0;
+uint16_t SmplCNt = 0;
 uint32_t NoTnCntr = 0;
 uint8_t PeriodCntr = 0;
 int Oldk = 0; //used in the addsmpl() as part of the auto-tune/freq measurement process 
 int DemodFreq = (int)TARGET_FREQUENCYC;
+int OutOfBndFrq = 0;
 float CurSendrFreq = (float)DemodFreq;
 int AvgToneFreq = DemodFreq;
-float intrglerr = 0.0;
+//float intrglerr = 0.0;
 uint8_t OutofBndCnt = 0;
 
 bool TstNegFlg = false;
@@ -382,6 +386,7 @@ void addSmpl(int k, int i, int *pCntrA)
 
   /*Calculate Tone frequency*/
   /*the following is part of the auto tune process */
+  float IIRBPOut = 0.0;
   if (!SmplSetDone)
   {
     BiasError += k;
@@ -396,8 +401,12 @@ void addSmpl(int k, int i, int *pCntrA)
 
   /*IIR manual method */
   float decimated = float(k);
-  float IIRBPOut =
-      a0 * decimated + a1 * in_z1 + a2 * in_z2 - b1 * out_z1 - b2 * out_z2;
+  if (xSemaphoreTake(IIR_Coef_mutx, pdMS_TO_TICKS(3)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+  {
+    IIRBPOut = a0 * decimated + a1 * in_z1 + a2 * in_z2 - b1 * out_z1 - b2 * out_z2;
+    xSemaphoreGive(IIR_Coef_mutx);
+  }
+  // float IIRBPOut = a0 * decimated + a1 * in_z1 + a2 * in_z2 - b1 * out_z1 - b2 * out_z2;
   in_z2 = in_z1;
   in_z1 = decimated;
   out_z2 = out_z1;
@@ -462,57 +471,15 @@ void addSmpl(int k, int i, int *pCntrA)
       SmplCNt = 0;
     }
     else if (PeriodCntr == 40)
-    {
-      /*if here, we have a usable signal; calculate its frequency*/
-      DemodFreq = (int)((float)PeriodCntr * (float)SAMPLING_RATE) / (float)SmplCNt;
-      // printf("DemodFreq: %d;\tAvgToneFreq: %d\tTARGET_FREQUENCYC: %d;\tCurSendrFreq: %d\n", DemodFreq, (uint16_t)AvgToneFreq, (uint16_t)TARGET_FREQUENCYC, (int)CurSendrFreq);
-      freq_int = DemodFreq;
-      if (DemodFreq > 450)
+    {/*if here, we have a usable signal; calculate its frequency*/
+       //DemodFreq = (int)((float)PeriodCntr * (float)SAMPLING_RATE) / (float)SmplCNt;
+      // freq_int = DemodFreq;
+      /*20250212 moved freq Calc to its own process*/
+      if (xQueueSend(ToneFrq_que, &SmplCNt, pdMS_TO_TICKS(2)) == pdFALSE)
       {
-        /*20250211 reworked Sender changed & tone Frequency filter code*/
-        if (abs(DemodFreq-AvgToneFreq) < 3)
-        {
-          /*OK we got essentially the same freq twice in row, so it must be valid*/
-          CalGtxlParamFlg = true;
-          Calc_IIR_BPFltrCoef((float)AvgToneFreq, SAMPLING_RATE, 3.7071);
-        }
-        else
-        {
-          //AvgToneFreq = DemodFreq;
-          AvgToneFreq = (int)((1+(4 * AvgToneFreq + DemodFreq) / 5));
-        }
-        /*Now test/check for sender change based on 'DemodFreq' freq change */
-        if ((abs((int)CurSendrFreq - DemodFreq) >= 7))
-        {
-          OutofBndCnt++;
-          //printf("DemodFreq: %d;\tCurSendrFreq: %d\tOutofBndCnt: %d\n", DemodFreq, CurSendrFreq, OutofBndCnt);
-
-          if (OutofBndCnt >= 6)
-          {
-            OutofBndCnt = 0;
-            CurSendrFreq = (float)AvgToneFreq;
-            intrglerr = 0.0; //reset error term
-            /*if here, we just had a shift in the incoming tone of more than 15hz,
-            so assume new 'sender', & force a wordbreak in the decoded text
-            by setting the expected wordbreak time to 0 */
-            NuSender = true;
-          //  printf("\nFreq Change; Step 1\tCurSendrFreq: %d\n", (int)CurSendrFreq);
-          }
-        }
-        else
-        {
-          OutofBndCnt = 0;
-        }
-        float tempval   = ((float)AvgToneFreq - CurSendrFreq )/100;
-        if(tempval>0.1) tempval = 0.1;
-        if(tempval< -0.1) tempval = -0.1;
-        CurSendrFreq =CurSendrFreq+ tempval;
-        // float tempval   = ((((11.0 *(float)CurSendrFreq) + (float)AvgToneFreq) / 12.0));
-        // CurSendrFreq =(int)tempval;// add correction for current sender slow drift in freq
-        // if((tempval - (float)CurSendrFreq) > 0.5) CurSendrFreq++; 
-        
-      } // end if (DemodFreq > 450)
-
+        printf("Failed to push 'PeriodCntr' to 'ToneFrq_que' \n");
+      }
+      vTaskResume(ToneFreqTaskHandle);
       /*reset for next round of samples*/
       SmplCNt = 0;
     }
@@ -827,6 +794,93 @@ void DisplayUpDt(void *param)
   printf("ERROR DisplayUpDt task DELETED\n");
   vTaskDelete(NULL);
 }
+///////////////////////////////////////////////////////////////////////////////////////
+void ToneFreqTask(void *param)
+{
+  //uint8_t PeriodCntr;
+  uint16_t _SmplCNt = 1;
+  int _DemodFreq =0;
+  while (1)
+  {
+    bool readQueue = true;
+    while (readQueue)
+    {
+      readQueue = (xQueueReceive(ToneFrq_que, (void *)&_SmplCNt, pdMS_TO_TICKS(3)) == pdTRUE);
+      if (readQueue)
+      {
+        _DemodFreq = (int)((float)40 * (float)SAMPLING_RATE) / (float)_SmplCNt;
+        freq_int = _DemodFreq;// used in the scope view as current tone frequency
+        if (_DemodFreq > 450)
+        {
+          // printf("_DemodFreq: %d;\tAvgToneFreq: %d\tTARGET_FREQUENCYC: %d;\tCurSendrFreq: %d\n", _DemodFreq, (uint16_t)AvgToneFreq, (uint16_t)TARGET_FREQUENCYC, (int)CurSendrFreq);
+          /*20250211 reworked Sender changed & tone Frequency filter code*/
+          if (abs(_DemodFreq - AvgToneFreq) < 3)
+          {
+            /*OK we got essentially the same freq twice in row, so it must be valid*/
+            CalGtxlParamFlg = true;
+            if (xSemaphoreTake(IIR_Coef_mutx, pdMS_TO_TICKS(3)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+            {
+              Calc_IIR_BPFltrCoef((float)AvgToneFreq, SAMPLING_RATE, 3.7071);
+              xSemaphoreGive(IIR_Coef_mutx);
+            }
+            //Calc_IIR_BPFltrCoef((float)AvgToneFreq, SAMPLING_RATE, 3.7071);
+          }
+          else
+          {
+            // AvgToneFreq = _DemodFreq;
+            AvgToneFreq = (int)((1 + (4 * AvgToneFreq + _DemodFreq) / 5));
+          }
+          /*Now test/check for sender change based on '_DemodFreq' freq change */
+          if ((abs((int)CurSendrFreq - _DemodFreq) >= 7))
+          {
+            /*Check verify that new _DemodFreq value for consistentcy*/
+            if (OutofBndCnt == 0)
+            {
+              OutOfBndFrq = _DemodFreq;
+            }
+            else if ((abs(OutOfBndFrq - _DemodFreq) > 4))
+            { /*OutOfBndFrq reset*/
+              OutOfBndFrq = _DemodFreq;
+              OutofBndCnt = 0;
+            }
+            OutofBndCnt++;
+            //printf("_DemodFreq: %d;\tCurSendrFreq: %d\tOutofBndCnt: %d\n", _DemodFreq, (uint16_t)CurSendrFreq, OutofBndCnt);
+
+            if (OutofBndCnt >= 3)
+            {
+              OutofBndCnt = 0;
+              CurSendrFreq = (float)_DemodFreq;//(float)AvgToneFreq;
+              //intrglerr = 0.0; // reset error term
+              /*if here, we just had a shift in the incoming tone of more than 15hz,
+              so assume new 'sender', & force a wordbreak in the decoded text
+              by setting the expected wordbreak time to 0 */
+              NuSender = true;
+              // printf("\t Nu Sender; CurSendrFreq: %d\n", (int)CurSendrFreq);
+            }
+          }
+          else
+          {
+            OutofBndCnt = 0;
+          }
+          float tempval = ((float)AvgToneFreq - CurSendrFreq) / 100;
+          if (tempval > 0.1)
+            tempval = 0.1;
+          if (tempval < -0.1)
+            tempval = -0.1;
+          CurSendrFreq = CurSendrFreq + tempval;
+          // float tempval   = ((((11.0 *(float)CurSendrFreq) + (float)AvgToneFreq) / 12.0));
+          // CurSendrFreq =(int)tempval;// add correction for current sender slow drift in freq
+          // if((tempval - (float)CurSendrFreq) > 0.5) CurSendrFreq++;
+
+        } // end if (_DemodFreq > 450)
+      }
+    }
+
+    vTaskSuspend(ToneFreqTaskHandle);
+
+  } // end while(1) loop
+  vTaskDelete(NULL);
+}
 //////////////////////////////////////////////////////////////////////////////////////
 /* CW Decoder Task; CW decoder main loop*/
 void CWDecodeTask(void *param)
@@ -1122,22 +1176,22 @@ void AdvParserTask(void *param)
 
     }
     /*Added 20250211 */
-    if (NuSender)/* ADC tone processing 'addSmpl()' detected Sender change - Start following text on a new line*/
-    {                                                                        
-      if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
-      {
-        NuSender = false;
-        char NuLine[5];
-        NuLine[0] = 13; // carriage return
-        NuLine[1] = '>';
-        NuLine[2] = '>';
-        NuLine[3] = ' ';
-        NuLine[4] = 0;
-        lvglmsgbx.dispDeCdrTxt(NuLine, TFT_GREENYELLOW);
-        //printf("Sender Changed induced Wrd Break\n");
-        xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
-      }
-    }
+    // if (NuSender)/* ADC tone processing 'addSmpl()' detected Sender change - Start following text on a new line*/
+    // {                                                                        
+    //   if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+    //   {
+    //     NuSender = false;
+    //     char NuLine[5];
+    //     NuLine[0] = 13; // carriage return
+    //     NuLine[1] = '>';
+    //     NuLine[2] = '>';
+    //     NuLine[3] = ' ';
+    //     NuLine[4] = 0;
+    //     lvglmsgbx.dispDeCdrTxt(NuLine, TFT_GREENYELLOW);
+    //     //printf("Sender Changed induced Wrd Break\n");
+    //     xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
+    //   }
+    // }
     /*The following code is primarilry for debugging stack alocation & understanding how much time the advance parser needs*/
     // uint16_t AdvPIntrvl = (uint16_t)(pdTICKS_TO_MS(xTaskGetTickCount())-AdvPStart);
     // printf("AdvPIntrvl: %d\n", AdvPIntrvl);
@@ -1238,7 +1292,9 @@ void app_main()
   KeyState_que = xQueueCreate(KeyState_que_len, sizeof(uint8_t));
   ToneSN_que = xQueueCreate(ToneSN_que_len, sizeof(float));
   ToneSN_que2 = xQueueCreate(IntrvlBufSize, sizeof(float));
+  ToneFrq_que = xQueueCreate(ToneFrq_que_len, sizeof(uint16_t));
   mutex = xSemaphoreCreateMutex();
+  IIR_Coef_mutx = xSemaphoreCreateMutex();
   DsplUpDt_AdvPrsrTsk_mutx =  xSemaphoreCreateMutex();
   ADCread_disp_refr_timer_mutx = xSemaphoreCreateMutex();
   Calc_IIR_BPFltrCoef(750.0, SAMPLING_RATE, 3.7071);
@@ -1304,6 +1360,10 @@ void app_main()
   if (GoertzelTaskHandle == NULL)
     ESP_LOGI(TAG, "Goertzel Task Task handle FAILED");
 
+  xTaskCreatePinnedToCore(ToneFreqTask, "ToneFreq Task", 3072, NULL, 1, &ToneFreqTaskHandle, tskNO_AFFINITY); 
+  if (ToneFreqTaskHandle == NULL)
+    ESP_LOGI(TAG, "ToneFreq Task Task_handle FAILED");  
+  vTaskSuspend(ToneFreqTaskHandle);    
   /*Setup Software Display Refresh/Update timer*/
   DisplayTmr = xTimerCreate(
       "Display-Refresh-Timer",
@@ -1549,7 +1609,6 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
       if (IntSOTstate && !CWsndengn.GetSOTflg())
         CWsndengn.SOTmode(); // Send On Type was enabled when we went to 'settings' so re-enable it
     }
-
     /*Added this to support 'open' paired BT keyboard event*/
 
     switch (bt_keyboard.Adc_Sw)

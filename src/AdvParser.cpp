@@ -101,7 +101,7 @@ void AdvParser::InitDah_SplitPt(void)
         int start = 0;
         int end = KeyDwnBucktPtr;
         /*move the 'start' bucket up above any garbage(noise) entries*/
-        while (KeyDwnBuckts[start].Intrvl < 25 && start+1 < end)
+        while (((KeyDwnBuckts[start].Intrvl < 25) && (KeyDwnSN[start] < 15))&& start+1 < end)
             start++;
         /*Now converge on where the transition from 'dit' buckets are to 'dah' buckets*/
         bool stuck = false;
@@ -306,7 +306,7 @@ void AdvParser::BldKyUpBktTbl(void)
     // for (int i = 1; i < KeyUpPtr; i++)
     bool DoSlopeChk = true;
     uint16_t stopchkval = (int)(1.7 * this->AvgDahVal);
-    uint16_t MinltrBrkVal = (int)(0.75 * this->AvgDahVal);
+    uint16_t MinltrBrkVal = (int)(0.70 * this->AvgDahVal);
     for (int i = 0; i <= SortdPtr - 1; i++)
     {
         if (this->SortdUpIntrvls[i + 1] > stopchkval) // KeyDwnBuckts[TopPtr].Intrvl
@@ -328,7 +328,7 @@ void AdvParser::BldKyUpBktTbl(void)
                 CurLtrBrkSlope = 1.0; // ignore entries that differ less than the sample period (8ms)
             else if ((this->SortdUpIntrvls[i + 1]) <= MinltrBrkVal)
             {
-                CurLtrBrkSlope = 1.0; // ignore entries that are less than the 75% of a dah
+                CurLtrBrkSlope = 1.0; // ignore entries that are less than the 70% of a dah
                 bstltrbrkptr = i;
             }
             else
@@ -1312,7 +1312,7 @@ void AdvParser::EvalTimeData(void)
     {
         if (Dbug)
         {
-            printf("%2d. DWn: %3d\t", n, TmpDwnIntrvls[n]);
+            printf("%2d. S/N: %4.1f\tDWn: %3d\t", n, KeyDwnSN[n], TmpDwnIntrvls[n]);
             printf("Up: %3d\t", TmpUpIntrvls[n]);
             // if (n < KeyUpPtr)
             //     printf("Up: %3d\t", TmpUpIntrvls[n]);
@@ -1406,7 +1406,7 @@ void AdvParser::EvalTimeData(void)
                 {
                     if (Dbug)
                     {
-                        printf("\n%2d. D0n: %3d\t", curN, TmpDwnIntrvls[curN]);
+                        printf("\n%2d. S/N: %4.1f\tD0n: %3d\t", curN, KeyDwnSN[curN], TmpDwnIntrvls[curN]);// S/N: %4.1f\tDWn: %3d\t", n, KeyDwnSN[n], TmpDwnIntrvls[n]
                         if (curN < KeyUpPtr)
                             printf("Up: %3d\t", TmpUpIntrvls[curN]);
                         else
@@ -4058,7 +4058,8 @@ int AdvParser::DitDahBugTst(void)
     int dahDwncnt;
     int Longdahcnt;
     int DahMaxcnt;
-    int dahcnt = ditcnt = dahDwncnt = Longdahcnt = DahMaxcnt = 0;
+    int DitMaxcnt;
+    int dahcnt = ditcnt = dahDwncnt = Longdahcnt = DahMaxcnt = DitMaxcnt = 0;
     uint16_t dahInterval;
     uint16_t MindahInterval;
     uint16_t DahVariance = 0;
@@ -4105,7 +4106,7 @@ int AdvParser::DitDahBugTst(void)
             if (TmpDwnIntrvls[n] < MindahInterval)
                 MindahInterval = TmpDwnIntrvls[n];
         }
-        else if (n > 0 && (TmpDwnIntrvls[n] < this->DitDahSplitVal))
+        else if (n > 0 && (TmpDwnIntrvls[n] < this->DitDahSplitVal)&& (TmpDwnIntrvls[n]>30)) //added >30 to ignore/throw out noisy entries
         {
             ditDwnInterval += TmpDwnIntrvls[n];
             ditDwncnt++;
@@ -4146,7 +4147,7 @@ int AdvParser::DitDahBugTst(void)
     {
         this->KeyupVarPrcnt = (float)(MaxditInterval - MinditInterval) / (float)IntrSymbolIntrvl;
     }
-    // printf("IntrSymbolIntrvl:%d\tditDelta: %d\tKeyupVarPrcnt: %4.2f\n",IntrSymbolIntrvl, ditDelta, this->KeyupVarPrcnt);
+    //printf("IntrSymbolIntrvl:%d\tditDelta: %d\tKeyupVarPrcnt: %4.2f\n",IntrSymbolIntrvl, ditDelta, this->KeyupVarPrcnt);
     if (dahDwncnt > 1)
     {
         /*find keydwnbkt with the most dahs*/
@@ -4161,6 +4162,14 @@ int AdvParser::DitDahBugTst(void)
         DahVariance = MaxdahInterval - MindahInterval;
         this->DahVarPrcnt = (float)DahVariance / (float)MindahInterval;          // used later to determine if sender is using streched dahs as a way of signaling letter breaks
         this->MaxDt2DhRatio = (float)MaxdahInterval / (float)this->DitIntrvlVal; // used later
+    }
+    /*find keydwnbkt with the most dits*/
+    for (int ptr = 0; ptr <= KeyDwnBucktPtr; ptr++)
+    {
+        if (KeyDwnBuckts[ptr].Intrvl < this->DitDahSplitVal && KeyDwnBuckts[ptr].Cnt > DitMaxcnt)
+        {
+            DitMaxcnt = KeyDwnBuckts[ptr].Cnt; // used later to determine fist/key type
+        }
     }
     /*the last keydwn bucket holds the 'streched' dahs.
     If there are more than 3 in this bucket, its unlikely we're dealing with a bug.
@@ -4182,7 +4191,7 @@ int AdvParser::DitDahBugTst(void)
             printf("code 99; ditDwncnt: %d; dahDwncnt: %d\n", ditDwncnt, dahDwncnt);
         return 6; // unknown (99) - Stick with whatever bug type was in play w/ last symbol set
     }
-
+    // printf("DahMaxcnt / dahDwncnt >= 0.75(%4.2f) && (this->KeyupVarPrcnt < 0.30(%4.2f))", (float)(DahMaxcnt / dahDwncnt), this->KeyupVarPrcnt);
     /*Assume paddle/keyboard if a large cluster of dahs fall in one bucket*/
     if (dahDwncnt > 0)
     {
@@ -4200,14 +4209,14 @@ int AdvParser::DitDahBugTst(void)
     {
         /* average/normalize dit interval */
         ditDwnInterval /= ditDwncnt;
-        int Delta = (int)((0.15 * (float)ditDwnInterval)); // 0.1*
+        int Delta = (int)(((0.15 * (float)ditDwnInterval))+8); // Add in 'sample time' uncertainty
         int NegDelta = -1 * Delta;
         // same = true;
         ditDwncnt = 0;
         int GudDitCnt = 0;                               // could use this as part of a ratio test
         for (int n = 1; n <= this->TmpUpIntrvlsPtr; n++) // skip the 1st key down event because testing showed the timing of the 1st event is often shorter than the rest in the group
         {
-            if (TmpDwnIntrvls[n] < DitDahSplitVal)
+            if (TmpDwnIntrvls[n] < DitDahSplitVal && TmpDwnIntrvls[n] > 30)
             {
                 ditDwncnt++;
                 int error = TmpDwnIntrvls[n] - ditDwnInterval; // at this point, 'ditDwnInterval' is the average dit interval for this word group
@@ -4222,7 +4231,7 @@ int AdvParser::DitDahBugTst(void)
         if (Score <= 0.70)
         {
             if (Dbug)
-                printf("STRAIGHT KEY EXIT A\n");
+                printf("STRAIGHT KEY EXIT A ; Score %4.2f\n", Score);
             return 7; // straight key; (50)
         }
         /* 1st, test for Sloppy Bug */
@@ -4366,6 +4375,8 @@ int AdvParser::DitDahBugTst(void)
             printf("&!!*\n");
         return 6; // bug(99)// not enough info to decide
     }
+    /*last check for paddle/keyboard */
+    if(((float)(DahMaxcnt + DitMaxcnt)/ (float)this->TmpUpIntrvlsPtr)> 0.78) return 0; // paddle/krybrd (70)
     return 11; // not enough info to decide
     // printf("\nditcnt:%d; dahcnt:%d; interval cnt: %d\n", ditcnt, dahcnt, stop);
 };
