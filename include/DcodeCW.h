@@ -47,13 +47,59 @@ extern QueueHandle_t KeyEvnt_que;
 extern QueueHandle_t KeyState_que;
 extern TaskHandle_t KeyEvntTaskTaskHandle;
 #define USE_TST_DATA 0 //set to 1, if debug with testKeyDwn & testKeyUp data is desired
-#define testSize 4 /*set this value to match the size of testKeyDwn & testKeyUp datasets/arrays*/
+#define testSize 23 /*set this value to match the size of testKeyDwn & testKeyUp datasets/arrays*/
 /*Use copy and paste of advanceparser debug serial output, to populate the 2 following arrays*/
 static uint16_t testKeyDwn[testSize]={
-76, 19, 15, 96};
+  100,
+  125,
+  106,
+  124,
+  100,
+  47,
+  48,
+  105,
+  129,
+  125,
+  105,
+  105,
+  28,
+  106,
+  129,
+  96,
+  105,
+  43,
+  124,
+  48,
+  47,
+  124,
+  100
+  };
 
 static uint16_t testKeyUp[testSize]={
-  105, 43, 23, 370};
+  291,
+61,
+119,
+139,
+268,
+115,
+406,
+205,
+119,
+62,
+353,
+58,
+143,
+119,
+62,
+167,
+119,
+124,
+320,
+120,
+254,
+62,
+131
+};
 
 
 //extern unsigned long EvntStart;
@@ -451,5 +497,5 @@ void ModeBtn(void);
 void showSpeed(void);
 void SftReset(void);
 void CLrDCdValBuf(void);
-
+void SyncAdvPrsrWPM(void);
 #endif /* INC_DCODECW_H_ */

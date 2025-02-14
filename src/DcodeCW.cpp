@@ -30,7 +30,9 @@
  * 20250116 reworked BldKeyUpDwnDataSet() and other areas related to 'wrdbrkFtcr' to improve 'slow' code decoding
  * 20250117 Added word break conditional test to BldKeyUpDwnDataSet()
  * 20250210 Automatic 'new line' when Sender change is detected
- * 20250213 - New code to manage display when 'sender' change has been detected
+ * 20250213 New code to manage display when 'sender' change has been detected
+ * 20250213 Added sanity check flag 'DeCoderActiviated' to the above code
+ * 20250213 Added SyncAdvPrsrWPM() to improve real time decoder's ability to sync up with new sender 
  */
  
 
@@ -158,6 +160,7 @@ bool XspctLo = true;
 bool Prtflg = false; // added for diagnostic keyISR testing
 bool Dbg = false;
 bool SndrChng = false;
+bool DeCoderActiviated = false; // Sanity Check flag to validate 'new sender' line feed & marker is needed
 	
 int exitCD = 0;		 // added for diagnostic keyISR testing
 int DitDahCD = 0;	 // added for diagnostic keyISR testing
@@ -1509,7 +1512,7 @@ bool chkChrCmplt(void)
 	////////////////////////////////////////////////////////////////////
 	/*20250213 - New code to manage display when 'sender' change has been detected*/
 	/*The following Code effectively inserts a new line and 'New Sender' markers to denote a change in sender*/
-	if (NuSender) /* ADC tone processing 'addSmpl()' detected Sender change - Start following text on a new line*/
+	if (NuSender && DeCoderActiviated) /* ADC tone processing 'addSmpl()' detected Sender change - Start following text on a new line*/
 	{
 		int i = 0;
 		char DelStr[15];
@@ -1535,6 +1538,7 @@ bool chkChrCmplt(void)
 		if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
 		{
 			NuSender = false;
+			DeCoderActiviated = false;
 			char NuLine[5];
 			NuLine[0] = 13; // carriage return
 			NuLine[1] = '>';
@@ -1545,7 +1549,7 @@ bool chkChrCmplt(void)
 			ptrmsgbx->dispDeCdrTxt(NuLineStr, TFT_GREEN);
 			xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
 		}
-	}
+	} else if(NuSender) NuSender = false;
 	////////////////////////////////////////////////////////////////////
 	unsigned long Now = pdTICKS_TO_MS(xTaskGetTickCount()); //(GetTimr5Cnt()/10);
 	if ((Now - letterBrk1) > 35000)
@@ -2806,6 +2810,7 @@ void dispMsg(char Msgbuf[50])
 		
 		tmpbuf[0] = curChar;
 		tmpbuf[1] = 0;
+		DeCoderActiviated = true;
 		ptrmsgbx->dispDeCdrTxt(tmpbuf, TFT_GREENYELLOW);
 		/*now add the just decoded character to DcddChrBuf */
 		for (int i = 0; i < sizeof(DcddChrBuf)-1; i++)
@@ -3119,3 +3124,14 @@ void CLrDCdValBuf(void)
 	OldDeCodeVal = 0;
 };
 /////////////////////////////////////////////////////////////////////////
+void SyncAdvPrsrWPM(void)
+{
+	uint16_t DahVal = advparser.Get_DahVal();
+	uint16_t OldDahVal = (uint16_t)avgDah;
+	
+	avgDit =  (unsigned long)DahVal/3;
+	ltrBrk =2*avgDit;
+	avgDah = (unsigned long)(3 * avgDit);
+	wpm = 1200 / (int)avgDit;
+	//printf("SyncAdvPrsrWPM - Resetting WPM; OldDahVal %d; new DahVal %d, wpm %d \n", OldDahVal, DahVal, wpm);
+};

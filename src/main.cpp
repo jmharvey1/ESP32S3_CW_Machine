@@ -1156,6 +1156,8 @@ void AdvParserTask(void *param)
         }
         xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
       }
+      /*assuming the Adv parser did a better job of decoding sync the real time decoder to the Adv parser timing values/WPM*/
+      SyncAdvPrsrWPM();
       // printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
     } // else printf("old txt: %s\n", advparser.LtrHoldr);
 

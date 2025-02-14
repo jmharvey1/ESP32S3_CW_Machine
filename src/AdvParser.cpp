@@ -1449,7 +1449,7 @@ void AdvParser::EvalTimeData(void)
             {
                 if (Dbug)
                 {
-                    printf("\n%2d. Dwn: %3d\tUp: %3d\t", curN, TmpDwnIntrvls[curN], TmpUpIntrvls[curN]);
+                    printf("\n%2d. S/N: %4.1f\tDWn: %3d\tUp: %3d\t", curN, KeyDwnSN[curN], TmpDwnIntrvls[curN], TmpUpIntrvls[curN]);
                 }
                 this->LstLtrBrkCnt++;
                 curN++;
@@ -2450,7 +2450,7 @@ bool AdvParser::SloppyBgRules(int &n)
             if ((TmpUpIntrvls[n] < 2 * AvgSmblDedSpc) && (n < (this->KeyDwnPtr - 1)))
             { /*we had a run of dahs, But last dah keyup event doesn't seem to signify a letter break, and there are more events to test*/
                 if (this->Dbug)
-                    printf("\n%2d. Dwn: %3d\tUp: %3d\t", n, TmpDwnIntrvls[n], TmpUpIntrvls[n]);
+                    printf("\n%2d. S/N: %4.1f\tDWn: %3d\tUp: %3d\t", n, KeyDwnSN[n], TmpDwnIntrvls[n], TmpUpIntrvls[n]);
                 ExitPath[n] = 33;
                 BrkFlg = '~';
                 return false;
@@ -3713,7 +3713,7 @@ bool AdvParser::SKRules(int &n)
                 SymbSet += 1;
                 if (this->Dbug)
                 {
-                    printf("\n%2d. Dwn: %3d\tUp: %3d\t", n, TmpDwnIntrvls[n], TmpUpIntrvls[n]);
+                    printf("\n%2d. S/N: %4.1f\tDWn: %3d\tUp: %3d\t", n, KeyDwnSN[n], TmpDwnIntrvls[n], TmpUpIntrvls[n]);
                 }
                 ExitPath[n] = 33;
                 BrkFlg = '+';

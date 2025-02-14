@@ -939,6 +939,7 @@ public:
     int KeyDwnPtr = 0;
     int wpm =0; //upated from DcodeCW.cpp
     inline uint16_t Get_LtrBrkVal(void) { return this->LtrBrkVal; }
+    inline uint16_t Get_DahVal(void) { return this->AvgDahVal; }
 	
 };
 
