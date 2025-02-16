@@ -191,10 +191,10 @@ bool AdvParser::GlitchChk(void)
             // else if ((ThisElmntIntrvl < 0.72 * AvgElmntIntrvl))
             // else if((TmpDwnIntrvls[rScanPtr]<  0.6 * DitIntrvlVal) || (TmpUpIntrvls[rScanPtr] < 0.6* AvgSmblDedSpc))
             /*20250114 removed the keyup qualifer/test because new tonedetect code can return in very small (but valid) time interval*/
-            else if ((TmpDwnIntrvls[rScanPtr] < 0.6 * DitIntrvlVal) && (KeyDwnSN[passcnt] < 3)) //greater than ~ 2 'S' units)
+            else if ((TmpDwnIntrvls[rScanPtr] < 0.6 * DitIntrvlVal) && (KeyDwnSN[rScanPtr] < 3)) //greater than ~ 2 'S' units)
             { /*this looks like 'glitch' because its combined time interval is either to big or too small to be part of this data set */
                 if (Dbug)
-                    printf("\t'GLITCH' Entry(Deleted): TmpDwnIntrvls[%d] %d;  TmpUpIntrvls[%d] %d; DitIntrvlVal %d; AvgSmblDedSpc %d\n", rScanPtr, TmpDwnIntrvls[rScanPtr], rScanPtr, TmpUpIntrvls[rScanPtr], (uint16_t)DitIntrvlVal, (uint16_t)AvgSmblDedSpc);
+                    printf("\t'GLITCH' Entry(Deleted): KeyDwnSN[%d] %4.1f; TmpDwnIntrvls[%d] %d;  TmpUpIntrvls[%d] %d; DitIntrvlVal %d; AvgSmblDedSpc %d\n", rScanPtr, KeyDwnSN[rScanPtr], rScanPtr, TmpDwnIntrvls[rScanPtr], rScanPtr, TmpUpIntrvls[rScanPtr], (uint16_t)DitIntrvlVal, (uint16_t)AvgSmblDedSpc);
                 GLitchFlg = true;
                 if (rScanPtr > 0)
                 {
@@ -309,18 +309,6 @@ void AdvParser::BldKyUpBktTbl(void)
     uint16_t MinltrBrkVal = (int)(0.70 * this->AvgDahVal);
     for (int i = 0; i <= SortdPtr - 1; i++)
     {
-        if (this->SortdUpIntrvls[i + 1] > stopchkval) // KeyDwnBuckts[TopPtr].Intrvl
-        {
-            if (Dbug && DoSlopeChk)
-                printf("EXIT Letter Break - test exceeded 1.7*CurrentDahVal: %d; UpIntrvl[%d]: %d\n", stopchkval, i + 1, this->SortdUpIntrvls[i + 1]);
-            DoSlopeChk = false;
-            // if(CurLtrBrkSlope == 1.0 && i-1 == bstltrbrkptr)//sender was likely sending with unusually long letter gaps. So advance bstltrbrkptr
-            // {
-            //     bstltrbrkptr++;
-            //     if (Dbug)
-            //         printf("long letter gap detected; bstltrbrkptr = %d\n", bstltrbrkptr);
-            // }    
-        }
         if (i < SortdPtr)
         {
             TmpSlope = CurLtrBrkSlope;
@@ -335,29 +323,39 @@ void AdvParser::BldKyUpBktTbl(void)
                 CurLtrBrkSlope = ((float)((float)this->SortdUpIntrvls[i + 1] / (float)this->SortdUpIntrvls[i]));
             if (i >= UprHlf && i < stop && this->SortdUpIntrvls[i] > 35) // we're looking for a letter break for code between 12 &35 WPM, so skip intervals that don't make sense
             {
-                if (Dbug)
-                    printf("i:%d; %d/%d = %5.1f\n", i, this->SortdUpIntrvls[i + 1], this->SortdUpIntrvls[i], CurLtrBrkSlope);
+                char choice = ' ';
                 if (CurLtrBrkSlope >= MaxLtrBrkSlope && DoSlopeChk)
                 {
                     OldSlope = TmpSlope;
                     MaxLtrBrkSlope = CurLtrBrkSlope;
                     bstltrbrkptr = i;
+                    choice = 'A';
                 }
                 else if ((this->SortdUpIntrvls[i] - this->SortdUpIntrvls[bstltrbrkptr]) <= 9)
                 {
                     CurLtrBrkSlope = 1.0;
                     bstltrbrkptr = i;
+                    choice = 'B';
                 }
-                else if (CurLtrBrkSlope >= 1.4 && i == bstltrbrkptr+1)
+                else if (CurLtrBrkSlope >= 1.4 && i == bstltrbrkptr+1 && DoSlopeChk)
                 {
                     CurLtrBrkSlope = 1.0;
                     bstltrbrkptr = i;
+                    choice = 'C';
                 }
                 if (MaxLtrBrkSlope >= 1.75 && bstltrbrkptr >= 2)
                     stop = i;
+                if (Dbug)
+                    printf("i:%d; %d/%d = %5.1f; bstltrbrkptr: %d rule: %c \n", i, this->SortdUpIntrvls[i + 1], this->SortdUpIntrvls[i], CurLtrBrkSlope, bstltrbrkptr, choice);    
             }
             else if (Dbug && i >= UprHlf && this->SortdUpIntrvls[i] > 35)
                 printf(" i:%d; %d/%d = %5.1f\n", i, this->SortdUpIntrvls[i + 1], this->SortdUpIntrvls[i], CurLtrBrkSlope);
+        }
+        if (this->SortdUpIntrvls[i + 1] > stopchkval)
+        {
+            if (Dbug && DoSlopeChk)
+                printf("EXIT Letter Break - test exceeded 1.7*CurrentDahVal: %d; UpIntrvl[%d]: %d\n", stopchkval, i + 1, this->SortdUpIntrvls[i + 1]);
+            DoSlopeChk = false;
         }
         bool match = false;
         // printf("this->SortdUpIntrvls[%d]=%d; (4 + (1.2 * KeyUpBuckts[%d].Intrvl) = %d\n", i, this->SortdUpIntrvls[i], KeyUpBucktPtr, (uint16_t)(4 + (1.2 * KeyUpBuckts[KeyUpBucktPtr].Intrvl)));
@@ -1222,9 +1220,9 @@ void AdvParser::EvalTimeData(void)
         ModeCnt = 0; // DcodeCW.cpp use "Normal" timing
         if ((this->LtrBrkVal > 1.7 * this->AvgSmblDedSpc) && (this->AvgSmblDedSpc > 30))
         {
-            this->LtrBrkVal = (uint16_t)(0.921 * (float)(this->AvgSmblDedSpc + this->DitIntrvlVal));
+            this->LtrBrkVal = (uint16_t)(0.95 * (float)(this->AvgSmblDedSpc + this->DitIntrvlVal));
             if (DeBug)
-                printf("\nRecalced LtrBrkVal = %d\n", this->LtrBrkVal);
+                printf("\n!!Recalced LtrBrkVal!! = %d\n", this->LtrBrkVal);
         }
         break;
     case 1:          // Bug1
@@ -1559,7 +1557,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         {
             for (int i = start; i < stop; i++) // set/limit the test to ignore the last/longest keydwn in the series, because it could/likely be a stretched dah;
             {
-                if (this->SortdDwnIntrvls[i] > 30)
+                if (this->SortdDwnIntrvls[i] > 30 || KeyDwnSN[i] > 5)
                 { /*20250120 added above 'if' to ignore apparent noise events */
                     CurSpltPtSlope = ((float)((float)this->SortdDwnIntrvls[i + 1] / (float)this->SortdDwnIntrvls[i]));
                     if (Dbug)
@@ -2889,6 +2887,7 @@ bool AdvParser::PadlRules(int &n)
     if ((n < TmpUpIntrvlsPtr - 1) && (TmpUpIntrvls[n] >= this->LtrBrkVal))
     {
         ExitPath[n] = 103;
+        //printf("\tTmpUpIntrvls[%d]:%d >= this->LtrBrkVal:%d\t", n, (uint16_t)TmpUpIntrvls[n],  (uint16_t)this->LtrBrkVal);
         BrkFlg = '+';
         return true;
     }
@@ -3814,6 +3813,7 @@ bool AdvParser::SKRules(int &n)
 ////////////////////////////////////////////////////////
 int AdvParser::AdvSrch4Match(int n, unsigned int decodeval, bool DpScan)
 {
+    //printf("Start AdvSrch4Match(decodeval:%d)\n", decodeval);
     /*1st test, & confirm, there's sufficient space to add search results to the 'Msgbuf'*/
     if (StrLength >= (MsgbufSize - 5))
         return 0;
@@ -4009,11 +4009,17 @@ void AdvParser::SyncTmpBufA(void)
     }
 };
 ///////////////////////////////////////////////////////////////////////
-/*This function finds the Msgbuf current length regardless of Dbug's state */
+/*This function, written primarly for Debugging, finds the Msgbuf current length regardless of Dbug's state.
+And posts to the debug screen the character decoded based on letterbreak detection
+ */
 void AdvParser::PrintThisChr(void)
 {
     int curEnd = StrLength;
-    while (Msgbuf[curEnd] != 0)
+    if(this->Msgbuf[curEnd] == 0 && StrLength > 0) // maybe a space got inserted. So step back to the 1st non-space character
+    while((this->Msgbuf[curEnd] == 0 || this->Msgbuf[curEnd] == ' ') && curEnd >= 0) curEnd--;
+
+    if (curEnd < 0) printf("!NULL!; %d", curEnd);
+    while (Msgbuf[curEnd] != 0 && curEnd >= 0)  
     {
         if (Dbug)
             printf("%c", this->Msgbuf[curEnd]);
@@ -4095,7 +4101,7 @@ int AdvParser::DitDahBugTst(void)
         }
         /*Made the define the average dah, less restrictive; because paddle generated dahs should all have the same interval */
         /*ALSO do NOT consider the 1st entry in the symbol set; its interval value may be truncated*/
-        if (n > 0 && (TmpDwnIntrvls[n] >= this->DitDahSplitVal))
+        if (n > 0 && (TmpDwnIntrvls[n] >= this->DitDahSplitVal) && this->KeyDwnSN[n]>5)
         {
             dahDwnInterval += TmpDwnIntrvls[n];
             dahDwncnt++;
@@ -4160,6 +4166,7 @@ int AdvParser::DitDahBugTst(void)
         }
         // printf("\tMindahInterval: %d\tMaxdahInterval: %d;\tDitDahSplitVal: %d\tstop: %d\n", MindahInterval, MaxdahInterval, this->DitDahSplitVal, stop);
         DahVariance = MaxdahInterval - MindahInterval;
+        if(DahVariance < 40) DahVariance = 0; //20250215 Added this test because KY4GS_K2PDJ_20250214.mp3 (keyboard-paddle) had a 25 ms varaition in both dits & dahs
         this->DahVarPrcnt = (float)DahVariance / (float)MindahInterval;          // used later to determine if sender is using streched dahs as a way of signaling letter breaks
         this->MaxDt2DhRatio = (float)MaxdahInterval / (float)this->DitIntrvlVal; // used later
     }
@@ -4318,10 +4325,11 @@ int AdvParser::DitDahBugTst(void)
         dahDwncnt = 0;
         int GudDahCnt = 0;
         uint16_t Tolrenc = (uint16_t)(0.1 * (float)dahDwnInterval);
+        if(Tolrenc<40) Tolrenc= 40;
         // printf("\nTolrenc %d; dahDwnInterval %d\n", Tolrenc, dahDwnInterval);
         for (int n = 1; n < stop; n++) // skip the 1st key down event because testing showed the timing of the 1st event is often shorter than the rest in the group
         {
-            if (TmpDwnIntrvls[n] > DitDahSplitVal)
+            if (TmpDwnIntrvls[n] > DitDahSplitVal && this->KeyDwnSN[n]>5)
             {
                 dahDwncnt++;
                 if ((TmpDwnIntrvls[n] < (dahDwnInterval + Tolrenc)) && (TmpDwnIntrvls[n] > (dahDwnInterval - Tolrenc)))
@@ -4356,7 +4364,10 @@ int AdvParser::DitDahBugTst(void)
                 return 4; // not enough info to decide
         }
         else if (Longdahcnt > 0 && this->DahVarPrcnt > 0.25) // found stretched dahs; need to use bug1 ruleset
-            return 8;                                        // bug (82)
+        {   
+            printf("\tDahVariance:%d\t", DahVariance); 
+            return 8;
+        }                                        // bug (82)
         else if (((float)GudDahCnt / (float)dahDwncnt > 0.8))
         {
             if (this->DahVarPrcnt > 0.15)

@@ -1148,6 +1148,7 @@ void AdvParserTask(void *param)
 #ifdef AutoCorrect
           printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
 #endif
+// printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
           CptrTxt = false;
           lvglmsgbx.dispDeCdrTxt(advparser.Msgbuf, TFT_GREEN); // Added for lvgl; Note: color value is meaningless
           CptrTxt = true;
@@ -1318,18 +1319,18 @@ void app_main()
 
   vTaskSuspend( AdvParserTaskHandle );
   //////////////////////////////////////////////
-  xTaskCreatePinnedToCore(
-      KeyEvntTask, /* Function to implement the task */
-      "KeyEvnt Task", /* Name of the task */
-      4096,  /* Stack size in words */
-      NULL,  /* Task input parameter */
-      2,  /* Priority of the task */
-      &KeyEvntTaskTaskHandle,  /* Task handle. */
-      0); /* Core where the task should run */
-  if (KeyEvntTaskTaskHandle == NULL)
-    ESP_LOGI(TAG, "KeyEvnt Task handle FAILED");
+  // xTaskCreatePinnedToCore(
+  //     KeyEvntTask, /* Function to implement the task */
+  //     "KeyEvnt Task", /* Name of the task */
+  //     4096,  /* Stack size in words */
+  //     NULL,  /* Task input parameter */
+  //     2,  /* Priority of the task */
+  //     &KeyEvntTaskTaskHandle,  /* Task handle. */
+  //     0); /* Core where the task should run */
+  // if (KeyEvntTaskTaskHandle == NULL)
+  //   ESP_LOGI(TAG, "KeyEvnt Task handle FAILED");
 
-  vTaskSuspend( KeyEvntTaskTaskHandle );
+  // vTaskSuspend( KeyEvntTaskTaskHandle );
 /////////////////////////////////////////////////
 /*Not currently using this approach/method*/
   //  xTaskCreatePinnedToCore(
@@ -1727,7 +1728,7 @@ void DsplTmr_callback(TimerHandle_t xtimer)
       {
         printf("DisplayUpDt timer Runing But Queque Reports FULL\n");
         printf(LogBuf);
-        
+        xTaskResumeFromISR(DsplUpDtTaskHandle);// DisplayUpDt
       }
 }
 /*                                          */

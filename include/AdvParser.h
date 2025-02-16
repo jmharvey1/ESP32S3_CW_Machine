@@ -940,7 +940,8 @@ public:
     int wpm =0; //upated from DcodeCW.cpp
     inline uint16_t Get_LtrBrkVal(void) { return this->LtrBrkVal; }
     inline uint16_t Get_DahVal(void) { return this->AvgDahVal; }
-	
+	inline uint16_t Get_space(void)  { return this->AvgSmblDedSpc; }
+    inline uint16_t Get_DitVal(void)  { return this->DitIntrvlVal; }
 };
 
 #endif /* INC_ADVPARSER_H_ */
