@@ -925,7 +925,7 @@ public:
     bool Dbug = false;
     int KeyType = 0;//used for the display's status indicator("S" or "E")
     float AvgSmblDedSpc;
-    float wrdbrkFtcr;
+    float wrdbrkFtcr = 1.0;
     int GetMsgLen(void);
     uint16_t GetWrdBrkIntrval(void);
     unsigned long LstGltchEvnt; //time stamp of last detected glitch (detected in/by Geoertzel.cpp)
@@ -937,7 +937,7 @@ public:
     uint16_t AvgDahVal;
     int KeyUpPtr = 0;
     int KeyDwnPtr = 0;
-    int wpm =0; //upated from DcodeCW.cpp
+    int wpm = 0; //upated from DcodeCW.cpp
     inline uint16_t Get_LtrBrkVal(void) { return this->LtrBrkVal; }
     inline uint16_t Get_DahVal(void) { return this->AvgDahVal; }
 	inline uint16_t Get_space(void)  { return this->AvgSmblDedSpc; }

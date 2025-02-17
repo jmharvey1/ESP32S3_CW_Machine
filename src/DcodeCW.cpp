@@ -47,7 +47,7 @@
 #define LOW false //JMH ADD for Waveshare Version
 #define HIGH true //JMH ADD for Waveshare Version
 //#define DBugLtrBrkTiming // uncomment to see how letter break timing is developed & syncronized w/ advParser
-bool DbgWrdBrkFtcr = false;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
+bool DbgWrdBrkFtcr = false; //true; //false;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
 int ShrtBrk[10];
 int charCnt = 0;
 int shwltrBrk = 0;
@@ -233,6 +233,7 @@ float ShrtFctr = 0.48; // 0.52;// 0.45; //used in Bug3 mode to control what perc
 uint8_t GudSig = 0;
 uint8_t oneLtrCntr = 0; //added to support auto-word break lenght
 float wrdbrkFtcr = 1.0; //added to support auto-word break lenght
+float OLDwrdbrkFtcr = wrdbrkFtcr;
 LVGLMsgBox *ptrmsgbx;
 SemaphoreHandle_t DeCodeVal_mutex;
 bool blocked = false;
@@ -263,6 +264,8 @@ void StartDecoder(LVGLMsgBox *pttftmsgbx)
 	STart = 0;
 	WrdStrt = pdTICKS_TO_MS(xTaskGetTickCount()); //(GetTimr5Cnt()/10);
 	wordBrk = avgDah;
+	wrdbrkFtcr = 1.0;
+	OLDwrdbrkFtcr = wrdbrkFtcr;
 	/*initialize period stack with 15WPM dit intervals*/
 	for (int i = 0; i < 10; i++)
 	{
@@ -1515,6 +1518,8 @@ void SetLtrBrk(void)
 	{
 		//printf("ltrBrk %d > wordBrk\n", (uint16_t)ltrBrk);
 		wordBrk = int(1.1 * float(ltrBrk));
+		wrdbrkFtcr = 1.0;
+		OLDwrdbrkFtcr = wrdbrkFtcr;
 	}
 	/*Now work out what the average intersymbol space time is*/
 	if ((3.18 * (float)deadSpace) < (float)avgDah)
@@ -1663,7 +1668,10 @@ bool chkChrCmplt(void)
 		if (ValidWrdBrk)
 		{
 			if (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5))
-				printf("\n!!OVERFLOW!!\n");
+			{
+				if(!DataSetRdy)printf("\n!!OVERFLOW - Skipping Adv Parser!!\n");
+				else printf("\n!!Close to OVERFLOW!!\n");
+			}
 			// if (DeCd_KeyUpPtr < IntrvlBufSize && DeCd_KeyDwnPtr >= 1)
 			if (DeCd_KeyDwnPtr != 0 && !KDwnFnd)
 			{ // we have both a usable time & place to store it; and at least 1 keydwn interval has been captured
@@ -1701,8 +1709,7 @@ bool chkChrCmplt(void)
 							{		
 								//printf("     5##  %s\n", LtrHoldr);				// had 2 entries in a row that were just one character in length; lengthen the wordbrk interval
 								wrdbrkFtcr += 0.15; // = 2.0
-								//wordBrk = (unsigned long)(wrdbrkFtcr* (float)wordBrk);
-								// LtrHoldr[LtrPtr] = curChar
+								ApplyWrdFctr(wrdbrkFtcr);
 								if (DbgWrdBrkFtcr)
 									printf("wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
 							}
@@ -1716,11 +1723,8 @@ bool chkChrCmplt(void)
 						// printf("advparser.Dbug = true\n");
 						advparser.Dbug = true;
 					}
-
-					// else
-					// 	advparser.Dbug = false;
 					/*Sync advparser.wrdbrkFtcr to current wrdbrkFtcr*/
-					advparser.wrdbrkFtcr = wrdbrkFtcr;
+					// advparser.wrdbrkFtcr = wrdbrkFtcr;//20250216 decided to de-link the two
 					/*Perpare advparser, by 1st copying current decoder symbol sets into local advparser arrays*/
 					int IndxPtr = 0;
 #if USE_TST_DATA
@@ -1759,6 +1763,7 @@ bool chkChrCmplt(void)
 					advparser.KeyDwnPtr = DeCd_KeyDwnPtr;
 					DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // reset pointers here just make sure we dont miss anything in the next data set
 					advparser.wpm = wpm;
+					// printf("WPM->advparser.wpm:%d\n", wpm);
 					advparser.LtrPtr = LtrPtr;
 					for (int i = 0; i <= LtrPtr; i++)
 					{
@@ -1814,7 +1819,7 @@ bool chkChrCmplt(void)
 						if (oneLtrCntr >= 2)
 						{ // had 2 entries in a row that were just one character in lenght; shorten the wordbrk interval
 							wrdbrkFtcr += 0.2;
-							//wordBrk = (unsigned long)(wrdbrkFtcr* (float)wordBrk);
+							ApplyWrdFctr(wrdbrkFtcr);
 							if (DbgWrdBrkFtcr)
 								printf("wordBrk+: %d; wrdbrkFtcr: %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr);
 						}
@@ -1941,7 +1946,7 @@ bool chkChrCmplt(void)
 			{
 				if(DeCodeVal==2 || DeCodeVal==3) ShrtLtrBrkCnt++;// copied either a 'T' or 'E'
 				else ShrtLtrBrkCnt = 0;
-				if(ShrtLtrBrkCnt>5) //had more than 5 E's & T's in a row. Check/verify letterbrk timing
+				if(ShrtLtrBrkCnt>5 && TmpSlwFlg) //had more than 5 E's & T's in a row. Check/verify letterbrk timing && tone (keying intervals)  are slower than 35WPM
 				{
 					
 					uint16_t NuLtrBrkVal = advparser.Get_LtrBrkVal();
@@ -1957,11 +1962,7 @@ bool chkChrCmplt(void)
 						ltrBrk = (unsigned long)advparser.Get_LtrBrkVal();
 						avgDah = (unsigned long)(3 * avgDit);
 						printf("; OldspaceVal %d; new space %d; OldDahVal %d; new DahVal %d; ltrBrk:%d; Wpm %d \n", OldSpace, (uint16_t)space, OldDahVal, DahVal, (uint16_t)ltrBrk, wpm);
-						// ltrBrk = NuLtrBrkVal;
-						// avgDit = ltrBrk / 2;
-						// avgDah = 3 * avgDit;
-						// wpm = 1200 / avgDit;
-						// ShrtLtrBrkCnt = 0;
+						
 					}else
 					{
 						printf("Advance Parser- No data Available.\n");
@@ -2399,11 +2400,12 @@ int CalcAvgPrd(unsigned long thisdur)
 
 int CalcWPM(int dotT, int dahT, int spaceT)
 {
-	int avgt = (dotT + dahT + (2 * spaceT)) / 6; // 20221105
-	int codeSpeed = 1200 / avgt;
-	//	sprintf(PrntBuf,"WPM: %d; %d; %d; %d; %s\n\r", codeSpeed, dotT, dahT, spaceT, DahMthd);//test/check timing only
-	//	Serial.print(PrntBuf);
-	//	sprintf(DahMthd," ");
+	char PrntBuf[30];
+	float avgt = float(dotT + dahT + (2 * spaceT)) / 6.0; // 20221105
+	int codeSpeed = (int)(1200.0 / avgt);
+	sprintf(PrntBuf, "WPM: %d;\t Dit:%d; Dah%d; Space%d\n", codeSpeed, dotT, dahT, spaceT); // test/check timing only
+	//printf("%s", PrntBuf);
+
 	return codeSpeed;
 }
 
@@ -2868,7 +2870,7 @@ void dispMsg(char Msgbuf[50])
 				//if (LtrPtr > 11 && curChar != 'T')
 				if (WrdChrCnt > 8){/*this word is getting long. Shorten the wordBrk interval a bit*/
 					wrdbrkFtcr -= 0.05; //-= 0.025
-					//wordBrk = (unsigned long)(wrdbrkFtcr* (float)wordBrk);
+					ApplyWrdFctr(wrdbrkFtcr);
 					if(DbgWrdBrkFtcr) printf("wordBrk-: %d; wrdbrkFtcr: %5.3f; MsgBuf: %s\n", (uint16_t)wordBrk, wrdbrkFtcr, Msgbuf);
 				}
 				if (LtrPtr > 28)
@@ -3207,8 +3209,12 @@ void SyncAdvPrsrWPM(void)
 	avgDit =  (unsigned long)advparser.Get_DitVal();
 	ltrBrk =  (unsigned long)advparser.Get_LtrBrkVal();
 	avgDah = (unsigned long)(3 * avgDit);
-	//wpm = 1200 / (int)avgDit;
 	#ifdef DBugLtrBrkTiming
 	printf("SyncAdvPrsrWPM - Resetting WPM; OldspaceVal %d; new space %d; OldDahVal %d; new DahVal %d; ltrBrk:%d; Wpm %d; AdvPrsrTxt:%s \n", OldSpace, (uint16_t)space, OldDahVal, DahVal, (uint16_t)ltrBrk, wpm, advparser.Msgbuf);
 	#endif
+};
+void ApplyWrdFctr(float _wrdbrkFtcr)
+{
+	float tmpwordBrk = (float)wordBrk/OLDwrdbrkFtcr;
+	wordBrk = (unsigned long)( _wrdbrkFtcr * tmpwordBrk);
 };

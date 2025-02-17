@@ -590,7 +590,6 @@ void GoertzelHandler(void *param)
           FrstPass = false; // 20231231 added to support new 4ms sample interval, W/ 8ms dataset
         if (FrstPass)
         {
-          // InitGoertzel(cur_smpl_rate);
           ResetGoertzel();
         }
         if (SlwFlg && !FrstPass)
@@ -660,9 +659,9 @@ void GoertzelHandler(void *param)
             // printf("curclr: %d\n", curclr);
           } // else printf("%d\n", CWsndengn.GetState());//just for diagnostic testing
           /*The following is just for time/clock testing/veification */
-          unsigned long sampleIntrvl = Now - ToneStart;
-          ToneStart = Now;
-          cur_smpl_rate = ((ret_num) * 250) / sampleIntrvl;
+          // unsigned long sampleIntrvl = Now - ToneStart;
+          // ToneStart = Now;
+          // cur_smpl_rate = ((ret_num) * 250) / sampleIntrvl;
 #ifdef POSTADC        
         }// end if(!skip)
 #endif        
@@ -1030,7 +1029,7 @@ void AdvParserTask(void *param)
     /*Scan/compare last word displayed w/ advpaser's version*/
     int NuMsgLen = advparser.GetMsgLen();
     int LtrPtr = advparser.LtrPtr;
-    wrdbrkFtcr = advparser.wrdbrkFtcr;
+    // wrdbrkFtcr = advparser.wrdbrkFtcr;//20250216 decided to de-link the two
     if (NuMsgLen > LtrPtr || NuMsgLen < LtrPtr)
     { // if the advparser test string is longer, then delete the last word printed
       same = false;

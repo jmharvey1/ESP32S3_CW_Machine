@@ -75,6 +75,8 @@ unsigned long EvntTime = 0;
 unsigned long StrtKeyDwn = 0;
 unsigned long TmpEvntTime = 0;
 unsigned long OldTmpEvntTime = 0;
+unsigned long OldCycleTime = 0;
+int setcnt = 0;
 float NFlrBase = 0;
 float avgKeyDwn = 1200 / 15;
 float curNois = 0;
@@ -143,6 +145,7 @@ float OldSigPk = 0;
 int prntcnt = 0;
 float MagBuf[MagBSz];
 float NoisBuf[2 * MagBSz];
+unsigned long EvntTimeBuf[MagBSz];
 float OldLvlBuf[4];
 int NoisPtr = 0;
 float ToneThresHold = 0;
@@ -360,6 +363,7 @@ void ComputeMags(unsigned long now)
 	OldLvlBuf[0] = MagBuf[MBpntr];
 
 	MagBuf[MBpntr] = CurLvl;
+	EvntTimeBuf[MBpntr]  = now;
 	MBpntr++;
 	if (MBpntr == MagBSz)
 		MBpntr = 0;
@@ -570,7 +574,6 @@ void Chk4KeyDwn(float NowLvl)
 	// printf("Chk4KeyDwn\n");
 	if (avgDit <= 1200 / 35) // WPM is the denominator here
 	{						 /*High speed code keying process*/
-		// if (CurLvl  > AdjSqlch)
 		if (CurLvl > ToneThresHold)
 		{
 			if ((OLDNoiseFlr < NoiseFlr) && (OLDNoiseFlr < AvgNoise))
@@ -583,10 +586,6 @@ void Chk4KeyDwn(float NowLvl)
 			if (!GudTone)
 				GudTone = true;
 		}
-		// else if(CurLvl < AvgNoise)
-		// {
-		// 	toneDetect = false;
-		// }
 		else if (CurLvl < ToneThresHold)
 		{
 			toneDetect = false;
@@ -696,6 +695,7 @@ void Chk4KeyDwn(float NowLvl)
 		else
 		{ // if we're here, we just ended a keydown event
 			float thisKDprd = (float)(TmpEvntTime - StrtKeyDwn);
+			//printf("thisKDprd = %5.0f\n", thisKDprd);
 			if ((thisKDprd > 1200 / 60) && (thisKDprd < 1200 / 5))
 			{ // test to see if this interval looks like a real morse code driven event
 				if (thisKDprd > 2.5 * avgKeyDwn)
@@ -708,14 +708,14 @@ void Chk4KeyDwn(float NowLvl)
 		//  sprintf( Smpl,"%d\n", 1200/(int)avgDit);
 		//  printf( Smpl);
 		// if((avgDit > 1200 / 35)) avgDit = (unsigned long)advparser.DitIntrvlVal;//20240521 added this becauxe now believe this is a more reliable value
-		if ((avgDit < 1200 / 30))
-		{					   // 20231031 changed from 1200/30 to 1200/35
-			TmpSlwFlg = false; // we'll determine the flagstate here but wont engage it until we have a letter complete state
-		}
-		else if (avgDit > 1200 / 28)
-		{					  // 20231031 added else if()to auto swap both ways
-			TmpSlwFlg = true; // we'll determine the flagstate here but wont engage it until we have a letter complete state
-		}
+		// if ((avgDit < 1200 / 30)) // note: DcodeCW.cpp sets the avgDit value
+		// {					   // 20231031 changed from 1200/30 to 1200/35
+		// 	TmpSlwFlg = false; // we'll determine the flagstate here but wont engage it until we have a letter complete state
+		// }
+		// else if (avgDit > 1200 / 28)
+		// {					  // 20231031 added else if()to auto swap both ways
+		// 	TmpSlwFlg = true; // we'll determine the flagstate here but wont engage it until we have a letter complete state
+		// }
 		if (!GltchFlg && (avgDit >= 1200 / 30))
 		{ // don't use "glitch" detect/correction for speeds greater than 30 wpm
 
@@ -795,10 +795,43 @@ void Chk4KeyDwn(float NowLvl)
 					LEDGREEN = (int)CurLvl;
 				if (Sentstate)
 					chkcnt++;
-				if(Sentstate) SndS_N = true;	
+				if(Sentstate)
+				{   uint16_t CycleInterval = (uint16_t)(TmpEvntTime- OldCycleTime);
+					if( ((CycleInterval) < 69) && OldCycleTime!=0) // incountered a keyup keydwn & back to keyup in an interval that represents >35wpm
+					{
+						if(setcnt>0)
+						{ // sustained keying intrvals are shorter than 35 wpm
+							TmpSlwFlg = false;
+							// printf("\t%d. CycleInterval: %d\n", setcnt, CycleInterval);
+						}
+						setcnt = 6;
+					} else 
+					
+					SndS_N = true;
+					if(setcnt>0)
+					{
+						setcnt--;
+					}
+					else TmpSlwFlg = true; // ok, we're now consistenly less than 35 wpm
+					OldCycleTime = TmpEvntTime;	
+				} 
+				if(!Sentstate && TmpSlwFlg)	//we're sending a 'keydown' state which actually happened 6 samples back so need to correct/update the time stamp
+				{
+					// int tmpptr = MBpntr;
+					// tmpptr--;
+					// if(tmpptr<0) tmpptr = MagBSz-1;
+					// tmpptr--;
+					// if(tmpptr<0) tmpptr = MagBSz-1;
+					// tmpptr--;
+					// if(tmpptr<0) tmpptr = MagBSz-1;
+					// tmpptr--;
+					// if(tmpptr<0) tmpptr = MagBSz-1;
+					TmpEvntTime = EvntTimeBuf[MBpntr];
+	
+				}
 				xQueueSend(KeyEvnt_que, &TmpEvntTime, (TickType_t)0);
 				xQueueSend(KeyState_que, &Sentstate, (TickType_t)0);
-				// printf("\tKeyEvnt_que, EvntTime: %d; State: %d\n", (uint16_t)TmpEvntTime, Sentstate);
+				//printf("\tKeyEvnt_que, EvntTime: %d; State: %d\n", (uint16_t)TmpEvntTime, Sentstate);
 				//if(!Sentstate) printf("\tKeyEvnt_que, &TmpEvntTime: &d\n", (uint16_t)TmpEvntTime);//testing debugging
 				KeyEvntSR(Sentstate, TmpEvntTime);
 			}

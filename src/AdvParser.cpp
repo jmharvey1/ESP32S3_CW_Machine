@@ -568,6 +568,7 @@ void AdvParser::EvalTimeData(void)
             this->NuSpltVal *= 0.95; // 20241210 added based on k9vp bug mp3 test recording
             this->DitDahSplitVal = this->NuSpltVal;
             this->WrdBrkVal = 4 * KeyDwnBuckts[BtmPtr].Intrvl;
+            // this->wrdbrkFtcr = 1.0;
             if (Dbug)
                 printf("WrdBrkVal Method 3; 4 * KeyDwnBuckts[BtmPtr:%d].Intrvl:%d = %d\n", BtmPtr, KeyDwnBuckts[BtmPtr].Intrvl, this->WrdBrkVal);
             if (this->Bg1SplitPt < 1.5 * KeyDwnBuckts[BtmPtr].Intrvl)
@@ -688,6 +689,7 @@ void AdvParser::EvalTimeData(void)
                     printf("ReSetB DitDahSplitVal = 0.6* (RunngTotl/%d) = %d\n", dahcnt, this->DitDahSplitVal);
             }
             this->WrdBrkVal = 1.4 * this->LtrBrkVal;
+            // this->wrdbrkFtcr = 1.0;
             if (Dbug)
                 printf("WrdBrkVal Method 2; 1.4*this->LtrBrkVal:%d = %d\n", this->LtrBrkVal, this->WrdBrkVal);
         }
@@ -901,6 +903,7 @@ void AdvParser::EvalTimeData(void)
                 this->LtrBrkVal = 1.5 * this->AvgSmblDedSpc; // this would only be the case, when there are just 2 keyupbuckets
             // this->WrdBrkVal = 2*(this->AvgSmblDedSpc + this->DitIntrvlVal); //4*(this->AvgSmblDedSpc+ this->DitIntrvlVal)/2
             this->WrdBrkVal = 1.8 * (this->AvgSmblDedSpc + this->DitIntrvlVal);
+            // this->wrdbrkFtcr = 1.0;
         }
     } //end normal/good S/N setup
     else
@@ -1436,7 +1439,6 @@ void AdvParser::EvalTimeData(void)
                 {
                     this->wrdbrkFtcr += 0.15;
                     WrdBrkAdjFlg = true;
-                    // if(DbgWrdBrkFtcr) printf("Parser wordBrk+: %d; wrdbrkFtcr: %5.3f; CurParseWord: %s\n", (uint16_t)this->WrdBrkVal, this->wrdbrkFtcr, this->Msgbuf);
                 }
             }
             this->LstLtrBrkCnt = 0;
@@ -1536,7 +1538,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
     int MaxDitPtr = 0;
     int MaxDahPtr = 0;
     int MaxDitCnt, DahCnt, MaxDahCnt;
-    uint16_t MaxIntrval = (3 * (1500 / wpm)); // set the max interval to that of a dah @ 0.8*WPM
+    uint16_t MaxIntrval = (3 * (1500 / wpm)); //Based on the 'real time decoder'(DcodeCW.cpp), set the max interval to that of a dah @ 0.8*WPM 
     uint16_t MaxDelta = 0;
     MaxDahCnt = MaxDitCnt = DahCnt = 0;
     if (this->Dbug)
@@ -2035,6 +2037,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         // this->NuSpltVal *= 0.95;//20241210 added based on k9vp bug mp3 test recording
         this->DitDahSplitVal = this->NuSpltVal;
         this->WrdBrkVal = 3 * KeyUpBuckts[MaxCntKyUpBcktPtr].Intrvl; // 4 * KeyUpBuckts[MaxCntKyUpBcktPtr].Intrvl;
+        // this->wrdbrkFtcr = 1.0;
         if (Dbug)
             printf("WrdBrkVal Method 7; 3 * KeyUpBuckts.Intrvl:%d = %d\n", KeyUpBuckts[MaxCntKyUpBcktPtr].Intrvl, this->WrdBrkVal);
         this->Bg1SplitPt = 1.1 * this->DitDahSplitVal;
@@ -4365,7 +4368,7 @@ int AdvParser::DitDahBugTst(void)
         }
         else if (Longdahcnt > 0 && this->DahVarPrcnt > 0.25) // found stretched dahs; need to use bug1 ruleset
         {   
-            printf("\tDahVariance:%d\t", DahVariance); 
+            //printf("\tDahVariance:%d\t", DahVariance); 
             return 8;
         }                                        // bug (82)
         else if (((float)GudDahCnt / (float)dahDwncnt > 0.8))

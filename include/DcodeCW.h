@@ -39,7 +39,7 @@ extern int LtrPtr;
 extern bool dletechar;
 extern int MsgChrCnt[];
 extern bool CptrTxt;
-
+extern bool TmpSlwFlg; // set to true when tone (keying intervals) are slower than 35WPM, in the Goertzel.cpp code
 extern unsigned long SmpIntrl;
 extern struct DF_t DFault;
 
@@ -503,4 +503,5 @@ void showSpeed(void);
 void SftReset(void);
 void CLrDCdValBuf(void);
 void SyncAdvPrsrWPM(void);
+void ApplyWrdFctr(float _wrdbrkFtcr);
 #endif /* INC_DCODECW_H_ */
