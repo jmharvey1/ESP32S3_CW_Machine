@@ -22,6 +22,7 @@
 /*20250126 more tweaks to threshold setpoint code */
 /*20250203 Moved S/N log calc to LVGLMsgBox.pp dispMsg2()*/
 /*20250203 Changed method for selecting S/N KeyDwn & KeyUp sample values */
+/*20250217 Changed Buffer size from 6 to 3 - Found the extended delay was no longer needed*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -29,7 +30,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
-#define MagBSz 6 // 3
+#define MagBSz 3 //6 // 3
 AdvParser advparser;
 LVGLMsgBox *ptrmsgbx1;
 uint16_t adc_buf[Goertzel_SAMPLE_CNT];
@@ -716,6 +717,7 @@ void Chk4KeyDwn(float NowLvl)
 		// {					  // 20231031 added else if()to auto swap both ways
 		// 	TmpSlwFlg = true; // we'll determine the flagstate here but wont engage it until we have a letter complete state
 		// }
+		//GltchFlg = true;//uncomment this to lock out glitch detection.
 		if (!GltchFlg && (avgDit >= 1200 / 30))
 		{ // don't use "glitch" detect/correction for speeds greater than 30 wpm
 

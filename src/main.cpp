@@ -96,6 +96,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250211 reworked Sender changed & tone Frequency filter code*/
 /*20250212 Created seperate task/process to freq Calc & detect sender change*/
 /*20250213 DcodeCW.cpp - New code to manage display when 'sender' change has been detected*/
+/*20250217 DcodeCW.cpp - Added wordbreak incrementing & Goertzelcpp - reduced sample buffering 6 to 3*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -1727,6 +1728,11 @@ void DsplTmr_callback(TimerHandle_t xtimer)
       {
         printf("DisplayUpDt timer Runing But Queque Reports FULL\n");
         printf(LogBuf);
+        printf("Attempting to restart DisplayUpDt task\n");
+        vTaskDelete(DsplUpDtTaskHandle);
+        xTaskCreatePinnedToCore(DisplayUpDt, "DisplayUpDate Task", 8192, NULL, 3, &DsplUpDtTaskHandle, 0);
+        printf("DisplayUpDt task Deleted & ReCreate. Now will Restart it\n");
+        vTaskDelay((TickType_t)500);
         xTaskResumeFromISR(DsplUpDtTaskHandle);// DisplayUpDt
       }
 }

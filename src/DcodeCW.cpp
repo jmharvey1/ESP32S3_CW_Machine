@@ -33,7 +33,9 @@
  * 20250213 New code to manage display when 'sender' change has been detected
  * 20250213 Added sanity check flag 'DeCoderActiviated' to the above code
  * 20250213 Added SyncAdvPrsrWPM() to improve real time decoder's ability to sync up with new sender 
- */
+ * 20250217 Added wordbreak incrementing based on disproportionate words containing characters of only 2 symbol count or less
+ * 
+ *  */
  
 
 // #include <SetUpCwDecoder.h>
@@ -47,13 +49,14 @@
 #define LOW false //JMH ADD for Waveshare Version
 #define HIGH true //JMH ADD for Waveshare Version
 //#define DBugLtrBrkTiming // uncomment to see how letter break timing is developed & syncronized w/ advParser
-bool DbgWrdBrkFtcr = false; //true; //false;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
+bool DbgWrdBrkFtcr = false;//true; //false;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
 int ShrtBrk[10];
 int charCnt = 0;
 int shwltrBrk = 0;
 int msgcntr = 0;
 int badCodeCnt = 0;
 int dahcnt = 0;
+int SnglLtrWrdCnt =0; //20250217 added to track & reset wordbrk interval
 int MsgChrCnt[2];
 int ltrCmplt = -2200; // letter complete false;  used in plot mode, to show where/when letter breaks are detected
 volatile int TimeDat[MaxIntrvlCnt];
@@ -340,7 +343,7 @@ void BldKeyUpDwnDataSet(void)
 						if(DeCd_KeyUpPtr> DeCd_KeyDwnPtr+1 || DeCd_KeyUpPtr < DeCd_KeyDwnPtr-1 )
 						{
 							/*last time I checked, this was no longer happening*/
-							DeCd_KeyUpPtr = DeCd_KeyDwnPtr = 0;
+							DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
 							float dummy;
 							while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
 							{
@@ -360,7 +363,7 @@ void BldKeyUpDwnDataSet(void)
 							//printf("Key DOWN NdX-reset; interval:%d > 750\n", interval);
 							printf("Key DOWN NdX-reset; interval:%d > ResetInterval:%d\n", interval, (uint16_t)ResetInterval);
 							#endif
-							DeCd_KeyUpPtr = DeCd_KeyDwnPtr = 0;
+							DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
 							float dummy;
 							while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
 							{
@@ -392,7 +395,7 @@ void BldKeyUpDwnDataSet(void)
 									#ifdef DeBgQueue
 									printf("done = true; NdX-reset\n");
 									#endif
-									DeCd_KeyUpPtr = DeCd_KeyDwnPtr = 0;
+									DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
 									float dummy;
 									while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
 									{
@@ -1302,47 +1305,6 @@ void ChkDeadSpace(void)
 			}
 		}
 	}
-	/* 20241229 new approach to setting word break wait interval*/
-	// uint16_t NuVal = advparser.GetWrdBrkIntrval();//= 0;
-	// if(0)//(NuVal>0)
-	// {
-	// 	wordBrk =  (uint16_t)(wrdbrkFtcr* (float)NuVal);
-	// 	if(DbgWrdBrkFtcr) printf("WrdBrkIntrval:%d; wordBrkA: %d; wrdbrkFtcr %5.3f\n", NuVal, (uint16_t)wordBrk, wrdbrkFtcr);
-	// }
-	// else
-	// {
-	// 	if (wpm > 35)
-	// 	{
-	// 		uint16_t NuWrdBkA = (uint16_t)(4.2*(float)avgDeadSpace);
-	// 		uint16_t OldWrdBk = wordBrk/ wrdbrkFtcr;
-	// 		if(NuWrdBkA != OldWrdBk){
-	// 		wordBrk = (unsigned long)( wrdbrkFtcr *((6.0 * ((float)OldWrdBk) + ((float)NuWrdBkA)) / 7.0)); //paddle
-	// 		if(DbgWrdBrkFtcr) printf("wpm > 35 -  wordBrkA: %d; wrdbrkFtcr %5.3f; NuWrdBkA: %d\n", (uint16_t)wordBrk, wrdbrkFtcr, NuWrdBkA);	
-	// 		}
-	// 	}
-	// 	else
-	// 	{
-	// 		uint16_t NuWrdBkB = (uint16_t)(2.3 * (float)advparser.UnitIntvrlx2r5);
-	// 		wordBrk = (unsigned long)( wrdbrkFtcr *((6.0 * ((float)wordBrk/ wrdbrkFtcr) + ((float)NuWrdBkB)) / 7.0)); //paddle
-	// 		if(DbgWrdBrkFtcr) printf("wordBrk: %d; wrdbrkFtcr %5.3f; NuWrdBkB: %d\n", (uint16_t)wordBrk, wrdbrkFtcr, NuWrdBkB);
-	// 	}
-	// }	
-	// /* 20240324 new approach to setting word break wait interval*/
-	// if(advparser.KeyType == 2) wordBrk = (5 * wordBrk + (8*avgDeadSpace)) / 6; //cootie with short keyup intervals
-	/*20240328 added separate calc for paddle trying to stop unneeded word breaks*/
-	// else if(advparser.KeyType == 0){
-	// 	uint16_t NuWrdBkA = (uint16_t)(4.2*(float)avgDeadSpace);
-	// 	uint16_t NuWrdBkB = (uint16_t)(2.3 * (float)advparser.UnitIntvrlx2r5);
-	// 	wordBrk = (unsigned long)( wrdbrkFtcr *((6.0 * ((float)wordBrk/ wrdbrkFtcr) + ((float)NuWrdBkA)) / 7.0)); //paddle
-	// 	//printf("wordBrkA: %d; wrdbrkFtcr %5.3f; NuWrdBkA: %d; NuWrdBkB: %d\n", (uint16_t)wordBrk, wrdbrkFtcr, NuWrdBkA, NuWrdBkB);
-	// }
-	// //else if(advparser.KeyType == 0) wordBrk = (unsigned long)((5.0 * (float)wordBrk + (2.3 * (float)advparser.UnitIntvrlx2r5)) / 6.0); //paddle 
-	// else{
-	//  wordBrk = (unsigned long)( wrdbrkFtcr *(5 * ((float)wordBrk/ wrdbrkFtcr) + (6*avgDeadSpace)) / 6);//all other key type
-	//  //printf("wordBrkB: %d; wrdbrkFtcr %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr);
-	// }
-	//printf("ReCal WordBrk - avgDeadSpace: %d; wordBrk: %d\n", (int)avgDeadSpace, (int)wordBrk);
-	
 	if (NuWrd)
 		NuWrdflg = true;
 }
@@ -1516,7 +1478,7 @@ void SetLtrBrk(void)
 
 	if (ltrBrk > wordBrk)
 	{
-		//printf("ltrBrk %d > wordBrk\n", (uint16_t)ltrBrk);
+		printf("ltrBrk %d > wordBrk\n", (uint16_t)ltrBrk);
 		wordBrk = int(1.1 * float(ltrBrk));
 		wrdbrkFtcr = 1.0;
 		OLDwrdbrkFtcr = wrdbrkFtcr;
@@ -1546,7 +1508,7 @@ bool chkChrCmplt(void)
 {
 	// uint8_t DBtrace =0;
 	bool done = false;
-	bool ValidWrdBrk = true;
+	bool ValidWrdBrk = false;
 	bool KDwnFnd = false;
 	bool RunAdvPrsr = false;
 	bool DataSetRdy = false;
@@ -1645,28 +1607,35 @@ bool chkChrCmplt(void)
 		}
 	}
 	float noKeySig = (float)(Now - noSigStrt);
+	if ((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0)) ValidWrdBrk = true;
 	/*20240226 added or clause to prevent long run on text strings which often end up scrambled by the post parser*/
 	/*20240322 Also in long runs, look for embedded 'DE' signifing call sign declaration & if found, force a word break */
 	// if (((noKeySig >= 0.75 * ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0))||(LtrPtr > 18 ||((LtrPtr >= 6) && (LtrHoldr[LtrPtr-2] == 'D') && (LtrHoldr[LtrPtr-1] == 'E'))))
 	if(Dbg) printf("stepB\n");
-	if (((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0)) 
+	if ((ValidWrdBrk) 
 		|| (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5)) 
 		|| ((LtrPtr >= 6) && (LtrHoldr[LtrPtr - 2] == 'D') && (LtrHoldr[LtrPtr - 1] == 'E')) 
 		|| ((ValidChrCnt >= 12))
 		|| SndrChng)
 	{
 		if(Dbg) printf("step1\n");
+		//printf("step1\n");
 		BldKeyUpDwnDataSet();
 		if(chkcnt == DeCd_KeyDwnPtr)
 		{
-			// printf("chkcnt%d == DeCd_KeyDwnPt:%d\n", chkcnt, DeCd_KeyDwnPtr);
+			// printf("\nchkcnt%d == DeCd_KeyDwnPt:%d\n", chkcnt, DeCd_KeyDwnPtr);
 			DataSetRdy = true;
-		}	
-		// else printf("chkcnt%d != DeCd_KeyDwnPt:%d\n", chkcnt, DeCd_KeyDwnPtr);
-		chkcnt = 0;
+		} 
+		// else
+		// {
+		// 	printf("chkcnt%d != DeCd_KeyDwnPt:%d\n", chkcnt, DeCd_KeyDwnPtr);
+		// }	
+		//chkcnt = 0;
 		
-		if (ValidWrdBrk)
-		{
+		// if (ValidWrdBrk)
+		// {
+			if(ValidWrdBrk && DbgWrdBrkFtcr) printf("ValidWrdBrk\n");
+			else if(DbgWrdBrkFtcr) printf("Word Break EXCEPTION\n");
 			if (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5))
 			{
 				if(!DataSetRdy)printf("\n!!OVERFLOW - Skipping Adv Parser!!\n");
@@ -1691,11 +1660,13 @@ bool chkChrCmplt(void)
 			//printf("\n###  %s\n", LtrHoldr);
 			if (DeCd_KeyDwnPtr > 2 && DeCd_KeyUpPtr > 2 && KeyUpIntrvls[0] > 0 && KeyDwnIntrvls[0] > 0)
 			{
-				//printf(" 1##  %s; DataSetRdy:%d\n", LtrHoldr, (uint8_t)DataSetRdy);
-				// printf("\nWORD BREAK - DeCd_KeyDwnPtr: %d; DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
+				if (DbgWrdBrkFtcr){
+				printf("\t1##  %s; DataSetRdy:%d\n", LtrHoldr, (uint8_t)DataSetRdy);
+				printf("\tWORD BREAK - DeCd_KeyDwnPtr: %d; DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
+				}
 				if (DataSetRdy && (LtrPtr >= 1 || DeCd_KeyDwnPtr >= 9) && ((wpm > 11) || (LtrPtr > 3)) && (wpm < 36) && (DeCd_KeyDwnPtr == DeCd_KeyUpPtr)) // don't try to reparse if the key up & down pointers arent equal
 				{			
-					//printf("  2##  %s\n", LtrHoldr);																												 // dont do "post parsing" with just one letter or WPMs <= 13
+					if (DbgWrdBrkFtcr) printf("\t\tPerpAdvParser  %s\n", LtrHoldr);																												 // dont do "post parsing" with just one letter or WPMs <= 13
 					/*Auto-word break adjustment test*/
 					if (LtrPtr == 1)
 					{
@@ -1711,7 +1682,7 @@ bool chkChrCmplt(void)
 								wrdbrkFtcr += 0.15; // = 2.0
 								ApplyWrdFctr(wrdbrkFtcr);
 								if (DbgWrdBrkFtcr)
-									printf("wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
+									printf("D wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
 							}
 						}
 					}
@@ -1761,15 +1732,29 @@ bool chkChrCmplt(void)
 					// else printf("\n\n");
 					advparser.KeyUpPtr = DeCd_KeyUpPtr;
 					advparser.KeyDwnPtr = DeCd_KeyDwnPtr;
-					DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // reset pointers here just make sure we dont miss anything in the next data set
+					DeCd_KeyDwnPtr = DeCd_KeyUpPtr = chkcnt = 0; // reset pointers here just make sure we dont miss anything in the next data set
 					advparser.wpm = wpm;
 					// printf("WPM->advparser.wpm:%d\n", wpm);
 					advparser.LtrPtr = LtrPtr;
+					bool incWrdBrk = true;
 					for (int i = 0; i <= LtrPtr; i++)
 					{
 						advparser.LtrHoldr[i] = LtrHoldr[i];
+						/*20250217 added the following increase wordbrk timing when poor decoding is indicated by  by excessive 'E's & 'T's 
+						i.e. symbol count is 2 or less */
+						if (incWrdBrk)
+						{
+							if (i != LtrPtr)
+							{
+								if (!(LtrHoldr[i] == 'T' || LtrHoldr[i] == 'E' || LtrHoldr[i] == 'I' || LtrHoldr[i] == 'N'))
+								{
+									incWrdBrk = false;
+									if (DbgWrdBrkFtcr) printf("\t\tincWrdBrk = false @ LtrHoldr[%d] = %c\n", i, LtrHoldr[i]);
+								}
+							}
+						}
 					}
-					
+
 					/*Make Sure a 'space' has been inserted after this text data set*/
 					#ifdef AutoCorrect
 					printf("Insert Wordbreak Space\n");
@@ -1786,12 +1771,18 @@ bool chkChrCmplt(void)
 					/*now we can start/resart the post parsing process */
 					if (SndrChng)
 					{
-						printf("Sender Changed induced Wrd Break\n");
+						// printf("Sender Changed induced Wrd Break\n");
 						SndrChng = false;
 					}
 					vTaskResume(AdvParserTaskHandle);
-					/*Pause here to ensure the newly inserted word break (space) gets sent to the display*/
-					//vTaskDelay(pdMS_TO_TICKS(100));
+					/*20250217 apply wordbreak increase based on testing done above*/
+					if (incWrdBrk)
+					{
+						wrdbrkFtcr += 0.15; // = 2.0
+						ApplyWrdFctr(wrdbrkFtcr);
+						if (DbgWrdBrkFtcr)
+							printf("\t\tA wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
+					}
 					RunAdvPrsr = true;
 					LckHiSpd = false;
 				}
@@ -1821,21 +1812,25 @@ bool chkChrCmplt(void)
 							wrdbrkFtcr += 0.2;
 							ApplyWrdFctr(wrdbrkFtcr);
 							if (DbgWrdBrkFtcr)
-								printf("wordBrk+: %d; wrdbrkFtcr: %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr);
+								printf("B wordBrk+: %d; wrdbrkFtcr: %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr);
 						}
 					}
 					else
 						oneLtrCntr = 0;
 				}
-				else
+				else // wpm < 36
 				{
 					#ifdef DeBgQueue
 					printf("advparser SKIPPED - LtrPtr:%d<1, Current WPM:%d too low or High or DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d\n", LtrPtr, wpm, DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
 					#endif
-					while (DeCd_KeyDwnPtr != DeCd_KeyUpPtr)
+					if (DeCd_KeyDwnPtr > DeCd_KeyUpPtr)
 					{
-						KeyUpIntrvls[DeCd_KeyUpPtr] = 0;
-						if(DeCd_KeyUpPtr < (IntrvlBufSize-1)) DeCd_KeyUpPtr++;
+						while (DeCd_KeyDwnPtr != DeCd_KeyUpPtr)
+						{
+							KeyUpIntrvls[DeCd_KeyUpPtr] = 0;
+							if (DeCd_KeyUpPtr < (IntrvlBufSize - 1))
+								DeCd_KeyUpPtr++;
+						}
 					}
 #ifdef DeBgQueue
 					for (int i = 0; i < DeCd_KeyDwnPtr; i++)
@@ -1871,7 +1866,7 @@ bool chkChrCmplt(void)
 				// 	// printf("ToneSN_que2 flush 4\n");
 				// }
 			}
-			if(DeCd_KeyDwnPtr != 0)
+			if(DeCd_KeyDwnPtr != 0 && LtrPtr==0)
 			{
 				if (DeBug)
 				{
@@ -1883,18 +1878,42 @@ bool chkChrCmplt(void)
 						i++;
 					}
 				}
-				DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // resetbuffer pntrs
+				DeCd_KeyDwnPtr = DeCd_KeyUpPtr = chkcnt = 0; // resetbuffer pntrs
 				float dummy;
 				while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
 				{
 					if (DeBug) printf("ToneSN_que2 flush %5.2f\n", dummy);
 				}
 			}
-			for (int i = 0; i < LtrPtr; i++)
-				LtrHoldr[i] = 0;
-			LtrPtr = 0;
-			ValidChrCnt = 0;
-			WrdChrCnt = 0;
+			if(LtrPtr==1 )
+			{
+				SnglLtrWrdCnt++;
+				if (DeBug) printf("->%s\n",LtrHoldr);
+			}
+			else
+			{
+				SnglLtrWrdCnt = 0;
+				/*If we're here, it should also be safe to reset the following parameters*/
+				for (int i = 0; i < LtrPtr; i++)
+					LtrHoldr[i] = 0;
+				LtrPtr = 0;
+				ValidChrCnt = 0;
+				WrdChrCnt = 0;
+			}
+			if(SnglLtrWrdCnt >=5)
+			{
+				SnglLtrWrdCnt = 0;
+				wordBrk *=2;
+				if (DeBug) printf("Doubled wordBrk: %d\n",(uint16_t)wordBrk); 
+
+			}
+			/*20250217 commented the following out & moved*/
+			// for (int i = 0; i < LtrPtr; i++)
+			// 		LtrHoldr[i] = 0;
+			// 	LtrPtr = 0;
+			// 	ValidChrCnt = 0;
+			// 	WrdChrCnt = 0;
+			
 
 			Pstate = 2; // have word - used below to insert a 'space' into the decoded text stream
 			// DBtrace = DBtrace | 0b10;
@@ -1915,8 +1934,8 @@ bool chkChrCmplt(void)
 				#endif
 				if(DeCd_KeyDwnPtr < (IntrvlBufSize-1)) DeCd_KeyDwnPtr++;
 			}
-		} // End if ValidWrdBrk = true
-		else if(Dbg) printf("step2\n");
+		// } // End if ValidWrdBrk = true
+		// else if(Dbg) printf("step2\n");
 	}
 	else if(Dbg)
 	{
@@ -1944,15 +1963,16 @@ bool chkChrCmplt(void)
 
 			if (DeCodeVal >= 2)
 			{
-				if(DeCodeVal==2 || DeCodeVal==3) ShrtLtrBrkCnt++;// copied either a 'T' or 'E'
+				if( LtrPtr == 1 && (LtrHoldr[LtrPtr-1]=='T' || LtrHoldr[LtrPtr-1]=='E')) ShrtLtrBrkCnt++;// copied either a 'T' or 'E'
 				else ShrtLtrBrkCnt = 0;
 				if(ShrtLtrBrkCnt>5 && TmpSlwFlg) //had more than 5 E's & T's in a row. Check/verify letterbrk timing && tone (keying intervals)  are slower than 35WPM
-				{
-					
-					uint16_t NuLtrBrkVal = advparser.Get_LtrBrkVal();
-					printf("Too Many Ts & Es- Resetting ltrBrk Val; Old value %d; new value %d", (uint16_t)ltrBrk, NuLtrBrkVal);
+				{	
+					ShrtLtrBrkCnt = 0;
+					uint16_t NuLtrBrkVal = (uint16_t)(advparser.Get_wrdbrkFtcr() * (float)advparser.Get_LtrBrkVal());
+					printf("Too Many Ts & Es- Resetting Parameters:\n\tltrBrk: Old %d; new %d", (uint16_t)ltrBrk, NuLtrBrkVal);
 					if(NuLtrBrkVal !=0)
 					{
+						uint16_t NuWrdBrk = advparser.GetWrdBrkIntrval();
 						uint16_t DahVal = advparser.Get_DahVal();
 						uint16_t OldDahVal = (uint16_t)avgDah;
 						uint16_t OldSpace = (uint16_t)space;
@@ -1961,21 +1981,17 @@ bool chkChrCmplt(void)
 						avgDit =  (unsigned long)advparser.Get_DitVal();
 						ltrBrk = (unsigned long)advparser.Get_LtrBrkVal();
 						avgDah = (unsigned long)(3 * avgDit);
-						printf("; OldspaceVal %d; new space %d; OldDahVal %d; new DahVal %d; ltrBrk:%d; Wpm %d \n", OldSpace, (uint16_t)space, OldDahVal, DahVal, (uint16_t)ltrBrk, wpm);
-						
+						printf("\n\tspace: OldVal %d; new %d\n\tDah: Old %d; new %d\n\twordBrk: Old  %d; new %d\n\tWPM: %d \n", OldSpace, (uint16_t)space, OldDahVal, DahVal, (uint16_t)wordBrk, NuWrdBrk, wpm);
+						if(NuWrdBrk !=0 )
+						{
+							wordBrk = (unsigned long)NuWrdBrk;
+							wrdbrkFtcr = 1.0;
+						}
 					}else
 					{
 						printf("Advance Parser- No data Available.\n");
 					}
-					/*reset Keyup/down timing & S/N data sets */
-					// DeCd_KeyUpPtr = DeCd_KeyDwnPtr = 0;
-					// float dummy;
-					// int IndxPtr = 0;
-					// while(xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
-					// {
-					// 	if (DeBug) printf("ToneSN_que2 flush %5.2f\n", dummy);
-					// 	IndxPtr++;
-					// }
+					
 				}
 				int i = 0;
 				while (CodeValBuf[i] > 0)
@@ -3216,5 +3232,7 @@ void SyncAdvPrsrWPM(void)
 void ApplyWrdFctr(float _wrdbrkFtcr)
 {
 	float tmpwordBrk = (float)wordBrk/OLDwrdbrkFtcr;
+	// printf("tmpwordBrk = %7.1f, OLDwrdbrkFtcr: %5.2f\n", tmpwordBrk, OLDwrdbrkFtcr);
 	wordBrk = (unsigned long)( _wrdbrkFtcr * tmpwordBrk);
+	OLDwrdbrkFtcr = _wrdbrkFtcr;
 };

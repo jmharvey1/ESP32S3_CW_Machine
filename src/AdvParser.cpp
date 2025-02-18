@@ -3280,7 +3280,7 @@ bool AdvParser::Bug1Rules(int &n)
             }
             else
             {
-                if (TmpDwnIntrvls[n] >= this->KeyDwnBuckts[this->KeyDwnBucktPtr].Intrvl)
+                if (TmpDwnIntrvls[n] >= this->KeyDwnBuckts[this->KeyDwnBucktPtr].Intrvl && (this->KeyDwnBucktPtr > 1))
                 { /*this looks like a streched Dah, So treat it as a letter break*/
                     ExitPath[n] = 34;
                     BrkFlg = '+';

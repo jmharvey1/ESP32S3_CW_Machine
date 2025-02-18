@@ -942,6 +942,7 @@ public:
     inline uint16_t Get_DahVal(void) { return this->AvgDahVal; }
 	inline uint16_t Get_space(void)  { return this->AvgSmblDedSpc; }
     inline uint16_t Get_DitVal(void)  { return this->DitIntrvlVal; }
+    inline float Get_wrdbrkFtcr(void)  { return this->wrdbrkFtcr; }
 };
 
 #endif /* INC_ADVPARSER_H_ */
