@@ -55,6 +55,7 @@
  * 20250115 lowered 'starting point' seach fof letter break
  * 20250119 added code to ensure last dataset entry was treated as a letterbreak, & other code to ensure alldit & alldah flags are cleared when appropriate
  * 20250210 added S/N checks to use only 'valid' time interval
+ * 20250217 Tweak to BldKyUpBktTbl()/Letter Break code
  * */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -313,7 +314,10 @@ void AdvParser::BldKyUpBktTbl(void)
         {
             TmpSlope = CurLtrBrkSlope;
             if ((this->SortdUpIntrvls[i + 1] - this->SortdUpIntrvls[i]) <= 9)
+            {
                 CurLtrBrkSlope = 1.0; // ignore entries that differ less than the sample period (8ms)
+                if(bstltrbrkptr == i) bstltrbrkptr = i+1; //20250217 Added this line, to ensure pointer follows small changes
+            }    
             else if ((this->SortdUpIntrvls[i + 1]) <= MinltrBrkVal)
             {
                 CurLtrBrkSlope = 1.0; // ignore entries that are less than the 70% of a dah
