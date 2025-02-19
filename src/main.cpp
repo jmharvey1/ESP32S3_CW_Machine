@@ -702,7 +702,8 @@ void DisplayUpDt(void *param)
      * which has the effect of clearing the task's notification
      * value back to 0, making the notification value act like
      * a binary (rather than a counting) semaphore.  */
-    thread_notification = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    if (QuequeFulFlg) printf("DisplayUpDt() TASK ERROR\n");
+    thread_notification = ulTaskNotifyTake(pdTRUE,  pdMS_TO_TICKS(100)); //portMAX_DELAY
     if (thread_notification)
     {
       
@@ -1732,7 +1733,7 @@ void DsplTmr_callback(TimerHandle_t xtimer)
       {
         printf("DisplayUpDt timer Runing But Queque Reports FULL\n");
         // printf(LogBuf);
-        printf("Attempting to restart DisplayUpDt task\n");
+        
         //bool lpagn = true;
         uint8_t state;
         // while (lpagn) //(TickType_t)10
@@ -1744,15 +1745,12 @@ void DsplTmr_callback(TimerHandle_t xtimer)
             printf("state %d\n", state);
           }
           QuequeFulFlg = false;
-        //   else
-        //   {
-        //    lpagn = false;
-        //   }
-        // }
+          vTaskSuspend(DsplUpDtTaskHandle);
         // vTaskDelete(DsplUpDtTaskHandle);
         // xTaskCreatePinnedToCore(DisplayUpDt, "DisplayUpDate Task", 8192, NULL, 3, &DsplUpDtTaskHandle, 0);
         // printf("DisplayUpDt task Deleted & ReCreate. Now will Restart it\n");
         vTaskDelay((TickType_t)100);
+        printf("Attempting to restart DisplayUpDt task\n");
         xTaskResumeFromISR(DsplUpDtTaskHandle);// DisplayUpDt
       }
 }

@@ -32,11 +32,10 @@
  * 20250210 Automatic 'new line' when Sender change is detected
  * 20250213 New code to manage display when 'sender' change has been detected
  * 20250213 Added sanity check flag 'DeCoderActiviated' to the above code
- * 20250213 Added SyncAdvPrsrWPM() to improve real time decoder's ability to sync up with new sender 
+ * 20250213 Added SyncAdvPrsrWPM() to improve real time decoder's ability to sync up with new sender
  * 20250217 Added wordbreak incrementing based on disproportionate words containing characters of only 2 symbol count or less
- * 
+ *
  *  */
- 
 
 // #include <SetUpCwDecoder.h>
 // #include "main.h" // removed this reference for ESP32 version
@@ -44,19 +43,19 @@
 #include "Goertzel.h"
 #include "globals.h"
 
-//#define DeBgQueue // moved to globals.h
+// #define DeBgQueue // moved to globals.h
 #define MaxIntrvlCnt 24
-#define LOW false //JMH ADD for Waveshare Version
-#define HIGH true //JMH ADD for Waveshare Version
-//#define DBugLtrBrkTiming // uncomment to see how letter break timing is developed & syncronized w/ advParser
-bool DbgWrdBrkFtcr = false;//true; //false;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
+#define LOW false // JMH ADD for Waveshare Version
+#define HIGH true // JMH ADD for Waveshare Version
+// #define DBugLtrBrkTiming // uncomment to see how letter break timing is developed & syncronized w/ advParser
+bool DbgWrdBrkFtcr = false; // true; //false;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
 int ShrtBrk[10];
 int charCnt = 0;
 int shwltrBrk = 0;
 int msgcntr = 0;
 int badCodeCnt = 0;
 int dahcnt = 0;
-int SnglLtrWrdCnt =0; //20250217 added to track & reset wordbrk interval
+int SnglLtrWrdCnt = 0; // 20250217 added to track & reset wordbrk interval
 int MsgChrCnt[2];
 int ltrCmplt = -2200; // letter complete false;  used in plot mode, to show where/when letter breaks are detected
 volatile int TimeDat[MaxIntrvlCnt];
@@ -72,8 +71,8 @@ int LineLen = 27; // max number of characters to be displayed on one line
 int statsMode = 0;
 int textSrtX = 0;
 int textSrtY = 0;
-//int cnt = 0; // used in scrollpage routine
-//int curRow = 0;
+// int cnt = 0; // used in scrollpage routine
+// int curRow = 0;
 int offset = 0;
 int LtrCntr = 0;
 int OldLtrPntr = 0;
@@ -112,12 +111,12 @@ volatile int TimeDatBuf[24];
 
 char newLine = '\n';
 char DeBugMsg[150];
-char DcddChrBuf[10]; //holds the last 10 decoded & DIsplayed characters; Pimarily used to look/test for common slopy sending strings
+char DcddChrBuf[10]; // holds the last 10 decoded & DIsplayed characters; Pimarily used to look/test for common slopy sending strings
 char Msgbuf[50];
 char LstPstdchar[2]; // used for diagnostic testing only
 char P[13];
 char PrntBuf[150];
-//char curChar = 0;// 20240227 moved this to be a global variable so that it can also be tested in the advparser task 
+// char curChar = 0;// 20240227 moved this to be a global variable so that it can also be tested in the advparser task
 /*the following vairables were created for the AutoMode detector*/
 uint16_t KeyUpIntrvls[IntrvlBufSize];
 uint16_t KeyDwnIntrvls[IntrvlBufSize];
@@ -129,13 +128,13 @@ char LtrHoldr[30];
 int LtrPtr = 0;
 int ValidChrCnt = 0;
 int WrdChrCnt = 0;
-//AdvParser advparser; // create/instantuate the AdvParser Object/Class
+// AdvParser advparser; // create/instantuate the AdvParser Object/Class
 
 // char DahMthd[150];//used for diagnostic testing only
 // char TmpMthd[150];//used for diagnostic testing only
 volatile bool valid = LOW;
 volatile bool mark = LOW;
-/*used in dispMsg() to control the AdvParser 
+/*used in dispMsg() to control the AdvParser
 text matches whats been printed to the display*/
 bool CptrTxt = true;
 bool dataRdy = LOW;
@@ -144,9 +143,9 @@ bool Bug3 = false;
 bool badLtrBrk = false;
 bool dletechar = false;
 bool ConcatSymbl = false;
-bool Test = false; //true; // if "true", use Arduino ide Serial Monitor to see output/results
-bool NrmFlg = false; //true; //set to true when debugging basic DeCodeVal processing
-bool SCD = false; //true; //false; //Sloppy Code Debugging ('Bg1'); if "true", use ide Serial Monitor to see output/results
+bool Test = false;	 // true; // if "true", use Arduino ide Serial Monitor to see output/results
+bool NrmFlg = false; // true; //set to true when debugging basic DeCodeVal processing
+bool SCD = false;	 // true; //false; //Sloppy Code Debugging ('Bg1'); if "true", use ide Serial Monitor to see output/results
 bool FrstSymbl = false;
 bool chkStatsMode = true;
 bool NrmMode = true;
@@ -166,7 +165,7 @@ bool Prtflg = false; // added for diagnostic keyISR testing
 bool Dbg = false;
 bool SndrChng = false;
 bool DeCoderActiviated = false; // Sanity Check flag to validate 'new sender' line feed & marker is needed
-	
+
 int exitCD = 0;		 // added for diagnostic keyISR testing
 int DitDahCD = 0;	 // added for diagnostic keyISR testing
 int glitchCnt = 0;	 // added to recover from slow CW shifting to high speed cw ({~>25WPM})
@@ -202,8 +201,8 @@ volatile unsigned long OldltrBrk = 0;
 volatile unsigned long BadDedSpce = 0;
 unsigned long LastdeadSpace = 0;
 unsigned long BadSpceStk[5];
-unsigned long SpaceStk[MaxIntrvlCnt];	  // use this to refine parsing of failed decodeval
-unsigned long SpcIntrvl[MaxIntrvlCnt];  // use this to refine parsing of failed decodeval
+unsigned long SpaceStk[MaxIntrvlCnt];	// use this to refine parsing of failed decodeval
+unsigned long SpcIntrvl[MaxIntrvlCnt];	// use this to refine parsing of failed decodeval
 unsigned long SpcIntrvl1[MaxIntrvlCnt]; // use this to refine parsing of failed decodeval
 unsigned long SpcIntrvl2[MaxIntrvlCnt]; // use this to refine parsing of failed decodeval
 unsigned long PrdStack[10];
@@ -220,7 +219,7 @@ volatile unsigned long DitVar = 0;	 // average 'Dit' duration
 volatile unsigned long avgDah = 240; // average 'Dah' duration
 volatile unsigned long lastDah = avgDah;
 float lastDit = (float)avgDit;
-float AvgSmblDedSpc =  (float)avgDit;
+float AvgSmblDedSpc = (float)avgDit;
 
 volatile unsigned long avgDeadSpace = avgDit;
 volatile unsigned long wordStrt;
@@ -234,15 +233,15 @@ float curRatio = 3;
 float SNR = 5.0;
 float ShrtFctr = 0.48; // 0.52;// 0.45; //used in Bug3 mode to control what percentage of the current "UsrLtrBrk" interval to use to detect the continuation of the previous character
 uint8_t GudSig = 0;
-uint8_t oneLtrCntr = 0; //added to support auto-word break lenght
-float wrdbrkFtcr = 1.0; //added to support auto-word break lenght
+uint8_t oneLtrCntr = 0; // added to support auto-word break lenght
+float wrdbrkFtcr = 1.0; // added to support auto-word break lenght
 float OLDwrdbrkFtcr = wrdbrkFtcr;
 LVGLMsgBox *ptrmsgbx;
 SemaphoreHandle_t DeCodeVal_mutex;
 bool blocked = false;
 bool AbrtFlg = false;
 bool KEISRwaiting = false;
-bool LckHiSpd = false; //20241209 added to support ensuring decoder is configure for paddle/keyboard for speeds in excees of 36WPM
+bool LckHiSpd = false; // 20241209 added to support ensuring decoder is configure for paddle/keyboard for speeds in excees of 36WPM
 unsigned long OldEvntTime = 0;
 uint8_t chkcnt = 0;
 uint8_t ShrtLtrBrkCnt = 0;
@@ -255,15 +254,15 @@ void StartDecoder(LVGLMsgBox *pttftmsgbx)
 	DeCodeVal_mutex = xSemaphoreCreateMutex();
 	ptrmsgbx = pttftmsgbx;
 	chkcnt = 0;
- 	/*initialize Decoded Character Buffer with ASCii space*/
-	for (int i = 0; i < sizeof(DcddChrBuf)-1; i++)
+	/*initialize Decoded Character Buffer with ASCii space*/
+	for (int i = 0; i < sizeof(DcddChrBuf) - 1; i++)
 	{
-		DcddChrBuf[i] =   (uint8_t) 32;// add "space" symbol;
+		DcddChrBuf[i] = (uint8_t)32; // add "space" symbol;
 	}
 	/*Make absolutely certain the Decoded Character Buffer is properly treminated*/
-	DcddChrBuf[sizeof(DcddChrBuf)-1] = 0;
+	DcddChrBuf[sizeof(DcddChrBuf) - 1] = 0;
 	WPMdefault();
-	
+
 	STart = 0;
 	WrdStrt = pdTICKS_TO_MS(xTaskGetTickCount()); //(GetTimr5Cnt()/10);
 	wordBrk = avgDah;
@@ -274,149 +273,147 @@ void StartDecoder(LVGLMsgBox *pttftmsgbx)
 	{
 		PrdStack[i] = 1200 / 15;
 	}
-	AvgSmblDedSpc =  avgDeadSpace;
-	
+	AvgSmblDedSpc = avgDeadSpace;
+
 } /* END SetUp Code */
 /////////////////////////////////////////
 void KeyEvntTask(void *param)
 {
 	// while (1)
 	// {
-	 	printf("??? KeyEvntTask() RUNNING - WHY ???\n");
+	printf("??? KeyEvntTask() RUNNING - WHY ???\n");
 	// 	void BldKeyUpDwnDataSet();
 	// 	vTaskSuspend(KeyEvntTaskTaskHandle);
 	// }
 	vTaskDelete(KeyEvntTaskTaskHandle);
 }
 //////////////////////////////////////////////////////////////////////////////////////////
+/*Normally converts queue data into into array data just prior, in preparation, to launching the Adv parser task/process
+Alternately it can purge/reset these queues*/
 void BldKeyUpDwnDataSet(void)
 {
 	unsigned long EvntTime;
 	bool lpagn = true;
-		
-		uint8_t Kstate;
-		uint16_t interval = 0;
-		unsigned long OldOldTime;
-		#ifdef DeBgQueue
-		printf("\nBldKeyUpDwnDataSet()\n");
-		#endif
-		while (lpagn) //(TickType_t)10
+
+	uint8_t Kstate;
+	uint16_t interval = 0;
+	unsigned long OldOldTime;
+#ifdef DeBgQueue
+	printf("\nBldKeyUpDwnDataSet()\n");
+#endif
+	while (lpagn)
+	{
+		if (xQueueReceive(KeyEvnt_que, (void *)&EvntTime, pdMS_TO_TICKS(1)) == pdTRUE)
 		{
-			if (xQueueReceive(KeyEvnt_que, (void *)&EvntTime, pdMS_TO_TICKS(1)) == pdTRUE)
+			if (xQueueReceive(KeyState_que, (void *)&Kstate, pdMS_TO_TICKS(10)) == pdTRUE)
 			{
-				if (xQueueReceive(KeyState_que, (void *)&Kstate, pdMS_TO_TICKS(10)) == pdTRUE)
+				interval = (uint16_t)(EvntTime - OldEvntTime);
+				OldOldTime = OldEvntTime;
+				OldEvntTime = EvntTime;
+				// if (interval < 750)
+				uint16_t ResetInterval = 750;
+				/*20250117 - added this conditional test to establish whats a good 'reset' interval*/
+				if (wordBrk > ResetInterval)
+					ResetInterval = (uint16_t)wordBrk;
+				if (interval < ResetInterval)
 				{
-					interval = (uint16_t)(EvntTime - OldEvntTime );
-					OldOldTime = OldEvntTime;
-					OldEvntTime = EvntTime;
-					//if (interval < 750)
-					uint16_t ResetInterval = 750;
-					/*20250117 - added this conditional test to establish whats a good 'reset' interval*/
-					if(wordBrk > ResetInterval) ResetInterval = (uint16_t)wordBrk;
-					if (interval < ResetInterval)
+					if (Kstate) // Key Down
 					{
-						if (Kstate)// Key Down
-						{
-							KeyDwnIntrvls[DeCd_KeyDwnPtr] = interval;
-							#ifdef DeBgQueue
-							printf("%2d. -%3d\t", DeCd_KeyDwnPtr, interval);
-							#endif
-							DeCd_KeyUpPtr = DeCd_KeyDwnPtr; //make sure we keep the two index pointers in sync
-							if(DeCd_KeyDwnPtr < (IntrvlBufSize-1)) DeCd_KeyDwnPtr++;
-						}
-						else if(DeCd_KeyDwnPtr >0)
-						{
-							KeyUpIntrvls[DeCd_KeyUpPtr] = interval;
-							#ifdef DeBgQueue
-							printf("%2d.\t+%d\n", DeCd_KeyUpPtr, interval);
-							//printf("+%d\ttimestampDwn:%d\ttimestampUp:%d\n", interval, (uint16_t)OldOldTime, (uint16_t)OldEvntTime);
-							#endif
-							if(DeCd_KeyUpPtr < (IntrvlBufSize-1)) DeCd_KeyUpPtr++;
-						}
-						else if(DeCd_KeyDwnPtr == 0)
-						{ //This is the actual 'sender' wordbreak interval
-						    //TODO use this interval to guide/set future word break intervals 
-							#ifdef DeBgQueue
-							printf(" NdX-reset:%d\n", interval);
-							#endif
-						}
-						if(DeCd_KeyUpPtr> DeCd_KeyDwnPtr+1 || DeCd_KeyUpPtr < DeCd_KeyDwnPtr-1 )
-						{
-							/*last time I checked, this was no longer happening*/
-							DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
-							float dummy;
-							while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
-							{
-								// printf("ToneSN_que2 flush 1\n");
-							}
-							#ifdef DeBgQueue
-							printf("<---->\n");
-							#endif
-						}
-						
+						KeyDwnIntrvls[DeCd_KeyDwnPtr] = interval;
+#ifdef DeBgQueue
+						printf("%2d. -%3d\t", DeCd_KeyDwnPtr, interval);
+#endif
+						DeCd_KeyUpPtr = DeCd_KeyDwnPtr; // make sure we keep the two index pointers in sync
+						if (DeCd_KeyDwnPtr < (IntrvlBufSize - 1))
+							DeCd_KeyDwnPtr++;
 					}
-					else
+					else if (DeCd_KeyDwnPtr > 0)
 					{
-						if (Kstate)// Key Down
+						KeyUpIntrvls[DeCd_KeyUpPtr] = interval;
+#ifdef DeBgQueue
+						printf("%2d.\t+%d\n", DeCd_KeyUpPtr, interval);
+// printf("+%d\ttimestampDwn:%d\ttimestampUp:%d\n", interval, (uint16_t)OldOldTime, (uint16_t)OldEvntTime);
+#endif
+						if (DeCd_KeyUpPtr < (IntrvlBufSize - 1))
+							DeCd_KeyUpPtr++;
+					}
+					else if (DeCd_KeyDwnPtr == 0)
+					{ // This is the actual 'sender' wordbreak interval
+// TODO use this interval to guide/set future word break intervals
+#ifdef DeBgQueue
+						printf(" NdX-reset:%d\n", interval);
+#endif
+					}
+					if (DeCd_KeyUpPtr > DeCd_KeyDwnPtr + 1 || DeCd_KeyUpPtr < DeCd_KeyDwnPtr - 1)
+					{
+						/*last time I checked, this was no longer happening*/
+						DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
+						float dummy;
+						while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
 						{
-							#ifdef DeBgQueue
-							//printf("Key DOWN NdX-reset; interval:%d > 750\n", interval);
-							printf("Key DOWN NdX-reset; interval:%d > ResetInterval:%d\n", interval, (uint16_t)ResetInterval);
-							#endif
-							DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
-							float dummy;
-							while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
-							{
-								// printf("ToneSN_que2 flush 5\n");
-							}
+							// printf("ToneSN_que2 flush 1\n");
 						}
-						else
-						{
-							#ifdef DeBgQueue
-							printf("Key UP NdX-reset; interval:%d > ResetInterval:%d\n", interval, (uint16_t)ResetInterval);
-							#endif
-							
-							if(DeCd_KeyDwnPtr>=4)
-							{
-								LclKeyState = 1;
-								#ifdef DeBgQueue
-								Dbg = true;
-								#else
-								Dbg = false;
-								#endif
-								letterBrk = pdTICKS_TO_MS(xTaskGetTickCount()) - 10;
-								//KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)wordBrk;
-								//DeCd_KeyUpPtr++;
-								DeCodeVal = 0;
-								bool gud = chkChrCmplt();
-								//Dbg = false;
-								if(gud)
-								{
-									#ifdef DeBgQueue
-									printf("done = true; NdX-reset\n");
-									#endif
-									DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
-									float dummy;
-									while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
-									{
-										// printf("ToneSN_que2 flush 6\n");
-									}
-								}
-								else
-								{
-									#ifdef DeBgQueue
-									printf("done = false; Replaced KeyUp interval%d with Cur ResetInterval:%d\n", KeyUpIntrvls[DeCd_KeyUpPtr-1], (uint16_t)ResetInterval);
-									#endif
-									KeyUpIntrvls[DeCd_KeyUpPtr-1] = (uint16_t)ResetInterval;
-								}
-							}
-						}
-						
+#ifdef DeBgQueue
+						printf("<---->\n");
+#endif
 					}
 				}
 				else
 				{
-					lpagn = false;
+					if (Kstate) // Key Down
+					{
+#ifdef DeBgQueue
+						// printf("Key DOWN NdX-reset; interval:%d > 750\n", interval);
+						printf("Key DOWN NdX-reset; interval:%d > ResetInterval:%d\n", interval, (uint16_t)ResetInterval);
+#endif
+						DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
+						float dummy;
+						while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+						{
+							// printf("ToneSN_que2 flush 5\n");
+						}
+					}
+					else
+					{
+#ifdef DeBgQueue
+						printf("Key UP NdX-reset; interval:%d > ResetInterval:%d\n", interval, (uint16_t)ResetInterval);
+#endif
+
+						if (DeCd_KeyDwnPtr >= 4)
+						{
+							LclKeyState = 1;
+#ifdef DeBgQueue
+							Dbg = true;
+#else
+							Dbg = false;
+#endif
+							letterBrk = pdTICKS_TO_MS(xTaskGetTickCount()) - 10;
+							// KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)wordBrk;
+							// DeCd_KeyUpPtr++;
+							DeCodeVal = 0;
+							bool gud = chkChrCmplt();
+							// Dbg = false;
+							if (gud)
+							{
+#ifdef DeBgQueue
+								printf("done = true; NdX-reset\n");
+#endif
+								DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
+								float dummy;
+								while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+								{
+									// printf("ToneSN_que2 flush 6\n");
+								}
+							}
+							else
+							{
+#ifdef DeBgQueue
+								printf("done = false; Replaced KeyUp interval%d with Cur ResetInterval:%d\n", KeyUpIntrvls[DeCd_KeyUpPtr - 1], (uint16_t)ResetInterval);
+#endif
+								KeyUpIntrvls[DeCd_KeyUpPtr - 1] = (uint16_t)ResetInterval;
+							}
+						}
+					}
 				}
 			}
 			else
@@ -424,6 +421,11 @@ void BldKeyUpDwnDataSet(void)
 				lpagn = false;
 			}
 		}
+		else
+		{
+			lpagn = false;
+		}
+	}
 }
 //////////////////////////////////////////////////////////////////////////////////////////
 /* In ESP32 No Longer a Stand alone Interurpt; but now called from within Goertzel.cpp*/
@@ -450,11 +452,12 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 		blocked = true;
 
 		if (Kstate == LOW && XspctLo)
-		{// key-down event
-			start1 = EvntTime; //used/saved in case recovery is needed
+		{					   // key-down event
+			start1 = EvntTime; // used/saved in case recovery is needed
 			if (((EvntTime - noSigStrt) < 15) && (wpm < 35) && !Bug2)
 			{
-				if(Test && NrmFlg){
+				if (Test && NrmFlg)
+				{
 					printf("ABORT Kdwn\n");
 				}
 				xSemaphoreGive(DeCodeVal_mutex);
@@ -473,19 +476,19 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 			deadSpace = (STart - noSigStrt) + 4; //+4;//jmh 20230706 added this corection value for ESP32
 			SpaceStk[Bitpos] = deadSpace;
 			/* usable event; store KeyUp time to AutoMode detector Up time buffer*/
-			if(DeCd_KeyUpPtr < IntrvlBufSize && DeCd_KeyDwnPtr >= 1)
-			{ //we have both a usable time & place to store it; and at least 1 keydwn interval has been captured
-				//KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)deadSpace; //20250110 commented out
-				//DeCd_KeyUpPtr++; //20250110 commented out
+			if (DeCd_KeyUpPtr < IntrvlBufSize && DeCd_KeyDwnPtr >= 1)
+			{ // we have both a usable time & place to store it; and at least 1 keydwn interval has been captured
+				// KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)deadSpace; //20250110 commented out
+				// DeCd_KeyUpPtr++; //20250110 commented out
 				/*20240129 Added this check to catch out of sync keyup vs keydown interval history (arrays)*/
-				//if(DeCd_KeyDwnPtr > DeCd_KeyUpPtr && DeCd_KeyDwnPtr == 2)
-				if(DeCd_KeyDwnPtr != DeCd_KeyUpPtr)
+				// if(DeCd_KeyDwnPtr > DeCd_KeyUpPtr && DeCd_KeyDwnPtr == 2)
+				if (DeCd_KeyDwnPtr != DeCd_KeyUpPtr)
 				{
-					//KeyDwnIntrvls[0] = KeyDwnIntrvls[1];
-					//DeCd_KeyDwnPtr--;
-					//printf("!!ERROR!!; DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d; Bitpos:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr, Bitpos);
-					//KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)deadSpace; //20250110 commented out
-					//DeCd_KeyUpPtr++; //20250110 commented out
+					// KeyDwnIntrvls[0] = KeyDwnIntrvls[1];
+					// DeCd_KeyDwnPtr--;
+					// printf("!!ERROR!!; DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d; Bitpos:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr, Bitpos);
+					// KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)deadSpace; //20250110 commented out
+					// DeCd_KeyUpPtr++; //20250110 commented out
 				}
 			}
 			if (Bitpos <= 14)
@@ -530,12 +533,12 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 						}
 						SpaceStk[Bitpos] = LstSpcTm;
 						//++Bitpos;
-						if (Bitpos > MaxIntrvlCnt -1)
-							Bitpos = MaxIntrvlCnt -1;
+						if (Bitpos > MaxIntrvlCnt - 1)
+							Bitpos = MaxIntrvlCnt - 1;
 					}
 					if (DeCodeVal == 0)
 					{ // Last letter received was posted to the screen
-						
+
 						if (MsgChrCnt[1] > 0)
 						{
 							DeCodeVal = DCVStrd[1];
@@ -548,12 +551,13 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 								++Bitpos;
 							}
 							SpaceStk[Bitpos] = LstSpcTm;
-							if (Bitpos > MaxIntrvlCnt -1)
-								Bitpos = MaxIntrvlCnt -1;
+							if (Bitpos > MaxIntrvlCnt - 1)
+								Bitpos = MaxIntrvlCnt - 1;
 							dletechar = true;
 							DeleteID = 1;
-							if(DeCodeVal <=3 ) FrstSymbl = true;//20240103 added to stop reset
-							ConcatSymbl = true; // used to verify (at the next letter break) we did the right thing;
+							if (DeCodeVal <= 3)
+								FrstSymbl = true; // 20240103 added to stop reset
+							ConcatSymbl = true;	  // used to verify (at the next letter break) we did the right thing;
 							if (Bug3 && SCD && Test)
 							{
 								for (int i = 0; i < sizeof(tmpbuf); i++)
@@ -570,8 +574,8 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 					}
 					else
 					{ // abort letter break process
-						if (Bitpos > MaxIntrvlCnt -1)
-							Bitpos = MaxIntrvlCnt -1;
+						if (Bitpos > MaxIntrvlCnt - 1)
+							Bitpos = MaxIntrvlCnt - 1;
 						if (Bug3 && SCD && Test)
 						{
 							for (int i = 0; i < sizeof(tmpbuf); i++)
@@ -580,7 +584,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 								if (tmpbuf[i] == 0)
 									break;
 							}
-							sprintf(PrntBuf, "%sClawed Last Letter Back\t%d\n\r",tmpbuf, (int)DeCodeVal);
+							sprintf(PrntBuf, "%sClawed Last Letter Back\t%d\n\r", tmpbuf, (int)DeCodeVal);
 							// sprintf(PrntBuf, "CLB\n\r");
 							// delay(2);
 							PrntUSB = true; // printf(PrntBuf);
@@ -619,12 +623,11 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 
 			if (wordBrkFlg)
 			{
-				
+
 				wordBrkFlg = false;
 				thisWordBrk = STart - wordStrt;
 				MaxDeadTime = 0;
 				charCnt = 0;
-				
 			}
 			noSigStrt = EvntTime; // jmh20190717added to prevent an absurd value
 
@@ -632,7 +635,8 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 			{ // we're starting a new symbol set
 				DeCodeVal = 1;
 				valid = LOW;
-				if(Test && NrmFlg){
+				if (Test && NrmFlg)
+				{
 					sprintf(PrntBuf, "START1- DeCodeVall:%d\n", DeCodeVal);
 					printf(PrntBuf);
 				}
@@ -650,22 +654,24 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 			int prob = 0;
 			OldKeyUPStart = KeyUPStart;
 			KeyUPStart = EvntTime;
-			if(ltrCmplt == -3500) SetLtrBrk(); //20231231 added to ensure that letter break timing is engaged
+			if (ltrCmplt == -3500)
+				SetLtrBrk(); // 20231231 added to ensure that letter break timing is engaged
 			if (DeCodeVal == 0)
 			{
 				/*20230915 ESP32; in normal decode mode, found it best NOT to set DeCodeVal to "1" at this point */
-				//DeCodeVal = 1;
+				// DeCodeVal = 1;
 				prob = 1;
 				STart = start1;
-				if(AbrtFlg){ //20230918 Added this in an attempt to recover a missed keydown interval 
+				if (AbrtFlg)
+				{ // 20230918 Added this in an attempt to recover a missed keydown interval
 					AbrtFlg = false;
 					DeCodeVal = 1;
-				} else
-				if(Test && NrmFlg){
+				}
+				else if (Test && NrmFlg)
+				{
 					sprintf(PrntBuf, "START2- DeCodeVall:%d\n", DeCodeVal);
 					printf(PrntBuf);
-				}	
-				
+				}
 			}
 			DitDahCD = 8;
 
@@ -690,10 +696,10 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 				WrdStrt = noSigStrt;
 				TimeDat[Bitpos] = period;
 				Bitpos += 1;
-				if (Bitpos > MaxIntrvlCnt -1)
+				if (Bitpos > MaxIntrvlCnt - 1)
 				{
-					Bitpos = MaxIntrvlCnt -1;		   // watch out: this character has too many symbols for a valid CW character
-					letterBrk = noSigStrt; // force a letter brk (to clear this garbage
+					Bitpos = MaxIntrvlCnt - 1; // watch out: this character has too many symbols for a valid CW character
+					letterBrk = noSigStrt;	   // force a letter brk (to clear this garbage
 					if (DeCodeVal == 1)
 					{					   // this should never be the case, But if true, force DeCodeVal to be something that can be evaluated
 						DeCodeVal = 99990; //"error"
@@ -879,7 +885,8 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 
 			} // End if(DeCodeVal!= 0)
 		}
-		else printf("Kstate ERROR\n");
+		else
+			printf("Kstate ERROR\n");
 		// end of key interrupt processing;
 		// Now, if we are here; the interrupt was a "Key-Up" event. Now its time to decide whether this last "Key-Down" period represents a "dit", a "dah"
 		// , or just garbage.
@@ -903,7 +910,8 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 		if ((float)period < 0.3 * (float)avgDit)
 		{ // if "true", key down event seems to related to noise
 			// if here, this was an atypical event, & may indicate a need to recalculate the average period.
-			if(Test && NrmFlg){
+			if (Test && NrmFlg)
+			{
 				printf("NOISE\n");
 			}
 			if (period > 0)
@@ -923,18 +931,19 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 			return;
 		}
 		/* usable event; store Keydown time to AutoMode detector dwn time buffer*/
-		if(DeCd_KeyDwnPtr < IntrvlBufSize){ //we have both a usable time & place to store it
+		if (DeCd_KeyDwnPtr < IntrvlBufSize)
+		{ // we have both a usable time & place to store it
 			// KeyDwnIntrvls[DeCd_KeyDwnPtr] = (uint16_t)period; //20250110 commented out
-			if(DeCd_KeyDwnPtr != DeCd_KeyUpPtr)
+			if (DeCd_KeyDwnPtr != DeCd_KeyUpPtr)
 			{
 				deadSpace = ((EvntTime - OldKeyUPStart));
 				deadSpace = 25;
-				//deadSpace = ((EvntTime - Oldstart)) - period;
-				//printf("!DeCd_KeyDwnPtr=%d; DeCd_KeyUpPtr=%d; deadSpace=%d; OldKeyUPStart=%d; EvntTime=%d; period;%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr, (uint16_t)deadSpace, (uint16_t)OldKeyUPStart, (uint16_t)EvntTime, (uint16_t)period);
-				//KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)deadSpace; //20250110 commented out
-				//DeCd_KeyUpPtr++; //20250110 commented out
+				// deadSpace = ((EvntTime - Oldstart)) - period;
+				// printf("!DeCd_KeyDwnPtr=%d; DeCd_KeyUpPtr=%d; deadSpace=%d; OldKeyUPStart=%d; EvntTime=%d; period;%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr, (uint16_t)deadSpace, (uint16_t)OldKeyUPStart, (uint16_t)EvntTime, (uint16_t)period);
+				// KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)deadSpace; //20250110 commented out
+				// DeCd_KeyUpPtr++; //20250110 commented out
 			}
-			//DeCd_KeyDwnPtr++; //20250110 commented out
+			// DeCd_KeyDwnPtr++; //20250110 commented out
 		}
 
 		/**** if here, its a usable event; Now, decide if its a "Dit" or "Dah"  ****/
@@ -945,13 +954,15 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 		}
 		badKeyEvnt = 15;			// badKeyEvnt = 20;
 		DeCodeVal = DeCodeVal << 1; // shift the current decode value left one place to make room for the next bit.
-		
-		if(Test && NrmFlg){
+
+		if (Test && NrmFlg)
+		{
 			sprintf(PrntBuf, "Shift- DeCodeVall:%d", DeCodeVal);
 			printf(PrntBuf);
 		}
 		bool NrmlDah = false;
-		if (((period >= 1.8 * avgDit) || (period >= 0.66 * avgDah)) && !Bug2 && !Bug3){//20231230 now using this definition for detecting a standard "dah"
+		if (((period >= 1.8 * avgDit) || (period >= 0.66 * avgDah)) && !Bug2 && !Bug3)
+		{ // 20231230 now using this definition for detecting a standard "dah"
 			NrmlDah = true;
 		}
 		else if (((period > 9 * avgDeadSpace) || (period > 1.5 * avgDit)) && Bug2)
@@ -960,48 +971,59 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 		{
 			bool NoFix = true;
 			/*20231102 1st apply traditional dah test*/
-			if (((period >= 1.7 * avgDit) || (period >= 0.66 * avgDah))){//20231102 now using this definition for detecting a standard "dah"
+			if (((period >= 1.7 * avgDit) || (period >= 0.66 * avgDah)))
+			{ // 20231102 now using this definition for detecting a standard "dah"
 				NrmlDah = true;
-				if(Test && SCD){
-					int pcode =0;
-					if(period >= 1.7 * avgDit) pcode +=1;
-					if(period >= 0.66 * avgDah) pcode +=2;
-					 printf(" Bug3 Fix 0; Pcode:%d\n", pcode);
-				}	 
+				if (Test && SCD)
+				{
+					int pcode = 0;
+					if (period >= 1.7 * avgDit)
+						pcode += 1;
+					if (period >= 0.66 * avgDah)
+						pcode += 2;
+					printf(" Bug3 Fix 0; Pcode:%d\n", pcode);
+				}
 				NoFix = false;
 			}
-			/* now go back and look at last keydown entry & see if it suggest something different*/	
-        	int OldPrdPtr = PrdStackPtr-1;
-        	if(PrdStackPtr==0)OldPrdPtr = 9;
-        	if((period >= 2*PrdStack[OldPrdPtr]) && !NrmlDah){
-					NrmlDah = true;
-					if(Test && SCD) printf(" Bug3 Fix 1\n");
-					NoFix = false;
-			}		
-        	if((period <= PrdStack[OldPrdPtr]/2) && NrmlDah){
-					NrmlDah = false;
-					if(Test && SCD) printf(" Bug3 Fix 2\n");
-					NoFix = false;
+			/* now go back and look at last keydown entry & see if it suggest something different*/
+			int OldPrdPtr = PrdStackPtr - 1;
+			if (PrdStackPtr == 0)
+				OldPrdPtr = 9;
+			if ((period >= 2 * PrdStack[OldPrdPtr]) && !NrmlDah)
+			{
+				NrmlDah = true;
+				if (Test && SCD)
+					printf(" Bug3 Fix 1\n");
+				NoFix = false;
 			}
-			if(Test && SCD && NoFix) printf(" Bug3 NOFIX\n");		
-		}	
+			if ((period <= PrdStack[OldPrdPtr] / 2) && NrmlDah)
+			{
+				NrmlDah = false;
+				if (Test && SCD)
+					printf(" Bug3 Fix 2\n");
+				NoFix = false;
+			}
+			if (Test && SCD && NoFix)
+				printf(" Bug3 NOFIX\n");
+		}
 		// else if ((period >= (1.46 * avgDit) + (DitVar)) && Bug3)
 		// {
 		// 	NrmlDah = true;
 		// }
 
-		//if ((NrmlDah) || ((DeCodeVal == 2) && ((period - 10) > 1.4 * avgDit) && (Bug3 || 0))) // normal dah path or special case handling
-		if (NrmlDah)//20231104 dropped back to this thinking that the new bug3 code above will handle/catch the special conditions 
-		{																					  // it smells like a "Dah".  think there's 10 millisecond uncertainty due to the sampling speed, so we're going to use the smallest possible interval for this decision
-			//if (Test && SCD) printf("DeCodeVal:%d; deadSpace:%d; avgDeadsSace:%d\n", DeCodeVal, (int)deadSpace, (int)avgDeadSpace);
-			if ((MsgChrCnt[1] > 0) && (DeCodeVal == 2) && (deadSpace < 2.5 * avgDeadSpace)  && (DCVStrd[1]!=255) && !NuWrd && !dletechar && Bug3)
+		// if ((NrmlDah) || ((DeCodeVal == 2) && ((period - 10) > 1.4 * avgDit) && (Bug3 || 0))) // normal dah path or special case handling
+		if (NrmlDah) // 20231104 dropped back to this thinking that the new bug3 code above will handle/catch the special conditions
+		{			 // it smells like a "Dah".  think there's 10 millisecond uncertainty due to the sampling speed, so we're going to use the smallest possible interval for this decision
+			// if (Test && SCD) printf("DeCodeVal:%d; deadSpace:%d; avgDeadsSace:%d\n", DeCodeVal, (int)deadSpace, (int)avgDeadSpace);
+			if ((MsgChrCnt[1] > 0) && (DeCodeVal == 2) && (deadSpace < 2.5 * avgDeadSpace) && (DCVStrd[1] != 255) && !NuWrd && !dletechar && Bug3)
 			{
 				GrabBack(true);
 			}
 			else
 			{
 				DeCodeVal += 1; // it appears to be a "dah' so set the least significant bit to "one"
-				if(Test && NrmFlg){
+				if (Test && NrmFlg)
+				{
 					printf(" DAH  ");
 					sprintf(PrntBuf, "\t%d\t%d\t%d\n", (int)period, (int)(avgDit), (int)(avgDah));
 					printf(PrntBuf);
@@ -1031,12 +1053,13 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 		}
 		else // treat this period as a dit
 		{	 // if(period >= 0.5*avgDit) //This is a typical 'Dit'
-			if(Test && NrmFlg){
+			if (Test && NrmFlg)
+			{
 				printf(" DIT  ");
 				sprintf(PrntBuf, "\t%d\t%d\t%d\n", (int)period, (int)(avgDit), (int)(avgDah));
 				printf(PrntBuf);
 			}
-			
+
 			if (Bug3 && SCD && Test)
 			{
 				// sprintf(DeBugMsg, "0%s", DeBugMsg);
@@ -1046,31 +1069,32 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 				DeBugMsg[i] = '0';
 				printf("deadSpace:%d; avgDeadsSace:%d\n", (int)deadSpace, (int)avgDeadSpace);
 			}
-			if((DeCodeVal == 2) && (DCVStrd[1]!=255) &&Bug3 && (deadSpace < 2.5 * avgDeadSpace) && !NuWrd && !dletechar){
+			if ((DeCodeVal == 2) && (DCVStrd[1] != 255) && Bug3 && (deadSpace < 2.5 * avgDeadSpace) && !NuWrd && !dletechar)
+			{
 				GrabBack(false);
 			}
 			if (FrstSymbl)
-			{ 
+			{
 				// if(Bug3 && (MsgChrCnt[1] > 0) && (deadSpace < 2.76 * avgDeadSpace) && (deadSpace > 1.4 * avgDeadSpace) && !NuWrd && !dletechar){
 				// 	GrabBack(false);
 				// }else{
 
-					// JMH 2020103 New way, doesn't make any difference about the last symbol of the preceding letter. The first symbol in the current letter is a 'dit', so forget the past
-					// if we're here then we have recieved 2 'dits' back to back with a large gap between. So assume this is the beginning of a new letter/character
-					// put everything back to decoding a 'normal' character
-					DeCodeVal = DeCodeVal >> 1;
-					//        Serial.print(DeCodeVal);
-					//        Serial.print('\t');
-					//        Serial.println( DicTbl1[linearSearchBreak(DeCodeVal, CodeVal1, ARSIZE)] );
-					DeCodeVal = 2;
-					dletechar = false;
-					FrstSymbl = false;
-					ConcatSymbl = false;
-					if (Test && NrmFlg)
-					{
-						sprintf(PrntBuf, "RESET- DeCodeVall:%d\n", DeCodeVal);
-						printf(PrntBuf);
-					}
+				// JMH 2020103 New way, doesn't make any difference about the last symbol of the preceding letter. The first symbol in the current letter is a 'dit', so forget the past
+				// if we're here then we have recieved 2 'dits' back to back with a large gap between. So assume this is the beginning of a new letter/character
+				// put everything back to decoding a 'normal' character
+				DeCodeVal = DeCodeVal >> 1;
+				//        Serial.print(DeCodeVal);
+				//        Serial.print('\t');
+				//        Serial.println( DicTbl1[linearSearchBreak(DeCodeVal, CodeVal1, ARSIZE)] );
+				DeCodeVal = 2;
+				dletechar = false;
+				FrstSymbl = false;
+				ConcatSymbl = false;
+				if (Test && NrmFlg)
+				{
+					sprintf(PrntBuf, "RESET- DeCodeVall:%d\n", DeCodeVal);
+					printf(PrntBuf);
+				}
 				// }
 			}
 			if ((period != 0) && !FrstSymbl)
@@ -1089,7 +1113,8 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 				//        Serial.print("DitVar: ");
 				//        Serial.println(DitVar);
 			}
-			if(Test && NrmFlg){
+			if (Test && NrmFlg)
+			{
 				sprintf(PrntBuf, "DeCodeVall:%d\n", DeCodeVal);
 				printf(PrntBuf);
 			}
@@ -1127,20 +1152,23 @@ void GrabBack(bool IsDah)
 	}
 	SpaceStk[Bitpos] = LstSpcTm;
 	++Bitpos;
-	if (Bitpos > MaxIntrvlCnt -1)
-		Bitpos = MaxIntrvlCnt -1;
+	if (Bitpos > MaxIntrvlCnt - 1)
+		Bitpos = MaxIntrvlCnt - 1;
 	DeCodeVal = DeCodeVal << 1;
-	if(IsDah) DeCodeVal = DeCodeVal + 1;
+	if (IsDah)
+		DeCodeVal = DeCodeVal + 1;
 	if (Test && NrmFlg)
 	{
-		if(IsDah) sprintf(PrntBuf, "Apnd Dah- DeCodeVall:%d\n", DeCodeVal);
-		else  sprintf(PrntBuf, "Apnd Dit- DeCodeVall:%d\n", DeCodeVal);
+		if (IsDah)
+			sprintf(PrntBuf, "Apnd Dah- DeCodeVall:%d\n", DeCodeVal);
+		else
+			sprintf(PrntBuf, "Apnd Dit- DeCodeVall:%d\n", DeCodeVal);
 		if (!SCD)
 			printf(PrntBuf);
 	}
 	dletechar = true;
 	DeleteID = 4;
-	FrstSymbl = false;	
+	FrstSymbl = false;
 	ConcatSymbl = true; // used to verify (at the next letter break) we did the right thing;
 
 	if (Test && SCD)
@@ -1251,7 +1279,7 @@ void WPMdefault(void)
 {
 	avgDit = 80.0; // average 'Dit' duration
 	avgDeadSpace = avgDit;
-	//printf("A avgDeadSpace:%d\n",(uint16_t)avgDeadSpace);
+	// printf("A avgDeadSpace:%d\n",(uint16_t)avgDeadSpace);
 	AvgSmblDedSpc = avgDit;
 	avgDah = 240.0;
 	AvgLtrBrk = avgDah;
@@ -1310,9 +1338,11 @@ void ChkDeadSpace(void)
 }
 
 ///////////////////////////////////////////////////////////////////////
-void DbgRptr(bool dbgLtrBrk, char pBuf[], char pStr[]){
+void DbgRptr(bool dbgLtrBrk, char pBuf[], char pStr[])
+{
 	// char tmpbuf[25];
-	if(!dbgLtrBrk) return;
+	if (!dbgLtrBrk)
+		return;
 	/* for (int p = 0; p < sizeof(tmpbuf); p++)
 	{
 		tmpbuf[p] = PrntBuf[p];
@@ -1320,9 +1350,8 @@ void DbgRptr(bool dbgLtrBrk, char pBuf[], char pStr[]){
 			break;
 	} */
 	// sprintf(tmpbuf, "%s", pBuf);
-	//sprintf(&pBuf, "%s%s",tmpbuf, pStr);
+	// sprintf(&pBuf, "%s%s",tmpbuf, pStr);
 	printf(pStr);
-
 }
 ///////////////////////////////////////////////////////////////////////
 /*In the ESP32 version this gets fired every or 8ms while the key is DOWN */
@@ -1333,10 +1362,11 @@ void SetLtrBrk(void)
 	unsigned long ltrBrkb;
 	char tmpbuf[50];
 	char Str[5];
-	bool dbgLtrBrk = false;//true; // Set to true for letterbreak debugging
+	bool dbgLtrBrk = false; // true; // Set to true for letterbreak debugging
 	char StrBuf[25];
 	int slop = pdTICKS_TO_MS(xTaskGetTickCount()) - noSigStrt;
-	if (slop >= 4) dbgLtrBrk = false; //regardles of original setting, kill debug output after 1st print following key up state
+	if (slop >= 4)
+		dbgLtrBrk = false; // regardles of original setting, kill debug output after 1st print following key up state
 	sprintf(Str, " ");
 	DbgRptr(dbgLtrBrk, StrBuf, Str);
 
@@ -1356,9 +1386,9 @@ void SetLtrBrk(void)
 	if (Bug2)
 	{
 		space = ((9 * space) + (3 * avgDeadSpace)) / 10;
-		#ifdef DBugLtrBrkTiming
+#ifdef DBugLtrBrkTiming
 		printf("C space:%d\n", (uint16_t)space);
-		#endif
+#endif
 		sprintf(Str, "Bg3:");
 		DbgRptr(dbgLtrBrk, StrBuf, Str);
 	}
@@ -1367,18 +1397,18 @@ void SetLtrBrk(void)
 		if (avgDeadSpace > avgDit)
 		{
 			space = avgDeadSpace; //((3*space)+avgDeadSpace)/4; //20190717 jmh - Changed to averaging space value to reduce chance of glitches causing mid character letter breaks
-			#ifdef DBugLtrBrkTiming
+#ifdef DBugLtrBrkTiming
 			printf("A space:%d\n", (uint16_t)space);
-			#endif
+#endif
 			sprintf(Str, "+");
 			DbgRptr(dbgLtrBrk, StrBuf, Str);
 		}
 		else
 		{
 			space = ((3 * space) + avgDit) / 4; // 20190717 jmh - Changed to averaging space value to reduce chance of glitches causing mid character letter breaks
-			#ifdef DBugLtrBrkTiming
+#ifdef DBugLtrBrkTiming
 			printf("B space:%d\n", (uint16_t)space);
-			#endif
+#endif
 			sprintf(Str, "-");
 			DbgRptr(dbgLtrBrk, StrBuf, Str);
 		}
@@ -1386,32 +1416,36 @@ void SetLtrBrk(void)
 
 	if (wpm < 35)
 	{
-		if(Bug3)ltrBrk = int(0.6 * (float(space)));
-		else ltrBrk = int(1.6 * (float(space))); 
-		//ltrBrk = int(1.5 * (float(space))); // 20221106 went from 1.6 back to 1.5//20221105 went from 1.5 back to 1.6//20221022 went from 1.4 back to 1.5  // 20210410 went from 1.5 back to 1.4 // 20200306 went from 1.6 back to 1.5 to reduce the chance of having to deal with multi letter symbol groups
-		#ifdef DBugLtrBrkTiming
+		if (Bug3)
+			ltrBrk = int(0.6 * (float(space)));
+		else
+			ltrBrk = int(1.6 * (float(space)));
+// ltrBrk = int(1.5 * (float(space))); // 20221106 went from 1.6 back to 1.5//20221105 went from 1.5 back to 1.6//20221022 went from 1.4 back to 1.5  // 20210410 went from 1.5 back to 1.4 // 20200306 went from 1.6 back to 1.5 to reduce the chance of having to deal with multi letter symbol groups
+#ifdef DBugLtrBrkTiming
 		printf("A ltrBrk:%d\n", (uint16_t)ltrBrk);
-		#endif
-		if (BugMode) //Bg2
-		{ // use special case spacing
+#endif
+		if (BugMode)									// Bg2
+		{												// use special case spacing
 			ltrBrk = int(2.9 * (float(AvgSmblDedSpc))); // 20230815 trying this value for ESP32 processing
 			sprintf(Str, "!:");
 			DbgRptr(dbgLtrBrk, StrBuf, Str);
-		
+
 			if (((DeCodeVal & 1) == 1) && (DeCodeVal > 3))
 			{ // this dead space interval appears to be an mid-character event AND the last symbol detected was a "DAH".
-				if(curRatio >= 3.1){// 20231229 added ratio comparison to the decision process
+				if (curRatio >= 3.1)
+				{										  // 20231229 added ratio comparison to the decision process
 					ltrBrk = int(0.92 * (float(avgDah))); // 20231229 trying this value for ESP32 processing
-					#ifdef DBugLtrBrkTiming
+#ifdef DBugLtrBrkTiming
 					printf("B ltrBrk:%d\n", (uint16_t)ltrBrk);
-					#endif
+#endif
 					sprintf(Str, "A1:");
 				}
-				else{
-					ltrBrk = int(2.85 * (float(avgDit))); // 20231229 trying this value for ESP32 processing 	
-					#ifdef DBugLtrBrkTiming
+				else
+				{
+					ltrBrk = int(2.85 * (float(avgDit))); // 20231229 trying this value for ESP32 processing
+#ifdef DBugLtrBrkTiming
 					printf("C ltrBrk:%d\n", (uint16_t)ltrBrk);
-					#endif
+#endif
 					sprintf(Str, "A2:");
 				}
 				DbgRptr(dbgLtrBrk, StrBuf, Str);
@@ -1420,24 +1454,24 @@ void SetLtrBrk(void)
 			{ // the first symbol sent is a dash
 				// At this point(time) the letter looks like a "T", but it could be the beginning of something else;i.e., "N"
 				// ltrBrka = long(float(avgDah) * 0.70);	// 20230814 trying this value for ESP32 processing; used to be *0.90
-				ltrBrka = long(float(avgDah) * 0.85);    // 20231229 trying this value for ESP32 processing
+				ltrBrka = long(float(avgDah) * 0.85); // 20231229 trying this value for ESP32 processing
 				// ltrBrkb = long(float(avgDeadSpace) * 1.7); // 20230802 changed x factor from 1.5 to 1.9;; trying to get "kt" to come out as "Y"
-				ltrBrkb = long(float(avgDeadSpace) * 1.9); // 20231229 
+				ltrBrkb = long(float(avgDeadSpace) * 1.9); // 20231229
 				if (ltrBrka >= ltrBrkb)
 				{ // hold on, new ltrBrk interval seems short
 					ltrBrk = ltrBrka;
-					#ifdef DBugLtrBrkTiming
+#ifdef DBugLtrBrkTiming
 					printf("D ltrBrk:%d\n", (uint16_t)ltrBrk);
-					#endif
+#endif
 					sprintf(Str, "B:");
 					DbgRptr(dbgLtrBrk, StrBuf, Str);
 				}
 				else
 				{
 					ltrBrk = ltrBrkb;
-					#ifdef DBugLtrBrkTiming
+#ifdef DBugLtrBrkTiming
 					printf("E ltrBrk:%d\n", (uint16_t)ltrBrk);
-					#endif
+#endif
 					sprintf(Str, "C:");
 					DbgRptr(dbgLtrBrk, StrBuf, Str);
 				}
@@ -1449,20 +1483,20 @@ void SetLtrBrk(void)
 			if ((DeCodeVal & 1) == 1)
 			{
 				/*20250122 changed to 0.65 based on recording from VK5CT*/
-				ltrBrk = int(1.15 * (float(avgDah)));//int(0.65 * (float(avgDah))); //int(0.8 * (float(avgDah))); // last synbol is a "dah"
-				#ifdef DBugLtrBrkTiming
+				ltrBrk = int(1.15 * (float(avgDah))); // int(0.65 * (float(avgDah))); //int(0.8 * (float(avgDah))); // last synbol is a "dah"
+#ifdef DBugLtrBrkTiming
 				printf("F ltrBrk:%d\n", (uint16_t)ltrBrk);
-				#endif
+#endif
 				sprintf(Str, "D:");
 				DbgRptr(dbgLtrBrk, StrBuf, Str);
 			}
 			else
 			{
-				//ltrBrk = int(1.6 * (float(avgDit))); // int(2.0 * (float(avgDit)));  //last synbol is a "dit"
-				ltrBrk = int(3.2 * (float(avgDit)));//20250215
-				#ifdef DBugLtrBrkTiming
+				// ltrBrk = int(1.6 * (float(avgDit))); // int(2.0 * (float(avgDit)));  //last synbol is a "dit"
+				ltrBrk = int(3.2 * (float(avgDit))); // 20250215
+#ifdef DBugLtrBrkTiming
 				printf("G ltrBrk:%d\n", (uint16_t)ltrBrk);
-				#endif
+#endif
 				sprintf(Str, "E:");
 				DbgRptr(dbgLtrBrk, StrBuf, Str);
 			}
@@ -1470,15 +1504,15 @@ void SetLtrBrk(void)
 	}
 	else // if here, setup "letter break" timing for speeds greater than 35 wpm
 	{
-		ltrBrk = ((15 * ltrBrk) + (0.75 * avgDah)) / 16;// 20230913 changed from 0.5 to 0.75 to stop premature letter breaks
-		#ifdef DBugLtrBrkTiming
+		ltrBrk = ((15 * ltrBrk) + (0.75 * avgDah)) / 16; // 20230913 changed from 0.5 to 0.75 to stop premature letter breaks
+#ifdef DBugLtrBrkTiming
 		printf("H ltrBrk:%d\n", (uint16_t)ltrBrk);
-		#endif
+#endif
 	}
 
 	if (ltrBrk > wordBrk)
 	{
-		//printf("ltrBrk %d > wordBrk\n", (uint16_t)ltrBrk);
+		// printf("ltrBrk %d > wordBrk\n", (uint16_t)ltrBrk);
 		wordBrk = int(1.1 * float(ltrBrk));
 		wrdbrkFtcr = 1.0;
 		OLDwrdbrkFtcr = wrdbrkFtcr;
@@ -1489,9 +1523,9 @@ void SetLtrBrk(void)
 	/*Set dbgLtrBrk = true, when diagnosing letter break timing */
 	if (dbgLtrBrk)
 	{
-			sprintf(PrntBuf, "\tltrBrk: %d; deadSpace: %u; space: %u; avgDeadSpace: %u; AvgSmblDedSpc: %u; avgDah: %u; avgDit: %u\n\r",
-					(uint16_t)ltrBrk, (uint16_t)deadSpace, (uint16_t)space, (uint16_t)avgDeadSpace, (uint16_t)AvgSmblDedSpc, (uint16_t)avgDah, (uint16_t)avgDit);
-			printf(PrntBuf);
+		sprintf(PrntBuf, "\tltrBrk: %d; deadSpace: %u; space: %u; avgDeadSpace: %u; AvgSmblDedSpc: %u; avgDah: %u; avgDit: %u\n\r",
+				(uint16_t)ltrBrk, (uint16_t)deadSpace, (uint16_t)space, (uint16_t)avgDeadSpace, (uint16_t)AvgSmblDedSpc, (uint16_t)avgDah, (uint16_t)avgDit);
+		printf(PrntBuf);
 	}
 	letterBrk = ltrBrk + pdTICKS_TO_MS(xTaskGetTickCount()); // ESP32/Goertzel driven method
 
@@ -1524,9 +1558,9 @@ bool chkChrCmplt(void)
 		char NuLineStr[65];
 		for (i = 0; i < LtrPtr; i++)
 		{
-			if(i<14)
+			if (i < 14)
 			{
-			DelStr[i] = 0x8;
+				DelStr[i] = 0x8;
 			}
 		}
 		// for (i = LtrPtr; i < 2*LtrPtr; i++)
@@ -1535,11 +1569,13 @@ bool chkChrCmplt(void)
 		// 	{
 
 		// 		DelStr[i] = LtrHoldr[i-LtrPtr];
-		// 	} 
+		// 	}
 		// }
-		if(i<14) DelStr[i] = 0x0;
-		else DelStr[14] = 0x0;
-		
+		if (i < 14)
+			DelStr[i] = 0x0;
+		else
+			DelStr[14] = 0x0;
+
 		if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
 		{
 			NuSender = false;
@@ -1554,7 +1590,9 @@ bool chkChrCmplt(void)
 			ptrmsgbx->dispDeCdrTxt(NuLineStr, TFT_GREEN);
 			xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
 		}
-	} else if(NuSender) NuSender = false;
+	}
+	else if (NuSender)
+		NuSender = false;
 	////////////////////////////////////////////////////////////////////
 	unsigned long Now = pdTICKS_TO_MS(xTaskGetTickCount()); //(GetTimr5Cnt()/10);
 	if ((Now - letterBrk1) > 35000)
@@ -1576,13 +1614,12 @@ bool chkChrCmplt(void)
 	// 	ptrmsgbx->dispDeCdrTxt(NuLine, TFT_GREENYELLOW);
 	// 	// }
 	// 	// else ForcedWrdBrk = false; //false alarm no real info available. reset and wait for another flag
-	// } 
-	
-	
+	// }
+
 	// check to see if enough time has passed since the last key closure to signify that the character is complete
 	if (LclKeyState == 0) // if this is the case, key is closed & should not be doing a letter complete
 	{
-		noSigStrt = Now; //20250214 added to prevent false 'letter complete' detection
+		noSigStrt = Now; // 20250214 added to prevent false 'letter complete' detection
 		ltrCmplt = -2200;
 		return done;
 	}
@@ -1591,7 +1628,8 @@ bool chkChrCmplt(void)
 	if ((Now >= letterBrk) && letterBrk != 0)
 	{
 		ltrCmplt = -2800; // doing this for 'plot' state trace
-		if(Dbg) printf("stepA\n");
+		if (Dbg)
+			printf("stepA\n");
 		if (DeCodeVal > 1)
 		{
 			Pstate = 1; // have a complete letter
@@ -1607,337 +1645,348 @@ bool chkChrCmplt(void)
 		}
 	}
 	float noKeySig = (float)(Now - noSigStrt);
-	if ((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0)) ValidWrdBrk = true;
+	if ((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0))
+		ValidWrdBrk = true;
 	/*20240226 added or clause to prevent long run on text strings which often end up scrambled by the post parser*/
 	/*20240322 Also in long runs, look for embedded 'DE' signifing call sign declaration & if found, force a word break */
 	// if (((noKeySig >= 0.75 * ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0))||(LtrPtr > 18 ||((LtrPtr >= 6) && (LtrHoldr[LtrPtr-2] == 'D') && (LtrHoldr[LtrPtr-1] == 'E'))))
-	if(Dbg) printf("stepB\n");
+	if (Dbg)
+		printf("stepB\n");
 	if ((ValidWrdBrk) 
-		|| (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5)) 
-		|| ((LtrPtr >= 6) && (LtrHoldr[LtrPtr - 2] == 'D') && (LtrHoldr[LtrPtr - 1] == 'E')) 
-		|| ((ValidChrCnt >= 12))
-		|| SndrChng)
+	|| ((LtrPtr >= 6) && (LtrHoldr[LtrPtr - 2] == 'D') && (LtrHoldr[LtrPtr - 1] == 'E')) 
+	|| ((ValidChrCnt >= 12)) 
+	|| SndrChng)
 	{
-		if(Dbg) printf("step1\n");
-		//printf("step1\n");
+		if (Dbg)
+			printf("step1\n");
+		// printf("step1\n");
 		BldKeyUpDwnDataSet();
-		if(chkcnt == DeCd_KeyDwnPtr)
+		if (chkcnt == DeCd_KeyDwnPtr)
 		{
 			// printf("\nchkcnt%d == DeCd_KeyDwnPt:%d\n", chkcnt, DeCd_KeyDwnPtr);
 			DataSetRdy = true;
-		} 
+		}
 		// else
 		// {
 		// 	printf("chkcnt%d != DeCd_KeyDwnPt:%d\n", chkcnt, DeCd_KeyDwnPtr);
-		// }	
-		//chkcnt = 0;
-		
+		// }
+		// chkcnt = 0;
+
 		// if (ValidWrdBrk)
 		// {
-			if(ValidWrdBrk && DbgWrdBrkFtcr) printf("ValidWrdBrk\n");
-			else if(DbgWrdBrkFtcr) printf("Word Break EXCEPTION\n");
-			if (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5))
+		if (ValidWrdBrk && DbgWrdBrkFtcr)
+			printf("ValidWrdBrk\n");
+		else if (DbgWrdBrkFtcr)
+			printf("Word Break EXCEPTION\n");
+		if (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5))
+		{
+			if (!DataSetRdy)
+				printf("\n!!OVERFLOW - Skipping Adv Parser!!\n");
+			else
+				printf("\n!!Close to OVERFLOW!!\n");
+		}
+		// if (DeCd_KeyUpPtr < IntrvlBufSize && DeCd_KeyDwnPtr >= 1)
+		if (DeCd_KeyDwnPtr != 0 && !KDwnFnd)
+		{ // we have both a usable time & place to store it; and at least 1 keydwn interval has been captured
+			KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)noKeySig;
+#ifdef DeBgQueue
+			// printf("%d+ *%d\n", DeCd_KeyUpPtr, (uint16_t)noKeySig);
+			printf("+*%d\n", (uint16_t)noKeySig);
+#endif
+			if (DeCd_KeyUpPtr < (IntrvlBufSize - 1))
+				DeCd_KeyUpPtr++;
+			// DBtrace = DBtrace | 0b1;
+		}
+// Ok just detected a new wordbreak interval; So Now need/can evaluate
+// the contents of the AutoMode detector time buffers
+#ifdef DeBgQueue
+		printf("\n###  %s\n", LtrHoldr);
+#endif
+		// printf("\n###  %s\n", LtrHoldr);
+		if (DeCd_KeyDwnPtr > 2 && DeCd_KeyUpPtr > 2 && KeyUpIntrvls[0] > 0 && KeyDwnIntrvls[0] > 0)
+		{
+			if (DbgWrdBrkFtcr)
 			{
-				if(!DataSetRdy)printf("\n!!OVERFLOW - Skipping Adv Parser!!\n");
-				else printf("\n!!Close to OVERFLOW!!\n");
-			}
-			// if (DeCd_KeyUpPtr < IntrvlBufSize && DeCd_KeyDwnPtr >= 1)
-			if (DeCd_KeyDwnPtr != 0 && !KDwnFnd)
-			{ // we have both a usable time & place to store it; and at least 1 keydwn interval has been captured
-				KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)noKeySig;
-				#ifdef DeBgQueue
-				// printf("%d+ *%d\n", DeCd_KeyUpPtr, (uint16_t)noKeySig);
-				printf("+*%d\n", (uint16_t)noKeySig);
-				#endif
-				if(DeCd_KeyUpPtr < (IntrvlBufSize-1)) DeCd_KeyUpPtr++;
-				// DBtrace = DBtrace | 0b1;
-			}
-			// Ok just detected a new wordbreak interval; So Now need/can evaluate
-			// the contents of the AutoMode detector time buffers
-			#ifdef DeBgQueue
-			printf("\n###  %s\n", LtrHoldr);
-			#endif
-			//printf("\n###  %s\n", LtrHoldr);
-			if (DeCd_KeyDwnPtr > 2 && DeCd_KeyUpPtr > 2 && KeyUpIntrvls[0] > 0 && KeyDwnIntrvls[0] > 0)
-			{
-				if (DbgWrdBrkFtcr){
 				printf("\t1##  %s; DataSetRdy:%d\n", LtrHoldr, (uint8_t)DataSetRdy);
 				printf("\tWORD BREAK - DeCd_KeyDwnPtr: %d; DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
-				}
-				if (DataSetRdy && (LtrPtr >= 1 || DeCd_KeyDwnPtr >= 9) && ((wpm > 11) || (LtrPtr > 3)) && (wpm < 36) && (DeCd_KeyDwnPtr == DeCd_KeyUpPtr)) // don't try to reparse if the key up & down pointers arent equal
-				{			
-					if (DbgWrdBrkFtcr) printf("\t\tPerpAdvParser  %s\n", LtrHoldr);																												 // dont do "post parsing" with just one letter or WPMs <= 13
-					/*Auto-word break adjustment test*/
-					if (LtrPtr == 1)
+			}
+			if (DataSetRdy && (LtrPtr >= 1 || DeCd_KeyDwnPtr >= 9) && ((wpm > 11) || (LtrPtr > 3)) && (wpm < 36) && (DeCd_KeyDwnPtr == DeCd_KeyUpPtr)) // don't try to reparse if the key up & down pointers arent equal
+			{
+				if (DbgWrdBrkFtcr)
+					printf("\t\tPerpAdvParser  %s\n", LtrHoldr); // dont do "post parsing" with just one letter or WPMs <= 13
+				/*Auto-word break adjustment test*/
+				if (LtrPtr == 1)
+				{
+					// printf("   3##  %s\n", LtrHoldr);
+					/*Only one letter in this word; */
+					if (LtrHoldr[0] != '-' && LtrHoldr[0] != '.' && LtrHoldr[0] != '?' && LtrHoldr[0] != 'K' && LtrHoldr[0] != 'R' && LtrHoldr[0] != 'E' && (LtrHoldr[0] < '0' || LtrHoldr[0] > '9'))
 					{
-						//printf("   3##  %s\n", LtrHoldr);
-						/*Only one letter in this word; */
-						if (LtrHoldr[0] != '-' && LtrHoldr[0] != '.' && LtrHoldr[0] != '?' && LtrHoldr[0] != 'K' && LtrHoldr[0] != 'R' && LtrHoldr[0] != 'E' && (LtrHoldr[0] < '0' || LtrHoldr[0] > '9'))
+						// printf("    4##  %s\n", LtrHoldr);
+						oneLtrCntr++;
+						if (oneLtrCntr >= 2)
 						{
-							//printf("    4##  %s\n", LtrHoldr);
-							oneLtrCntr++;
-							if (oneLtrCntr >= 2)
-							{		
-								//printf("     5##  %s\n", LtrHoldr);				// had 2 entries in a row that were just one character in length; lengthen the wordbrk interval
-								wrdbrkFtcr += 0.15; // = 2.0
-								ApplyWrdFctr(wrdbrkFtcr);
-								if (DbgWrdBrkFtcr)
-									printf("D wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
-							}
+							// printf("     5##  %s\n", LtrHoldr);				// had 2 entries in a row that were just one character in length; lengthen the wordbrk interval
+							wrdbrkFtcr += 0.15; // = 2.0
+							ApplyWrdFctr(wrdbrkFtcr);
+							if (DbgWrdBrkFtcr)
+								printf("D wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
 						}
 					}
-					else
-						oneLtrCntr = 0;
-					/*1st refresh/sync 'advparser.Dbug' */
-					if (DeBug)
-					{
-						// printf("advparser.Dbug = true\n");
-						advparser.Dbug = true;
-					}
-					/*Sync advparser.wrdbrkFtcr to current wrdbrkFtcr*/
-					// advparser.wrdbrkFtcr = wrdbrkFtcr;//20250216 decided to de-link the two
-					/*Perpare advparser, by 1st copying current decoder symbol sets into local advparser arrays*/
-					int IndxPtr = 0;
+				}
+				else
+					oneLtrCntr = 0;
+				/*1st refresh/sync 'advparser.Dbug' */
+				if (DeBug)
+				{
+					// printf("advparser.Dbug = true\n");
+					advparser.Dbug = true;
+				}
+				/*Sync advparser.wrdbrkFtcr to current wrdbrkFtcr*/
+				// advparser.wrdbrkFtcr = wrdbrkFtcr;//20250216 decided to de-link the two
+				/*Perpare advparser, by 1st copying current decoder symbol sets into local advparser arrays*/
+				int IndxPtr = 0;
 #if USE_TST_DATA
-					DeCd_KeyUpPtr = DeCd_KeyDwnPtr = testSize;
-					for (int i = 0; i < DeCd_KeyDwnPtr; i++)
-					{
-						advparser.KeyUpIntrvls[i] = test_KeyUp[i];
-						advparser.KeyDwnIntrvls[i] = test_KeyDwn[i];
-						advparser.KeyDwnSN[i] = test_SN[i];
-					} 
-					
-					float dummy;
-					while(xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
-					{
-						IndxPtr++;
-					}
+				DeCd_KeyUpPtr = DeCd_KeyDwnPtr = testSize;
+				for (int i = 0; i < DeCd_KeyDwnPtr; i++)
+				{
+					advparser.KeyUpIntrvls[i] = test_KeyUp[i];
+					advparser.KeyDwnIntrvls[i] = test_KeyDwn[i];
+					advparser.KeyDwnSN[i] = test_SN[i];
+				}
+
+				float dummy;
+				while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+				{
+					IndxPtr++;
+				}
 #else
-					for (int i = 0; i <= DeCd_KeyDwnPtr; i++)
-					{
-						advparser.KeyUpIntrvls[i] = KeyUpIntrvls[i];
-						advparser.KeyDwnIntrvls[i] = KeyDwnIntrvls[i];
-					}
-					while(xQueueReceive(ToneSN_que2, (void *)&advparser.KeyDwnSN[IndxPtr], pdMS_TO_TICKS(3)) == pdTRUE)
-					{
-						IndxPtr++;
-					}
-					if(IndxPtr< DeCd_KeyDwnPtr )
-					for(int i = IndxPtr; i <= DeCd_KeyDwnPtr; i++)
+				for (int i = 0; i <= DeCd_KeyDwnPtr; i++)
+				{
+					advparser.KeyUpIntrvls[i] = KeyUpIntrvls[i];
+					advparser.KeyDwnIntrvls[i] = KeyDwnIntrvls[i];
+				}
+				while (xQueueReceive(ToneSN_que2, (void *)&advparser.KeyDwnSN[IndxPtr], pdMS_TO_TICKS(3)) == pdTRUE)
+				{
+					IndxPtr++;
+				}
+				if (IndxPtr < DeCd_KeyDwnPtr)
+					for (int i = IndxPtr; i <= DeCd_KeyDwnPtr; i++)
 					{
 						advparser.KeyDwnSN[i] = (99.9);
 					}
-#endif /* USE_TST_DATA*/					
-					// if(IndxPtr != DeCd_KeyUpPtr) printf("Error!! - IndxPtr: %d; DeCd_KeyUpPtr: %d\n\n", IndxPtr, DeCd_KeyUpPtr);
-					// else printf("\n\n");
-					advparser.KeyUpPtr = DeCd_KeyUpPtr;
-					advparser.KeyDwnPtr = DeCd_KeyDwnPtr;
-					DeCd_KeyDwnPtr = DeCd_KeyUpPtr = chkcnt = 0; // reset pointers here just make sure we dont miss anything in the next data set
-					advparser.wpm = wpm;
-					// printf("WPM->advparser.wpm:%d\n", wpm);
-					advparser.LtrPtr = LtrPtr;
-					bool incWrdBrk = true;
-					for (int i = 0; i <= LtrPtr; i++)
+#endif /* USE_TST_DATA*/
+				// if(IndxPtr != DeCd_KeyUpPtr) printf("Error!! - IndxPtr: %d; DeCd_KeyUpPtr: %d\n\n", IndxPtr, DeCd_KeyUpPtr);
+				// else printf("\n\n");
+				advparser.KeyUpPtr = DeCd_KeyUpPtr;
+				advparser.KeyDwnPtr = DeCd_KeyDwnPtr;
+				DeCd_KeyDwnPtr = DeCd_KeyUpPtr = chkcnt = 0; // reset pointers here just make sure we dont miss anything in the next data set
+				advparser.wpm = wpm;
+				// printf("WPM->advparser.wpm:%d\n", wpm);
+				advparser.LtrPtr = LtrPtr;
+				bool incWrdBrk = true;
+				for (int i = 0; i <= LtrPtr; i++)
+				{
+					advparser.LtrHoldr[i] = LtrHoldr[i];
+					/*20250217 added the following increase wordbrk timing when poor decoding is indicated by  by excessive 'E's & 'T's
+					i.e. symbol count is 2 or less */
+					if (incWrdBrk)
 					{
-						advparser.LtrHoldr[i] = LtrHoldr[i];
-						/*20250217 added the following increase wordbrk timing when poor decoding is indicated by  by excessive 'E's & 'T's 
-						i.e. symbol count is 2 or less */
-						if (incWrdBrk)
+						if (i != LtrPtr)
 						{
-							if (i != LtrPtr)
+							if (!(LtrHoldr[i] == 'T' || LtrHoldr[i] == 'E' || LtrHoldr[i] == 'I' || LtrHoldr[i] == 'N'))
 							{
-								if (!(LtrHoldr[i] == 'T' || LtrHoldr[i] == 'E' || LtrHoldr[i] == 'I' || LtrHoldr[i] == 'N'))
-								{
-									incWrdBrk = false;
-									if (DbgWrdBrkFtcr) printf("\t\tincWrdBrk = false @ LtrHoldr[%d] = %c\n", i, LtrHoldr[i]);
-								}
+								incWrdBrk = false;
+								if (DbgWrdBrkFtcr)
+									printf("\t\tincWrdBrk = false @ LtrHoldr[%d] = %c\n", i, LtrHoldr[i]);
 							}
 						}
 					}
+				}
 
-					/*Make Sure a 'space' has been inserted after this text data set*/
-					#ifdef AutoCorrect
-					printf("Insert Wordbreak Space\n");
-					#endif
-					char space[2];
-					space[0] = ' ';
-					space[1] = 0;
-					ptrmsgbx->dispDeCdrTxt(space, TFT_GREENYELLOW);
-					//dispMsg(space);
-					// while (CodeValBuf[0] > 0)
-					// {
-					// 	DisplayChar(CodeValBuf[0]);
-					// }
-					/*now we can start/resart the post parsing process */
-					if (SndrChng)
-					{
-						// printf("Sender Changed induced Wrd Break\n");
-						SndrChng = false;
-					}
-					vTaskResume(AdvParserTaskHandle);
-					/*20250217 apply wordbreak increase based on testing done above*/
-					if (incWrdBrk)
-					{
-						wrdbrkFtcr += 0.15; // = 2.0
-						ApplyWrdFctr(wrdbrkFtcr);
-						if (DbgWrdBrkFtcr)
-							printf("\t\tA wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
-					}
-					RunAdvPrsr = true;
-					LckHiSpd = false;
-				}
-				else if (wpm >= 36)
+/*Make Sure a 'space' has been inserted after this text data set*/
+#ifdef AutoCorrect
+				printf("Insert Wordbreak Space\n");
+#endif
+				char space[2];
+				space[0] = ' ';
+				space[1] = 0;
+				ptrmsgbx->dispDeCdrTxt(space, TFT_GREENYELLOW);
+				// dispMsg(space);
+				//  while (CodeValBuf[0] > 0)
+				//  {
+				//  	DisplayChar(CodeValBuf[0]);
+				//  }
+				/*now we can start/resart the post parsing process */
+				if (SndrChng)
 				{
-					
-					// DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // resetbuffer pntrs
-					// float dummy;
-					// while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
-					// {
-					// 	// printf("ToneSN_que2 flush 2\n");
-					// }
-					/*20241209 added the following 2 lines*/
-					if (!LckHiSpd)
-					{
-						ModeCnt = 0;
-						SetModFlgs(ModeCnt); // Force paddle/keyboard // DcodeCW.cpp routine; Update DcodeCW.cpp timing settings & ultimately update display status line
-						CurMdStng(ModeCnt);
-						LckHiSpd = true;
-					}
-					if (LtrPtr == 1)
-					{
-						/*Only one letter in this word; */
-						oneLtrCntr++;
-						if (oneLtrCntr >= 2)
-						{ // had 2 entries in a row that were just one character in lenght; shorten the wordbrk interval
-							wrdbrkFtcr += 0.2;
-							ApplyWrdFctr(wrdbrkFtcr);
-							if (DbgWrdBrkFtcr)
-								printf("B wordBrk+: %d; wrdbrkFtcr: %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr);
-						}
-					}
-					else
-						oneLtrCntr = 0;
+					// printf("Sender Changed induced Wrd Break\n");
+					SndrChng = false;
 				}
-				else // wpm < 36
+				vTaskResume(AdvParserTaskHandle);
+				/*20250217 apply wordbreak increase based on testing done above*/
+				if (incWrdBrk)
 				{
-					#ifdef DeBgQueue
-					printf("advparser SKIPPED - LtrPtr:%d<1, Current WPM:%d too low or High or DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d\n", LtrPtr, wpm, DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
-					#endif
-					if (DeCd_KeyDwnPtr > DeCd_KeyUpPtr)
-					{
-						while (DeCd_KeyDwnPtr != DeCd_KeyUpPtr)
-						{
-							KeyUpIntrvls[DeCd_KeyUpPtr] = 0;
-							if (DeCd_KeyUpPtr < (IntrvlBufSize - 1))
-								DeCd_KeyUpPtr++;
-						}
-					}
-#ifdef DeBgQueue
-					for (int i = 0; i < DeCd_KeyDwnPtr; i++)
-					{
-						printf("%d; %d; %d\n", i, KeyDwnIntrvls[i], KeyUpIntrvls[i]);
-					}
-					#endif
-					// DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // resetbuffer pntrs
-					// float dummy;
-					// while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
-					// {
-					// 	// printf("ToneSN_que2 flush 3\n");
-					// }
-					
+					wrdbrkFtcr += 0.15; // = 2.0
+					ApplyWrdFctr(wrdbrkFtcr);
+					if (DbgWrdBrkFtcr)
+						printf("\t\tA wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
 				}
-				// else if ((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && LtrPtr == 1)
-				// {
-				// 	if (advparser.Dbug)
-				// 	{
-				// 		printf("--------\n  %s\n--------\n\n",LtrHoldr);
-				// 	}
-				// }
+				RunAdvPrsr = true;
+				LckHiSpd = false;
 			}
-			else
+			else if (wpm >= 36)
 			{
-				#ifdef DeBgQueue
-				printf("advparser SKIPPED - no usable KeyUpIntrvls[0],KeyDwnIntrvls[0] data; DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
-				#endif
+
 				// DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // resetbuffer pntrs
 				// float dummy;
 				// while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
 				// {
-				// 	// printf("ToneSN_que2 flush 4\n");
+				// 	// printf("ToneSN_que2 flush 2\n");
 				// }
-			}
-			if(DeCd_KeyDwnPtr != 0 && LtrPtr==0)
-			{
-				if (DeBug)
+				/*20241209 added the following 2 lines*/
+				if (!LckHiSpd)
 				{
-					printf("RESET/Trash KeyDwnIntrvls & KeyUpIntrvls\n");
-					int i = 0;
-					while (i < DeCd_KeyDwnPtr)
-					{
-						printf("%d. Dwn: %d\tUp: %d\n", i, KeyDwnIntrvls[i], KeyUpIntrvls[i]);
-						i++;
+					ModeCnt = 0;
+					SetModFlgs(ModeCnt); // Force paddle/keyboard // DcodeCW.cpp routine; Update DcodeCW.cpp timing settings & ultimately update display status line
+					CurMdStng(ModeCnt);
+					LckHiSpd = true;
+				}
+				if (LtrPtr == 1)
+				{
+					/*Only one letter in this word; */
+					oneLtrCntr++;
+					if (oneLtrCntr >= 2)
+					{ // had 2 entries in a row that were just one character in lenght; shorten the wordbrk interval
+						wrdbrkFtcr += 0.2;
+						ApplyWrdFctr(wrdbrkFtcr);
+						if (DbgWrdBrkFtcr)
+							printf("B wordBrk+: %d; wrdbrkFtcr: %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr);
 					}
 				}
-				DeCd_KeyDwnPtr = DeCd_KeyUpPtr = chkcnt = 0; // resetbuffer pntrs
-				float dummy;
-				while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+				else
+					oneLtrCntr = 0;
+			}
+			else // wpm < 36
+			{
+#ifdef DeBgQueue
+				printf("advparser SKIPPED - LtrPtr:%d<1, Current WPM:%d too low or High or DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d\n", LtrPtr, wpm, DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
+#endif
+				if (DeCd_KeyDwnPtr > DeCd_KeyUpPtr)
 				{
-					if (DeBug) printf("ToneSN_que2 flush %5.2f\n", dummy);
+					while (DeCd_KeyDwnPtr != DeCd_KeyUpPtr)
+					{
+						KeyUpIntrvls[DeCd_KeyUpPtr] = 0;
+						if (DeCd_KeyUpPtr < (IntrvlBufSize - 1))
+							DeCd_KeyUpPtr++;
+					}
+				}
+#ifdef DeBgQueue
+				for (int i = 0; i < DeCd_KeyDwnPtr; i++)
+				{
+					printf("%d; %d; %d\n", i, KeyDwnIntrvls[i], KeyUpIntrvls[i]);
+				}
+#endif
+				// DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // resetbuffer pntrs
+				// float dummy;
+				// while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+				// {
+				// 	// printf("ToneSN_que2 flush 3\n");
+				// }
+			}
+			// else if ((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && LtrPtr == 1)
+			// {
+			// 	if (advparser.Dbug)
+			// 	{
+			// 		printf("--------\n  %s\n--------\n\n",LtrHoldr);
+			// 	}
+			// }
+		}
+		else
+		{
+#ifdef DeBgQueue
+			printf("advparser SKIPPED - no usable KeyUpIntrvls[0],KeyDwnIntrvls[0] data; DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
+#endif
+			// DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // resetbuffer pntrs
+			// float dummy;
+			// while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+			// {
+			// 	// printf("ToneSN_que2 flush 4\n");
+			// }
+		}
+		if (DeCd_KeyDwnPtr != 0 && LtrPtr == 0)
+		{
+			if (DeBug)
+			{
+				printf("RESET/Trash KeyDwnIntrvls & KeyUpIntrvls\n");
+				int i = 0;
+				while (i < DeCd_KeyDwnPtr)
+				{
+					printf("%d. Dwn: %d\tUp: %d\n", i, KeyDwnIntrvls[i], KeyUpIntrvls[i]);
+					i++;
 				}
 			}
-			if(LtrPtr==1 )
+			DeCd_KeyDwnPtr = DeCd_KeyUpPtr = chkcnt = 0; // resetbuffer pntrs
+			float dummy;
+			while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
 			{
-				SnglLtrWrdCnt++;
-				if (DeBug) printf("->%s\n",LtrHoldr);
+				if (DeBug)
+					printf("ToneSN_que2 flush %5.2f\n", dummy);
 			}
-			else
-			{
-				SnglLtrWrdCnt = 0;
-				/*If we're here, it should also be safe to reset the following parameters*/
-				for (int i = 0; i < LtrPtr; i++)
-					LtrHoldr[i] = 0;
-				LtrPtr = 0;
-				ValidChrCnt = 0;
-				WrdChrCnt = 0;
-			}
-			if(SnglLtrWrdCnt >=5)
-			{
-				SnglLtrWrdCnt = 0;
-				wordBrk *=2;
-				if (DeBug) printf("Doubled wordBrk: %d\n",(uint16_t)wordBrk); 
+		}
+		if (LtrPtr == 1)
+		{
+			SnglLtrWrdCnt++;
+			if (DeBug)
+				printf("->%s\n", LtrHoldr);
+		}
+		else
+		{
+			SnglLtrWrdCnt = 0;
+			/*If we're here, it should also be safe to reset the following parameters*/
+			for (int i = 0; i < LtrPtr; i++)
+				LtrHoldr[i] = 0;
+			LtrPtr = 0;
+			ValidChrCnt = 0;
+			WrdChrCnt = 0;
+		}
+		if (SnglLtrWrdCnt >= 5)
+		{
+			SnglLtrWrdCnt = 0;
+			wordBrk *= 2;
+			if (DeBug)
+				printf("Doubled wordBrk: %d\n", (uint16_t)wordBrk);
+		}
+		/*20250217 commented the following out & moved*/
+		// for (int i = 0; i < LtrPtr; i++)
+		// 		LtrHoldr[i] = 0;
+		// 	LtrPtr = 0;
+		// 	ValidChrCnt = 0;
+		// 	WrdChrCnt = 0;
 
-			}
-			/*20250217 commented the following out & moved*/
-			// for (int i = 0; i < LtrPtr; i++)
-			// 		LtrHoldr[i] = 0;
-			// 	LtrPtr = 0;
-			// 	ValidChrCnt = 0;
-			// 	WrdChrCnt = 0;
-			
+		Pstate = 2; // have word - used below to insert a 'space' into the decoded text stream
+		// DBtrace = DBtrace | 0b10;
 
-			Pstate = 2; // have word - used below to insert a 'space' into the decoded text stream
-			// DBtrace = DBtrace | 0b10;
-
-			wordStrt = noSigStrt;
-			if (DeCodeVal == 0)
-			{
-				noSigStrt = pdTICKS_TO_MS(xTaskGetTickCount()); //(GetTimr5Cnt()/10);//jmh20190717added to prevent an absurd value
-				MaxDeadTime = 0;
-				charCnt = 0;
-			}
-			wordBrkFlg = true;
-			if (KDwnFnd)
-			{
-				KeyDwnIntrvls[DeCd_KeyDwnPtr] = KDwnIntrvl;
-				#ifdef DeBgQueue
-				printf("\nNewWrd %d- %d\n", DeCd_KeyDwnPtr, KDwnIntrvl);
-				#endif
-				if(DeCd_KeyDwnPtr < (IntrvlBufSize-1)) DeCd_KeyDwnPtr++;
-			}
+		wordStrt = noSigStrt;
+		if (DeCodeVal == 0)
+		{
+			noSigStrt = pdTICKS_TO_MS(xTaskGetTickCount()); //(GetTimr5Cnt()/10);//jmh20190717added to prevent an absurd value
+			MaxDeadTime = 0;
+			charCnt = 0;
+		}
+		wordBrkFlg = true;
+		if (KDwnFnd)
+		{
+			KeyDwnIntrvls[DeCd_KeyDwnPtr] = KDwnIntrvl;
+#ifdef DeBgQueue
+			printf("\nNewWrd %d- %d\n", DeCd_KeyDwnPtr, KDwnIntrvl);
+#endif
+			if (DeCd_KeyDwnPtr < (IntrvlBufSize - 1))
+				DeCd_KeyDwnPtr++;
+		}
 		// } // End if ValidWrdBrk = true
 		// else if(Dbg) printf("step2\n");
 	}
-	else if(Dbg)
+	else if (Dbg)
 	{
 		printf("StepC noKeySig:%d >= ((float)wordBrk:%d)) && noSigStrt:%d != 0 && !wordBrkFlg:%d && DeCodeVal:%d == 0\n", (uint16_t)noKeySig, (uint16_t)wordBrk, (uint16_t)noSigStrt, (uint8_t)wordBrkFlg, DeCodeVal);
 	}
@@ -1963,14 +2012,16 @@ bool chkChrCmplt(void)
 
 			if (DeCodeVal >= 2)
 			{
-				if( LtrPtr == 1 && (LtrHoldr[LtrPtr-1]=='T' || LtrHoldr[LtrPtr-1]=='E')) ShrtLtrBrkCnt++;// copied either a 'T' or 'E'
-				else ShrtLtrBrkCnt = 0;
-				if(ShrtLtrBrkCnt>5 && TmpSlwFlg) //had more than 5 E's & T's in a row. Check/verify letterbrk timing && tone (keying intervals)  are slower than 35WPM
-				{	
+				if (LtrPtr == 1 && (LtrHoldr[LtrPtr - 1] == 'T' || LtrHoldr[LtrPtr - 1] == 'E'))
+					ShrtLtrBrkCnt++; // copied either a 'T' or 'E'
+				else
+					ShrtLtrBrkCnt = 0;
+				if (ShrtLtrBrkCnt > 5 && TmpSlwFlg) // had more than 5 E's & T's in a row. Check/verify letterbrk timing && tone (keying intervals)  are slower than 35WPM
+				{
 					ShrtLtrBrkCnt = 0;
 					uint16_t NuLtrBrkVal = (uint16_t)(advparser.Get_wrdbrkFtcr() * (float)advparser.Get_LtrBrkVal());
 					printf("Too Many Ts & Es- Resetting Parameters:\n\tltrBrk: Old %d; new %d", (uint16_t)ltrBrk, NuLtrBrkVal);
-					if(NuLtrBrkVal !=0)
+					if (NuLtrBrkVal != 0)
 					{
 						uint16_t NuWrdBrk = advparser.GetWrdBrkIntrval();
 						uint16_t DahVal = advparser.Get_DahVal();
@@ -1978,20 +2029,20 @@ bool chkChrCmplt(void)
 						uint16_t OldSpace = (uint16_t)space;
 						space = (unsigned long)advparser.Get_space();
 						avgDeadSpace = space;
-						avgDit =  (unsigned long)advparser.Get_DitVal();
+						avgDit = (unsigned long)advparser.Get_DitVal();
 						ltrBrk = (unsigned long)advparser.Get_LtrBrkVal();
 						avgDah = (unsigned long)(3 * avgDit);
 						printf("\n\tspace: OldVal %d; new %d\n\tDah: Old %d; new %d\n\twordBrk: Old  %d; new %d\n\tWPM: %d \n", OldSpace, (uint16_t)space, OldDahVal, DahVal, (uint16_t)wordBrk, NuWrdBrk, wpm);
-						if(NuWrdBrk !=0 )
+						if (NuWrdBrk != 0)
 						{
 							wordBrk = (unsigned long)NuWrdBrk;
 							wrdbrkFtcr = 1.0;
 						}
-					}else
+					}
+					else
 					{
 						printf("Advance Parser- No data Available.\n");
 					}
-					
 				}
 				int i = 0;
 				while (CodeValBuf[i] > 0)
@@ -2032,34 +2083,34 @@ bool chkChrCmplt(void)
 			{
 				if (!RunAdvPrsr)
 				{
-				int i = 0;
-				while (CodeValBuf[i] > 0)
-					++i;			 // move buffer pointer to 1st available empty array position
-				CodeValBuf[i] = 255; // insert space in text to create a word break
+					int i = 0;
+					while (CodeValBuf[i] > 0)
+						++i;			 // move buffer pointer to 1st available empty array position
+					CodeValBuf[i] = 255; // insert space in text to create a word break
 				}
 				NuWrd = true;
 			}
-			TDBptr = Bitpos;				// printf("Insert Wordbreak Space at %d\n", i);
-				// while (CodeValBuf[0] > 0)
-				// {
-				// 	if (1)//(Test)
-				// 	{
-				// 		sprintf(PrntBuf, "codebuf: %d\n\r", (int)CodeValBuf[0]);
-				// 		printf(PrntBuf);
-				// 	}
-				// 	DisplayChar(CodeValBuf[0]);
-				// 	// RfshFlg = 0;
-				// }
-				// #ifdef DeBgQueue
-				// printf("\n@@@  %s\n", LtrHoldr);
-				// #endif
-				// advparser.LtrPtr = LtrPtr;
-				// for (int i = 0; i <= LtrPtr; i++)
-				// {
-				// 	advparser.LtrHoldr[i] = LtrHoldr[i];
-				// }
-				// if (RunAdvPrsr)
-				// 	vTaskResume(AdvParserTaskHandle);
+			TDBptr = Bitpos; // printf("Insert Wordbreak Space at %d\n", i);
+							 // while (CodeValBuf[0] > 0)
+							 // {
+							 // 	if (1)//(Test)
+							 // 	{
+							 // 		sprintf(PrntBuf, "codebuf: %d\n\r", (int)CodeValBuf[0]);
+							 // 		printf(PrntBuf);
+							 // 	}
+							 // 	DisplayChar(CodeValBuf[0]);
+							 // 	// RfshFlg = 0;
+							 // }
+							 // #ifdef DeBgQueue
+							 // printf("\n@@@  %s\n", LtrHoldr);
+							 // #endif
+							 // advparser.LtrPtr = LtrPtr;
+							 // for (int i = 0; i <= LtrPtr; i++)
+							 // {
+							 // 	advparser.LtrHoldr[i] = LtrHoldr[i];
+							 // }
+							 // if (RunAdvPrsr)
+							 // 	vTaskResume(AdvParserTaskHandle);
 			Bitpos = 0;
 
 			letterBrk = 0;
@@ -2087,10 +2138,13 @@ bool chkChrCmplt(void)
 //     }
 // }
 //////////////////////////////////////////////////////////////////////
-void DblChkDitDah(void){
-	if(dletechar && ConcatSymbl) return;//skip check. Current Timing values are useless
+void DblChkDitDah(void)
+{
+	if (dletechar && ConcatSymbl)
+		return; // skip check. Current Timing values are useless
 	/*Double check the 'dit' 'dah' assigments of DeCodeVal based on the TimeDat[] values before transfering to CodeValBuf[]*/
-	if(DeCodeVal < 4) return; //not enough data to evaluate so go back  
+	if (DeCodeVal < 4)
+		return; // not enough data to evaluate so go back
 	int Mintime, Maxtime;
 	Mintime = 1000;
 	Maxtime = 1;
@@ -2099,49 +2153,67 @@ void DblChkDitDah(void){
 	// 	sprintf(PrntBuf, "DblChkDitDah(%d)", Bitpos);
 	// 	printf(PrntBuf);
 	// }
-	for(int i = 0; i< Bitpos; i++){
+	for (int i = 0; i < Bitpos; i++)
+	{
 		int KyDwnTime = (int)TimeDat[i];
-		if(KyDwnTime < Mintime ) Mintime = KyDwnTime;
-		if(KyDwnTime > Maxtime) Maxtime = KyDwnTime;
+		if (KyDwnTime < Mintime)
+			Mintime = KyDwnTime;
+		if (KyDwnTime > Maxtime)
+			Maxtime = KyDwnTime;
 	}
-	
-	int spltpt = (Mintime+ ((Maxtime-Mintime)/2))-8; //20231230 Added the -8ms because there's an 8ms uncertainty in the timing measurements
-	if(Test){
+
+	int spltpt = (Mintime + ((Maxtime - Mintime) / 2)) - 8; // 20231230 Added the -8ms because there's an 8ms uncertainty in the timing measurements
+	if (Test)
+	{
 		sprintf(PrntBuf, "Mintime: %d; Maxtime: %d; spltpt: %d;  avgDit: %d; ", Mintime, Maxtime, spltpt, (int)avgDit);
 		printf(PrntBuf);
 	}
-	if(spltpt >= 2*Mintime){//rebuild DeCodeVal
-	    DeCodeVal = 1;
-		for(int i = 0; i< Bitpos; i++){
+	if (spltpt >= 2 * Mintime)
+	{ // rebuild DeCodeVal
+		DeCodeVal = 1;
+		for (int i = 0; i < Bitpos; i++)
+		{
 			DeCodeVal = DeCodeVal << 1; // shift the current decode value left one place to make room for the next bit.
-			if(Test){
+			if (Test)
+			{
 				sprintf(PrntBuf, "TimeDat[%d]:%d; ", i, (int)TimeDat[i]);
 				printf(PrntBuf);
 			}
-			if((float)TimeDat[i] > 1.4*((float)avgDit)){//rough check as a dah candidate
-				if((TimeDat[i] > spltpt) ) DeCodeVal +=1;
-				else if(TimeDat[i] > 2.25*(float)Mintime) DeCodeVal +=1;
-				else if((TimeDat[i] > avgDit) && (TimeDat[i] < avgDah)){
-					if((TimeDat[i] - avgDit) > (avgDah - TimeDat[i])) DeCodeVal +=1;
+			if ((float)TimeDat[i] > 1.4 * ((float)avgDit))
+			{ // rough check as a dah candidate
+				if ((TimeDat[i] > spltpt))
+					DeCodeVal += 1;
+				else if (TimeDat[i] > 2.25 * (float)Mintime)
+					DeCodeVal += 1;
+				else if ((TimeDat[i] > avgDit) && (TimeDat[i] < avgDah))
+				{
+					if ((TimeDat[i] - avgDit) > (avgDah - TimeDat[i]))
+						DeCodeVal += 1;
 				}
 			}
 		}
 	}
-	if(Test){
-		if((OldVal != DeCodeVal)){
+	if (Test)
+	{
+		if ((OldVal != DeCodeVal))
+		{
 			sprintf(PrntBuf, "\n\tOld DeCodeVall:%d; New Val:%d\n", OldVal, DeCodeVal);
-		}else{ 
+		}
+		else
+		{
 			sprintf(PrntBuf, "\n");
 		}
-		printf(PrntBuf);	
+		printf(PrntBuf);
 	}
 }
 //////////////////////////////////////////////////////////////////////
-void StrechLtrcmplt(unsigned long StrchPrd){
-	//if(ltrCmplt == -3500) return; //there's no active symbol set. So need to extend the letterbreak interval
-	// sprintf(PrntBuf, "StrchPrd:%d\n", (int)StrchPrd);
-	// printf(PrntBuf);
-	if(Test) printf("^%d\n",(int)StrchPrd);
+void StrechLtrcmplt(unsigned long StrchPrd)
+{
+	// if(ltrCmplt == -3500) return; //there's no active symbol set. So need to extend the letterbreak interval
+	//  sprintf(PrntBuf, "StrchPrd:%d\n", (int)StrchPrd);
+	//  printf(PrntBuf);
+	if (Test)
+		printf("^%d\n", (int)StrchPrd);
 	letterBrk = letterBrk + StrchPrd;
 }
 //////////////////////////////////////////////////////////////////////
@@ -2173,7 +2245,7 @@ int CalcAvgPrd(unsigned long thisdur)
 		BadDedSpce = deadSpace;
 		deadSpace = avgDeadSpace;
 		if ((curRatio < 2.0) && (float(3600 / avgDah) < 14) && !Bug2)
-		{	// curRatio < 2.5
+		{ // curRatio < 2.5
 			/*We're running at a slow WPM but the dit to dah ratio is looking "whaky". Let's speed things up*/
 			BadDedSpceCnt = 0;
 			avgDah = thisdur;
@@ -2396,9 +2468,11 @@ int CalcAvgPrd(unsigned long thisdur)
 		avgDit = 384;
 	if ((avgDit < 15) && (wpm > 35))
 		avgDit = 15;
-	if (DeCodeVal == 1){
+	if (DeCodeVal == 1)
+	{
 		DeCodeVal = 0;
-		if(Test && NrmFlg){
+		if (Test && NrmFlg)
+		{
 			sprintf(PrntBuf, "CalcAvgPrd reset- DeCodeVall:%d\n", DeCodeVal);
 			printf(PrntBuf);
 		}
@@ -2420,7 +2494,7 @@ int CalcWPM(int dotT, int dahT, int spaceT)
 	float avgt = float(dotT + dahT + (2 * spaceT)) / 6.0; // 20221105
 	int codeSpeed = (int)(1200.0 / avgt);
 	sprintf(PrntBuf, "WPM: %d;\t Dit:%d; Dah%d; Space%d\n", codeSpeed, dotT, dahT, spaceT); // test/check timing only
-	//printf("%s", PrntBuf);
+	// printf("%s", PrntBuf);
 
 	return codeSpeed;
 }
@@ -2440,13 +2514,13 @@ void SetModFlgs(int ModeVal)
 {
 	switch (ModeVal)
 	{
-	case 0: //Normal
+	case 0: // Normal
 		BugMode = false;
 		Bug2 = false;
 		NrmMode = true;
 		Bug3 = false;
 		break;
-	case 1: //Bg1
+	case 1: // Bg1
 		BugMode = false;
 		Bug2 = false;
 		NrmMode = true;
@@ -2461,13 +2535,13 @@ void SetModFlgs(int ModeVal)
 		Bug3 = true;
 
 		break;
-	case 2: //Bg2
+	case 2: // Bg2
 		BugMode = true;
 		Bug2 = false;
 		NrmMode = false;
 		Bug3 = false;
 		break;
-	case 3: //Bg3 (Cootie)
+	case 3: // Bg3 (Cootie)
 		BugMode = false;
 		Bug2 = true;
 		NrmMode = false;
@@ -2476,7 +2550,7 @@ void SetModFlgs(int ModeVal)
 	}
 }
 //////////////////////////////////////////////////////////////////////
-/* this routine doesn't actually display anything; its role is to convert the dit/dah pattern created in 
+/* this routine doesn't actually display anything; its role is to convert the dit/dah pattern created in
 the KeyEvntSR() routine into a set of ascii characters.
 Usually 1 character per decodeval, but can be 2,3, or more. Depending on how sloppy the sending is */
 void DisplayChar(unsigned int decodeval)
@@ -2497,14 +2571,14 @@ void DisplayChar(unsigned int decodeval)
 	// clear buffer
 	for (int i = 0; i < sizeof(Msgbuf); ++i)
 		Msgbuf[i] = 0;
-	if (decodeval != 99999)// 99999 is the 'end of File' code; So if we see this, there is nothing left to process
-	{ 
+	if (decodeval != 99999) // 99999 is the 'end of File' code; So if we see this, there is nothing left to process
+	{
 		/* prepare to transfer inter-symbol space intervals to next buffer */
 		int SymblLen = 0;
 		int GlitchCnt = 0;
 		int GlitchCnt1 = 0;
 		int p1 = 0;
-		/* 20230722 for esp32, and given that the "glicth fixer" now in the Goertzel section, 
+		/* 20230722 for esp32, and given that the "glicth fixer" now in the Goertzel section,
 		   feel like the following section is obsolete
 		*/
 		/* But 1st, test space timing for glitches*/
@@ -2547,7 +2621,7 @@ void DisplayChar(unsigned int decodeval)
 		// 	GlitchCnt1 = GlitchCnt;
 		// 	GlitchCnt = 0;
 		// }
-		DCVStrd[0] = decodeval;//incase we decide this is actaully part of a longer symbol set, save this value/pattern, 
+		DCVStrd[0] = decodeval; // incase we decide this is actaully part of a longer symbol set, save this value/pattern,
 		/*Again, for ESP32 setup, the following for loop isn't really needed */
 		for (int p = 0; p < MaxIntrvlCnt; p++)
 		{
@@ -2557,10 +2631,10 @@ void DisplayChar(unsigned int decodeval)
 				SymblLen = p;
 			SpcIntrvl1[p] = SpcIntrvl[p];
 		}
-		if (GlitchCnt == 0) //for ESP32 should always be true
+		if (GlitchCnt == 0)		 // for ESP32 should always be true
 		{						 // Ok, we appear to have a usable/valid value
 			bool DpScan = false; //"DpScan" = Deep Scan
-			if (!Bug2 && !Bug3)//if (!Bug2)//
+			if (!Bug2 && !Bug3)	 // if (!Bug2)//
 				DpScan = true;
 			/* if "true", we're not operating in one of the "Bug" timing modes
 			 * so use both dictionaries to find a match to the current decodeval
@@ -2592,22 +2666,25 @@ void DisplayChar(unsigned int decodeval)
 					}
 				}
 				decodeval = DCVStrd[0] >> (SymblLen - EndSPntr);
-				if(Test && NrmFlg){
-					printf("decodeval ReParsed: %d; \n", decodeval );//for debugging only
-				}	
+				if (Test && NrmFlg)
+				{
+					printf("decodeval ReParsed: %d; \n", decodeval); // for debugging only
+				}
 				if (Srch4Match(decodeval, true) < 0)
 				{
 					Msgbuf[0] = 0; // clear buffer
-					
-				}else{
-					//printf("1st Char : %s; ", Msgbuf);//for debugging only
-					//sprintf( TmpBufA, "%s", Msgbuf);//this doesn't work with ESP32 compiler; So Have to use the following code
-					for(int i =0; i<sizeof(TmpBufA);i++){
+				}
+				else
+				{
+					// printf("1st Char : %s; ", Msgbuf);//for debugging only
+					// sprintf( TmpBufA, "%s", Msgbuf);//this doesn't work with ESP32 compiler; So Have to use the following code
+					for (int i = 0; i < sizeof(TmpBufA); i++)
+					{
 						TmpBufA[i] = Msgbuf[i];
-						if(TmpBufA[i]== 0) break;
-
+						if (TmpBufA[i] == 0)
+							break;
 					}
-				 }
+				}
 				/*now construct the 2nd decodeval */
 				int DcdVal2 = (1 << ((SymblLen - EndSPntr)));
 				int Mask = 0;
@@ -2621,10 +2698,10 @@ void DisplayChar(unsigned int decodeval)
 				DcdVal2 += (DCVStrd[0] & Mask);
 				for (int p = 0; p < 8; p++)
 					Msgbuf[p] = 0; // erase buffer
-				//printf("DcdVal2 : %d; ", DcdVal2 );//for debugging only	
+				// printf("DcdVal2 : %d; ", DcdVal2 );//for debugging only
 				if (Srch4Match(DcdVal2, true) < 0)
 				{
-					sprintf( Msgbuf, "%s",  TmpBufA);
+					sprintf(Msgbuf, "%s", TmpBufA);
 					DCVStrd[0] = 0;
 					for (int p = 0; p < MaxIntrvlCnt; p++)
 					{
@@ -2635,16 +2712,17 @@ void DisplayChar(unsigned int decodeval)
 				else
 				{
 					/* it appears that a legitimate decodeval was found, so use this data for potential concatenation with the next symbol set */
-					//printf("2nd Char : %s; ", Msgbuf);//for debugging only	
-					// if(TonPltFlg ||Test) //sprintf(TmpBufB, "[%s]", Msgbuf);
-					// else //
-					//sprintf(TmpBufB, "%s", Msgbuf);//this doesn't work with ESP32 compiler; So Have to use the following code
-					for(int i =0; i<sizeof(TmpBufB);i++){
+					// printf("2nd Char : %s; ", Msgbuf);//for debugging only
+					//  if(TonPltFlg ||Test) //sprintf(TmpBufB, "[%s]", Msgbuf);
+					//  else //
+					// sprintf(TmpBufB, "%s", Msgbuf);//this doesn't work with ESP32 compiler; So Have to use the following code
+					for (int i = 0; i < sizeof(TmpBufB); i++)
+					{
 						TmpBufB[i] = Msgbuf[i];
-						if(TmpBufB[i] == 0) break;
-
+						if (TmpBufB[i] == 0)
+							break;
 					}
-					sprintf( Msgbuf, "%s%s", TmpBufA, TmpBufB);//put the two just found characters back in the MsgBuf, in their order of occurance
+					sprintf(Msgbuf, "%s%s", TmpBufA, TmpBufB); // put the two just found characters back in the MsgBuf, in their order of occurance
 					// ChrCntFix = 1;
 					while (TmpBufA[ChrCntFix] != 0)
 						++ChrCntFix; // record how many characters will be printed in this group
@@ -2686,8 +2764,8 @@ void DisplayChar(unsigned int decodeval)
 			++badCodeCnt;
 		else if (decodeval != 255)
 			badCodeCnt = 0;
-		if (badCodeCnt > 10 && wpm > 25)// 20230913 changed count from 5 to 10
-		{ // do an auto reset back to 15wpm
+		if (badCodeCnt > 10 && wpm > 25) // 20230913 changed count from 5 to 10
+		{								 // do an auto reset back to 15wpm
 			WPMdefault();
 		}
 	}
@@ -2786,13 +2864,13 @@ int linearSrchChr(char val, char arr[ARSIZE][2], int sz)
 void dispMsg(char Msgbuf[50])
 {
 
-	if (Test) //if (1)//
+	if (Test) // if (1)//
 	{
 		sprintf(PrntBuf, "\t\tdispMsg: \t%s\n\r", Msgbuf);
 		printf(PrntBuf);
 	}
 	int msgpntr = 0;
-	//int xoffset = 0;
+	// int xoffset = 0;
 	char info[25];
 	char tmpbuf[2];
 	// sprintf(info, "");
@@ -2852,13 +2930,13 @@ void dispMsg(char Msgbuf[50])
 				ptrmsgbx->dispDeCdrTxt(tmpbuf, TFT_GREENYELLOW);
 				--MsgChrCnt[1];
 				/*now remove the previously decoded character from DcddChrBuf */
-				for (int i = sizeof(DcddChrBuf)-1; i == 0; i--)
+				for (int i = sizeof(DcddChrBuf) - 1; i == 0; i--)
 				{
-					DcddChrBuf[i] =  DcddChrBuf[i-1];
+					DcddChrBuf[i] = DcddChrBuf[i - 1];
 				}
 				/*make sure the DcddChrBuf is 'capped' correctly*/
-				DcddChrBuf[sizeof(DcddChrBuf)-1] =  0;// add string terminator
-				DcddChrBuf[0] =  (uint8_t) 32;// add "space" symbol to beginning of  the DcddChrBuf
+				DcddChrBuf[sizeof(DcddChrBuf) - 1] = 0; // add string terminator
+				DcddChrBuf[0] = (uint8_t)32;			// add "space" symbol to beginning of  the DcddChrBuf
 			}
 			DeleteID = 0;
 
@@ -2874,20 +2952,24 @@ void dispMsg(char Msgbuf[50])
 		/*added the following 11 lines for AdvParser comparison*/
 		if (CptrTxt)
 		{
-			if (curChar != 32) //skip if curChar = 'SPACE'
+			if (curChar != 32) // skip if curChar = 'SPACE'
 			{
 				LtrHoldr[LtrPtr] = curChar;
-				//printf("[%c]",curChar);
+				// printf("[%c]",curChar);
 				LtrHoldr[LtrPtr + 1] = 0;
 				LtrPtr++;
-				if(curChar != 'T' && curChar != 'E') ValidChrCnt++;
-				if (curChar != 'T') WrdChrCnt++;
+				if (curChar != 'T' && curChar != 'E')
+					ValidChrCnt++;
+				if (curChar != 'T')
+					WrdChrCnt++;
 				/*Auto-word break adjustment test*/
-				//if (LtrPtr > 11 && curChar != 'T')
-				if (WrdChrCnt > 8){/*this word is getting long. Shorten the wordBrk interval a bit*/
+				// if (LtrPtr > 11 && curChar != 'T')
+				if (WrdChrCnt > 8)
+				{						/*this word is getting long. Shorten the wordBrk interval a bit*/
 					wrdbrkFtcr -= 0.05; //-= 0.025
 					ApplyWrdFctr(wrdbrkFtcr);
-					if(DbgWrdBrkFtcr) printf("wordBrk-: %d; wrdbrkFtcr: %5.3f; MsgBuf: %s\n", (uint16_t)wordBrk, wrdbrkFtcr, Msgbuf);
+					if (DbgWrdBrkFtcr)
+						printf("wordBrk-: %d; wrdbrkFtcr: %5.3f; MsgBuf: %s\n", (uint16_t)wordBrk, wrdbrkFtcr, Msgbuf);
 				}
 				if (LtrPtr > 28)
 					LtrPtr = 28; // limit adding more than 30 characters to the "LtrHoldr" buffer
@@ -2895,18 +2977,18 @@ void dispMsg(char Msgbuf[50])
 		}
 		if (LstPstdchar[0] == 0x20)
 			LstPstdchar[0] = curChar;
-		
+
 		tmpbuf[0] = curChar;
 		tmpbuf[1] = 0;
 		DeCoderActiviated = true;
 		ptrmsgbx->dispDeCdrTxt(tmpbuf, TFT_GREENYELLOW);
 		/*now add the just decoded character to DcddChrBuf */
-		for (int i = 0; i < sizeof(DcddChrBuf)-1; i++)
+		for (int i = 0; i < sizeof(DcddChrBuf) - 1; i++)
 		{
-			DcddChrBuf[i] =  DcddChrBuf[i+1];
+			DcddChrBuf[i] = DcddChrBuf[i + 1];
 		}
-		DcddChrBuf[sizeof(DcddChrBuf)-2] = curChar;
-		DcddChrBuf[sizeof(DcddChrBuf)-1] = 0;
+		DcddChrBuf[sizeof(DcddChrBuf) - 2] = curChar;
+		DcddChrBuf[sizeof(DcddChrBuf) - 1] = 0;
 
 		// char tmpStrBuf[9];
 		// for (int i = 0; i < sizeof(tmpStrBuf); i++)
@@ -2917,14 +2999,13 @@ void dispMsg(char Msgbuf[50])
 		// }
 		// sprintf(DcddChrBuf, "%s%c", tmpStrBuf, curChar);// add the character just "printed" to the "DcddChrBuf"
 
-		
 		/* now test/correct letter groups that represent common mis-prints */
 		if (CptrTxt) // but don't do it with AdvParser built text
-		{ //No longer need to worry about if we have enough decoded characters evaluate the following sloppy strings DcddChrBuf now has enough data, to test for special character combos often found with sloppy sending
-			int lstCharPos = sizeof(DcddChrBuf)-2;
-			if(DcddChrBuf[lstCharPos - 1] == '@' && DcddChrBuf[lstCharPos] == 'D')
-			{															  
-				sprintf(Msgbuf, " (%c%s", DcddChrBuf[lstCharPos - 2], "AC)");// test for "@" (%c%s", DcddChrBuf[lstCharPos - 2], "AC)"); //"true"; Insert preceeding character plus correction "AC"
+		{			 // No longer need to worry about if we have enough decoded characters evaluate the following sloppy strings DcddChrBuf now has enough data, to test for special character combos often found with sloppy sending
+			int lstCharPos = sizeof(DcddChrBuf) - 2;
+			if (DcddChrBuf[lstCharPos - 1] == '@' && DcddChrBuf[lstCharPos] == 'D')
+			{
+				sprintf(Msgbuf, " (%c%s", DcddChrBuf[lstCharPos - 2], "AC)"); // test for "@" (%c%s", DcddChrBuf[lstCharPos - 2], "AC)"); //"true"; Insert preceeding character plus correction "AC"
 			}
 
 			// if (DcddChrBuf[lstCharPos - 1] == 'P' && DcddChrBuf[lstCharPos] == 'D')
@@ -2932,11 +3013,11 @@ void dispMsg(char Msgbuf[50])
 			// 	sprintf(Msgbuf, " (%c%s", DcddChrBuf[lstCharPos - 2], "AND)"); //"true"; Insert preceeding character plus correction "AND"
 			// }
 			if (DcddChrBuf[lstCharPos - 1] == '6' && DcddChrBuf[lstCharPos] == 'E')
-			{															   // test for "6E"
+			{																   // test for "6E"
 				sprintf(Msgbuf, " (%c%s", DcddChrBuf[lstCharPos - 2], "THE)"); //"true"; Insert preceeding character plus correction "THE"
 			}
 			if (DcddChrBuf[lstCharPos - 1] == '6' && DcddChrBuf[lstCharPos] == 'A')
-			{															   // test for "6A"
+			{																   // test for "6A"
 				sprintf(Msgbuf, " (%c%s", DcddChrBuf[lstCharPos - 2], "THA)"); //"true"; Insert preceeding character plus correction "THA"
 			}
 			if (DcddChrBuf[lstCharPos - 1] == '9' && DcddChrBuf[lstCharPos] == 'E')
@@ -2948,7 +3029,7 @@ void dispMsg(char Msgbuf[50])
 				sprintf(Msgbuf, " (WELL)"); //"true"; Insert correction "WELL"
 			}
 			if ((DcddChrBuf[lstCharPos - 2] == 'N' || DcddChrBuf[lstCharPos - 2] == 'L') && DcddChrBuf[lstCharPos - 1] == 'M' && DcddChrBuf[lstCharPos] == 'Y')
-			{															  // test for "NMY/LMY"
+			{																  // test for "NMY/LMY"
 				sprintf(Msgbuf, " (%c%s", DcddChrBuf[lstCharPos - 2], "OW)"); //"true"; Insert correction "NOW"/"LOW"
 			}
 			if (DcddChrBuf[lstCharPos - 2] == 'T' && DcddChrBuf[lstCharPos - 1] == 'T' && DcddChrBuf[lstCharPos] == 'O')
@@ -2958,11 +3039,11 @@ void dispMsg(char Msgbuf[50])
 		}
 		// recalculate maximum wait interval to splice decodeval
 		if (Bug3 && curChar != ' ')
-		{ // if(Bug3 & (cnt>CPL) & (DcddChrBuf[cnt-(CPL)]!=' ') ){ //JMH 20200925 with current algorithm, no longer need to wait for "DcddChrBuf" to become active
+		{									 // if(Bug3 & (cnt>CPL) & (DcddChrBuf[cnt-(CPL)]!=' ') ){ //JMH 20200925 with current algorithm, no longer need to wait for "DcddChrBuf" to become active
 			ltrBrk = (60 * UsrLtrBrk) / 100; // Jmh 20200925 added this to keep "ltrBrk" at a dynamic/reasonable value with respect to what the sender is doing
-			#ifdef DBugLtrBrkTiming
+#ifdef DBugLtrBrkTiming
 			printf("I ltrBrk:%d\n", (uint16_t)ltrBrk);
-			#endif
+#endif
 			if (ShrtBrk[LtrCntr] < UsrLtrBrk)
 			{ // we're working with the last letter received was started before a normal letter break period
 				ShrtFctr = float(float(80 * ltrBrk) / float(100 * UsrLtrBrk));
@@ -2970,9 +3051,9 @@ void dispMsg(char Msgbuf[50])
 			}
 
 			if ((ShrtBrk[LtrCntr] < 0.6 * wordBrk) && curChar != ' ' && (info[0] == 0))
-			{// this filter is based on Bug sent code
-				UsrLtrBrk = (5 * UsrLtrBrk + ShrtBrk[LtrCntr]) / 6; 
-			} 
+			{ // this filter is based on Bug sent code
+				UsrLtrBrk = (5 * UsrLtrBrk + ShrtBrk[LtrCntr]) / 6;
+			}
 		}
 		if (Bug3 && SCD && Test)
 		{
@@ -2988,7 +3069,7 @@ void dispMsg(char Msgbuf[50])
 			// 	Ltr = curChar;
 			// }
 			// else
-				Ltr = DcddChrBuf[sizeof(DcddChrBuf)-2];
+			Ltr = DcddChrBuf[sizeof(DcddChrBuf) - 2];
 			// sprintf(DeBugMsg, "%d %d \t%c%c%c %d/%d/%d/%d/%s   \t%d/%lu\t  \t%lu\t%d \t%s \n\r",LtrCntr, ShrtBrk[LtrCntr],'"', Ltr,'"', ShrtBrkA, ltrBrk, wordBrk, UsrLtrBrk, str_ShrtFctr, cursorX, cursorY,  cnt, xoffset, info1);
 			// printf(DeBugMsg);
 			// LtrCntr = 0;
@@ -3001,7 +3082,6 @@ void dispMsg(char Msgbuf[50])
 			i++;
 		}
 		msgpntr++;
-	
 	}
 	LtrCntr = 0;
 	ChkDeadSpace();
@@ -3023,7 +3103,7 @@ void dispMsg(char Msgbuf[50])
 //     DcddChrBuf[cnt] = DcddChrBuf[cnt + CPL]; //shift existing text character forward by one line
 //     cnt++;
 //     //if (((cnt) - offset)*fontW >= displayW) {
-// 	if (((cnt) - offset) >= CPL) {	
+// 	if (((cnt) - offset) >= CPL) {
 //       curRow++;
 //       offset = cnt;
 //     //   cursorX = 0;
@@ -3107,10 +3187,10 @@ void showSpeed(void)
 			break;
 		case 6:
 			sprintf(tmpbufB, "B3");
-			break;			
+			break;
 		case 7:
 			sprintf(tmpbufB, "- ");
-			break;				
+			break;
 		default:
 			sprintf(tmpbufB, "? ");
 			break;
@@ -3185,8 +3265,8 @@ void SftReset(void) // Not called in ESP32 version
 
 	for (int i = 0; i < sizeof(DcddChrBuf); ++i)
 		DcddChrBuf[i] = 0;
-	//cnt = 0;
-	//curRow = 0;
+	// cnt = 0;
+	// curRow = 0;
 	offset = 0;
 	cursorX = 0;
 	cursorY = 0;
@@ -3209,8 +3289,9 @@ void CLrDCdValBuf(void)
 		DCVStrd[i] = 0;
 	}
 	DeCodeVal = 0;
-	if(Test && NrmFlg){
-		printf("CLrDCdValBuf Reset: %d; \n", DeCodeVal);//for debugging only
+	if (Test && NrmFlg)
+	{
+		printf("CLrDCdValBuf Reset: %d; \n", DeCodeVal); // for debugging only
 	}
 	OldDeCodeVal = 0;
 };
@@ -3220,19 +3301,19 @@ void SyncAdvPrsrWPM(void)
 	uint16_t DahVal = advparser.Get_DahVal();
 	uint16_t OldDahVal = (uint16_t)avgDah;
 	uint16_t OldSpace = (uint16_t)space;
-	space =  (unsigned long) advparser.Get_space();
+	space = (unsigned long)advparser.Get_space();
 	avgDeadSpace = space;
-	avgDit =  (unsigned long)advparser.Get_DitVal();
-	ltrBrk =  (unsigned long)advparser.Get_LtrBrkVal();
+	avgDit = (unsigned long)advparser.Get_DitVal();
+	ltrBrk = (unsigned long)advparser.Get_LtrBrkVal();
 	avgDah = (unsigned long)(3 * avgDit);
-	#ifdef DBugLtrBrkTiming
+#ifdef DBugLtrBrkTiming
 	printf("SyncAdvPrsrWPM - Resetting WPM; OldspaceVal %d; new space %d; OldDahVal %d; new DahVal %d; ltrBrk:%d; Wpm %d; AdvPrsrTxt:%s \n", OldSpace, (uint16_t)space, OldDahVal, DahVal, (uint16_t)ltrBrk, wpm, advparser.Msgbuf);
-	#endif
+#endif
 };
 void ApplyWrdFctr(float _wrdbrkFtcr)
 {
-	float tmpwordBrk = (float)wordBrk/OLDwrdbrkFtcr;
+	float tmpwordBrk = (float)wordBrk / OLDwrdbrkFtcr;
 	// printf("tmpwordBrk = %7.1f, OLDwrdbrkFtcr: %5.2f\n", tmpwordBrk, OLDwrdbrkFtcr);
-	wordBrk = (unsigned long)( _wrdbrkFtcr * tmpwordBrk);
+	wordBrk = (unsigned long)(_wrdbrkFtcr * tmpwordBrk);
 	OLDwrdbrkFtcr = _wrdbrkFtcr;
 };
