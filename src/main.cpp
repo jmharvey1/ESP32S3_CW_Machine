@@ -795,6 +795,10 @@ void DisplayUpDt(void *param)
   vTaskDelete(NULL);
 }
 ///////////////////////////////////////////////////////////////////////////////////////
+/*
+* Convert accumulated sample count needed to produce 40 'zero crossings' (tone cyles) to frequency
+* and second, look for tone frequency change, indicating a change in 'sender'
+*/
 void ToneFreqTask(void *param)
 {
   //uint8_t PeriodCntr;
@@ -838,7 +842,7 @@ void ToneFreqTask(void *param)
             {
               OutOfBndFrq = _DemodFreq;
             }
-            else if ((abs(OutOfBndFrq - _DemodFreq) > 4))
+            else if ((abs(OutOfBndFrq - _DemodFreq) > 5)) //20250218  > 4
             { /*OutOfBndFrq reset*/
               OutOfBndFrq = _DemodFreq;
               OutofBndCnt = 0;
@@ -1727,12 +1731,28 @@ void DsplTmr_callback(TimerHandle_t xtimer)
     if (QuequeFulFlg)
       {
         printf("DisplayUpDt timer Runing But Queque Reports FULL\n");
-        printf(LogBuf);
+        // printf(LogBuf);
         printf("Attempting to restart DisplayUpDt task\n");
-        vTaskDelete(DsplUpDtTaskHandle);
-        xTaskCreatePinnedToCore(DisplayUpDt, "DisplayUpDate Task", 8192, NULL, 3, &DsplUpDtTaskHandle, 0);
-        printf("DisplayUpDt task Deleted & ReCreate. Now will Restart it\n");
-        vTaskDelay((TickType_t)500);
+        //bool lpagn = true;
+        uint8_t state;
+        // while (lpagn) //(TickType_t)10
+        // {
+          //if (xQueueReceive(state_que, (void *)&state, pdMS_TO_TICKS(10)) == pdTRUE)
+          while (xQueueReceive(state_que, (void *)&state, pdMS_TO_TICKS(10)) == pdTRUE)
+          {
+            lvglmsgbx.IntrCrsr(state);
+            printf("state %d\n", state);
+          }
+          QuequeFulFlg = false;
+        //   else
+        //   {
+        //    lpagn = false;
+        //   }
+        // }
+        // vTaskDelete(DsplUpDtTaskHandle);
+        // xTaskCreatePinnedToCore(DisplayUpDt, "DisplayUpDate Task", 8192, NULL, 3, &DsplUpDtTaskHandle, 0);
+        // printf("DisplayUpDt task Deleted & ReCreate. Now will Restart it\n");
+        vTaskDelay((TickType_t)100);
         xTaskResumeFromISR(DsplUpDtTaskHandle);// DisplayUpDt
       }
 }

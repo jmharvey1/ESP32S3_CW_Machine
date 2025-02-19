@@ -309,7 +309,8 @@ void AdvParser::BldKyUpBktTbl(void)
     uint16_t stopchkval = (int)(1.7 * this->AvgDahVal);
     uint16_t MinltrBrkVal = (int)(0.70 * this->AvgDahVal);
     for (int i = 0; i <= SortdPtr - 1; i++)
-    {
+    {   
+        int chk = 0;
         if (i < SortdPtr)
         {
             TmpSlope = CurLtrBrkSlope;
@@ -317,15 +318,20 @@ void AdvParser::BldKyUpBktTbl(void)
             {
                 CurLtrBrkSlope = 1.0; // ignore entries that differ less than the sample period (8ms)
                 if(bstltrbrkptr == i) bstltrbrkptr = i+1; //20250217 Added this line, to ensure pointer follows small changes
+                chk = 1;
             }    
             else if ((this->SortdUpIntrvls[i + 1]) <= MinltrBrkVal)
             {
                 CurLtrBrkSlope = 1.0; // ignore entries that are less than the 70% of a dah
                 bstltrbrkptr = i;
+                chk = 2;
             }
             else
+            {
                 CurLtrBrkSlope = ((float)((float)this->SortdUpIntrvls[i + 1] / (float)this->SortdUpIntrvls[i]));
-            if (i >= UprHlf && i < stop && this->SortdUpIntrvls[i] > 35) // we're looking for a letter break for code between 12 &35 WPM, so skip intervals that don't make sense
+                chk = 3;
+            }
+            if (i >= UprHlf && i < stop && this->SortdUpIntrvls[i] > 20) // we're looking for a letter break for code between 12 &35 WPM, so skip intervals that don't make sense
             {
                 char choice = ' ';
                 if (CurLtrBrkSlope >= MaxLtrBrkSlope && DoSlopeChk)
@@ -350,7 +356,7 @@ void AdvParser::BldKyUpBktTbl(void)
                 if (MaxLtrBrkSlope >= 1.75 && bstltrbrkptr >= 2)
                     stop = i;
                 if (Dbug)
-                    printf("i:%d; %d/%d = %5.1f; bstltrbrkptr: %d rule: %c \n", i, this->SortdUpIntrvls[i + 1], this->SortdUpIntrvls[i], CurLtrBrkSlope, bstltrbrkptr, choice);    
+                    printf("i:%d; %d/%d = %5.1f; bstltrbrkptr: %d rule: %d%c \n", i, this->SortdUpIntrvls[i + 1], this->SortdUpIntrvls[i], CurLtrBrkSlope, bstltrbrkptr, chk, choice);    
             }
             else if (Dbug && i >= UprHlf && this->SortdUpIntrvls[i] > 35)
                 printf(" i:%d; %d/%d = %5.1f\n", i, this->SortdUpIntrvls[i + 1], this->SortdUpIntrvls[i], CurLtrBrkSlope);
@@ -532,7 +538,7 @@ void AdvParser::EvalTimeData(void)
         TmpDwnIntrvls[i] = this->KeyDwnIntrvls[i];
         TmpUpIntrvls[i] = this->KeyUpIntrvls[i];
         /*For Settings Analysis copy only the 'good' time intervals*/
-        if (KeyDwnSN[i] > 5) //greater than ~ 2 'S' units
+        if (KeyDwnSN[i] > 2) //greater than ~ 1 'S' units
         {
             SortdDwnIntrvls[SortdPtr] = this->KeyDwnIntrvls[i];
             SortdUpIntrvls[SortdPtr] = this->KeyUpIntrvls[i];

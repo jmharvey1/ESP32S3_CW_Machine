@@ -23,6 +23,7 @@
 /*20250203 Moved S/N log calc to LVGLMsgBox.pp dispMsg2()*/
 /*20250203 Changed method for selecting S/N KeyDwn & KeyUp sample values */
 /*20250217 Changed Buffer size from 6 to 3 - Found the extended delay was no longer needed*/
+/*20250217 Reworked S/N capture and changed Avgnoise code for white set value to improve false key down detection*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -147,7 +148,9 @@ int prntcnt = 0;
 float MagBuf[MagBSz];
 float NoisBuf[2 * MagBSz];
 unsigned long EvntTimeBuf[MagBSz];
-float OldLvlBuf[4];
+#define OldLvlBufSize 4
+int OldLvlBufptr =0;
+float OldLvlBuf[OldLvlBufSize];
 int NoisPtr = 0;
 float ToneThresHold = 0;
 int ClimCnt = 0;
@@ -332,8 +335,8 @@ void ComputeMags(unsigned long now)
 	}
 	/*End of preload process */
 	CurLvl = (magC + magL + magH) / 3;
-	if (CurLvl < 50)
-		CurLvl = NowLvl; // something went wrong use last datapoint
+	// if (CurLvl < 50)
+	// 	CurLvl = NowLvl; // something went wrong use last datapoint
 	NowLvl = CurLvl;	 //'NowLvl will be used later for showing current LED state
 	/* ESP32 Plot code to do a simple look at the sampling & conversion process */
 	// char buf[20];
@@ -346,8 +349,17 @@ void ComputeMags(unsigned long now)
 	{
 		SndS_N = false;
 		KeyUpSmplCnt = 0;
-		float S2N = OldLvlBuf[2] / NowLvl;
-		// float S2Na = S2N;
+		//float S2N = OldLvlBuf[3] / NowLvl;
+		float S2N = OldLvlBuf[OldLvlBufptr] / NowLvl;
+		/*Uncomment For testing only */
+		// int prntptr = OldLvlBufptr;
+		// for(int i = 0; i< OldLvlBufSize; i++ )
+		// {
+		// 	if(prntptr+i == OldLvlBufSize) prntptr -= OldLvlBufSize; 
+		// 	printf("%d, ", (uint16_t)OldLvlBuf[prntptr+i]);
+		// } 
+		// printf("%d\n", (uint16_t)NowLvl);
+
 		if (xQueueSend(ToneSN_que, &S2N, pdMS_TO_TICKS(2)) == pdFALSE)//used byLVGLMsgBox to drive the S/N shown on the Display
 		{
 			// printf("Failed to push 'pksigH' to 'RxSig_que' \n");
@@ -358,10 +370,10 @@ void ComputeMags(unsigned long now)
 		}
 		//printf("ToneSN_que2, &S2N: %5.1f; now:%d\n", S2N, (uint16_t)now);
 	}
-	// OldLvlBuf[3] = OldLvlBuf[2];
-	OldLvlBuf[2] = OldLvlBuf[1];
-	OldLvlBuf[1] = OldLvlBuf[0];
-	OldLvlBuf[0] = MagBuf[MBpntr];
+	OldLvlBuf[OldLvlBufptr] = NowLvl;
+	OldLvlBufptr++;
+	if(OldLvlBufptr == OldLvlBufSize) OldLvlBufptr = 0;
+
 
 	MagBuf[MBpntr] = CurLvl;
 	EvntTimeBuf[MBpntr]  = now;
@@ -384,6 +396,7 @@ void ComputeMags(unsigned long now)
 	}
 	bool NoisUp = true;
 	curNois = (SigPk - NoiseFlr);
+	//curNois *= 2;
 	if (OldcurNois > curNois)
 		NoisUp = false;
 
@@ -410,12 +423,13 @@ void ComputeMags(unsigned long now)
 	{
 		if (NoisUp)
 		{
-			curNois *= 1.7;
+			//curNois *= 1.7;
 			if (curNois > 40000)
 				curNois = 40000;
-			// curNois *= 2.5;
-			ToneThresHold = curNois;
-			// ToneThresHold = ((4*ToneThresHold) + (curNois))/5;
+			 
+			/*this establishes the tone detect level during white noise conditions
+			and tends to kepp it at or above the noise peaks*/
+			ToneThresHold = ((4*ToneThresHold) + (8*curNois))/5;
 		}
 		else
 		{
@@ -423,16 +437,16 @@ void ComputeMags(unsigned long now)
 			ToneThresHold = ((19 * ToneThresHold) + (OldcurNois)) / 20;
 		}
 	}
+	/*now to aviod false key dtection, set minimum noise value*/
+	if (curNois< 1500) curNois = 1500;
 	OldcurNois = curNois;
+	
 	/*Now look to see if the noise is increasing
 	And if it is, Add a differential term/componet to the ToneThresHold*/
 	int LstNLvlIndx = NoisPtr - 1;
 	if (LstNLvlIndx < 0)
 		LstNLvlIndx = 2 * MagBSz - 1;
-	if (ToneThresHold > NoisBuf[LstNLvlIndx])
-	{
-		//		ToneThresHold += 0.25*(ToneThresHold-NoisBuf[LstNLvlIndx]);
-	}
+	
 	/*save this noise value to histrory ring buffer for later comparison */
 	NoisPtr++;
 	if (NoisPtr == 2 * MagBSz)
@@ -643,8 +657,6 @@ void Chk4KeyDwn(float NowLvl)
 	if (!state)
 	{ // KeyDown
 		float tmpcurnoise;
-		// if(!SlwFlg)
-		// {
 		tmpcurnoise = ((CurLvl - NFlrBase) / 2) + NFlrBase;
 		if (state != OLDstate)
 		{
@@ -678,12 +690,12 @@ void Chk4KeyDwn(float NowLvl)
 		/*20250123 new approach to finding where/when to reset the threshold tone detect level
 		Note: the 'or' curNois vs NowLvl test is based on the curNois dropping below the CurLvl(nowlvl)
 		even in a noisy environment as a way to detect the presence of a tone */
-		if (state && (state != OLDstate)) // || (curNois < NowLvl/4))//(curNois < 0.75* NowLvl))
-		{
+		if ((state != OLDstate))//if (state && (state != OLDstate)) // || (curNois < NowLvl/4))//(curNois < 0.75* NowLvl))
+		{ /* Just transistion from keydown to keyup */
 			float tmpcurnoise = ((AvgNoise - NFlrBase) / 2) + NFlrBase;
 			AvgNoise = tmpcurnoise;
 			OLDstate = state;
-			//SndS_N = true;
+			SndS_N = true;
 		}
 
 	/* new auto-adjusting glitch detection; based on average dit length */
@@ -809,7 +821,7 @@ void Chk4KeyDwn(float NowLvl)
 						setcnt = 6;
 					} else 
 					
-					SndS_N = true;
+					//SndS_N = true;
 					if(setcnt>0)
 					{
 						setcnt--;

@@ -1251,7 +1251,7 @@ void WPMdefault(void)
 {
 	avgDit = 80.0; // average 'Dit' duration
 	avgDeadSpace = avgDit;
-	printf("A avgDeadSpace:%d\n",(uint16_t)avgDeadSpace);
+	//printf("A avgDeadSpace:%d\n",(uint16_t)avgDeadSpace);
 	AvgSmblDedSpc = avgDit;
 	avgDah = 240.0;
 	AvgLtrBrk = avgDah;
@@ -1478,7 +1478,7 @@ void SetLtrBrk(void)
 
 	if (ltrBrk > wordBrk)
 	{
-		printf("ltrBrk %d > wordBrk\n", (uint16_t)ltrBrk);
+		//printf("ltrBrk %d > wordBrk\n", (uint16_t)ltrBrk);
 		wordBrk = int(1.1 * float(ltrBrk));
 		wrdbrkFtcr = 1.0;
 		OLDwrdbrkFtcr = wrdbrkFtcr;
