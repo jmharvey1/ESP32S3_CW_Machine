@@ -191,7 +191,7 @@ QueueHandle_t RxSig_que;
 static const int ToneSN_que_len = 25;//50
 QueueHandle_t ToneSN_que;
 QueueHandle_t ToneSN_que2;
-static const int KeyEvnt_que_len = 2*IntrvlBufSize;//50;
+static const int KeyEvnt_que_len = (2*IntrvlBufSize) -3;//50;
 static const int KeyState_que_len = KeyEvnt_que_len;
 QueueHandle_t KeyEvnt_que;
 QueueHandle_t KeyState_que;
@@ -706,7 +706,7 @@ void DisplayUpDt(void *param)
     thread_notification = ulTaskNotifyTake(pdTRUE,  pdMS_TO_TICKS(100)); //portMAX_DELAY
     if (thread_notification)
     {
-      
+      if (QuequeFulFlg) printf("DisplayUpDt()/thread_notification TASK ERROR\n");
       // if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE) // wait forever
       // {
       //   xSemaphoreGive(mutex);
@@ -773,6 +773,7 @@ void DisplayUpDt(void *param)
            lpagn = false;
           }
         }
+        QuequeFulFlg = false;
         lvglmsgbx.Str_KyBrdBat_level(bt_keyboard.get_battery_level());
         //sprintf(LogBuf,"DisplayUpDt Step 3 complete\n");
         /*update tone bar graph*/
@@ -781,8 +782,8 @@ void DisplayUpDt(void *param)
         /* We have finished accessing the shared resource.  Release the
         semaphore. */
         xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
-      }
-      QuequeFulFlg = false;
+      } else printf("xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx FAILED\n"); 
+      
       //printf("Cur ADC Sample Rate: %d\n", cur_smpl_rate);// just for diagnostic testing
       bool HeapOK = heap_caps_check_integrity_all(true);
       if(!HeapOK)
@@ -1183,23 +1184,7 @@ void AdvParserTask(void *param)
       avgDit = 1200 / 40; 
 
     }
-    /*Added 20250211 */
-    // if (NuSender)/* ADC tone processing 'addSmpl()' detected Sender change - Start following text on a new line*/
-    // {                                                                        
-    //   if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
-    //   {
-    //     NuSender = false;
-    //     char NuLine[5];
-    //     NuLine[0] = 13; // carriage return
-    //     NuLine[1] = '>';
-    //     NuLine[2] = '>';
-    //     NuLine[3] = ' ';
-    //     NuLine[4] = 0;
-    //     lvglmsgbx.dispDeCdrTxt(NuLine, TFT_GREENYELLOW);
-    //     //printf("Sender Changed induced Wrd Break\n");
-    //     xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
-    //   }
-    // }
+    
     /*The following code is primarilry for debugging stack alocation & understanding how much time the advance parser needs*/
     // uint16_t AdvPIntrvl = (uint16_t)(pdTICKS_TO_MS(xTaskGetTickCount())-AdvPStart);
     // printf("AdvPIntrvl: %d\n", AdvPIntrvl);
@@ -1715,7 +1700,6 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
 } /*End Main loop*/
 
 /*Timer interrupt ISRs*/
-
 void DsplTmr_callback(TimerHandle_t xtimer)
 {
   // uint8_t state;
@@ -1724,35 +1708,51 @@ void DsplTmr_callback(TimerHandle_t xtimer)
   vTaskNotifyGiveFromISR(DsplUpDtTaskHandle, &xHigherPriorityTaskWoken); // start DisplayUpDt Task
   if (xHigherPriorityTaskWoken == pdTRUE)
   {
-      /*pdTRUE then a context switch should be performed to ensure 
+    /*pdTRUE then a context switch should be performed to ensure
+    the interrupt returns directly to the highest priority task. */
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    // printf("DsplTmr_callback->xHigherPriorityTaskWoken\n"); // this happens a lot
+  }
+  if (QuequeFulFlg)
+  {
+    printf("DisplayUpDt timer Runing But Queque Reports FULL\n");
+    // printf(LogBuf);
+    uint8_t state;
+    /*clear queue*/
+    while (xQueueReceive(state_que, (void *)&state, pdMS_TO_TICKS(10)) == pdTRUE)
+    {
+      // lvglmsgbx.IntrCrsr(state);
+      // printf("state %d\n", state);
+    }
+    QuequeFulFlg = false;
+    /*now try to create a crash*/
+    uint8_t MyCntr = 0;
+    while (1)
+    {
+      char OutofBound = StrdTxt[MyCntr];
+      printf("%d, OutofBound =%c\n", MyCntr, OutofBound);
+      *(volatile uint32_t *)0xDEADBEEF = 0;
+      MyCntr++;
+    }
+    vTaskSuspend(DsplUpDtTaskHandle);
+    vTaskNotifyGiveFromISR(DsplUpDtTaskHandle, &xHigherPriorityTaskWoken); // start DisplayUpDt Task
+    if (xHigherPriorityTaskWoken == pdTRUE)
+    {
+      /*pdTRUE then a context switch should be performed to ensure
       the interrupt returns directly to the highest priority task. */
       portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-      
+      // printf("DsplTmr_callback->xHigherPriorityTaskWoken\n"); // this happens a lot
+    }
+    // vTaskDelete(DsplUpDtTaskHandle);
+    // xTaskCreatePinnedToCore(DisplayUpDt, "DisplayUpDate Task", 8192, NULL, 3, &DsplUpDtTaskHandle, 0);
+    // printf("DisplayUpDt task Deleted & ReCreate. Now will Restart it\n");
+    vTaskDelay((TickType_t)100);
+    printf("Attempting to restart DisplayUpDt task\n");
+    if (xTaskResumeFromISR(DsplUpDtTaskHandle) == pdTRUE)
+    {
+      printf("xTaskResumeFromISR(DsplUpDtTaskHandle) == pdTRUE\n");
+    }
   }
-    if (QuequeFulFlg)
-      {
-        printf("DisplayUpDt timer Runing But Queque Reports FULL\n");
-        // printf(LogBuf);
-        
-        //bool lpagn = true;
-        uint8_t state;
-        // while (lpagn) //(TickType_t)10
-        // {
-          //if (xQueueReceive(state_que, (void *)&state, pdMS_TO_TICKS(10)) == pdTRUE)
-          while (xQueueReceive(state_que, (void *)&state, pdMS_TO_TICKS(10)) == pdTRUE)
-          {
-            lvglmsgbx.IntrCrsr(state);
-            printf("state %d\n", state);
-          }
-          QuequeFulFlg = false;
-          vTaskSuspend(DsplUpDtTaskHandle);
-        // vTaskDelete(DsplUpDtTaskHandle);
-        // xTaskCreatePinnedToCore(DisplayUpDt, "DisplayUpDate Task", 8192, NULL, 3, &DsplUpDtTaskHandle, 0);
-        // printf("DisplayUpDt task Deleted & ReCreate. Now will Restart it\n");
-        vTaskDelay((TickType_t)100);
-        printf("Attempting to restart DisplayUpDt task\n");
-        xTaskResumeFromISR(DsplUpDtTaskHandle);// DisplayUpDt
-      }
 }
 /*                                          */
 /* DotClk timer ISR                 */

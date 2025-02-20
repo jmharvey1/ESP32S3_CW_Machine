@@ -1563,21 +1563,22 @@ bool chkChrCmplt(void)
 				DelStr[i] = 0x8;
 			}
 		}
-		// for (i = LtrPtr; i < 2*LtrPtr; i++)
-		// {
-		// 	if(i<29)
-		// 	{
-
-		// 		DelStr[i] = LtrHoldr[i-LtrPtr];
-		// 	}
-		// }
 		if (i < 14)
 			DelStr[i] = 0x0;
 		else
 			DelStr[14] = 0x0;
-
-		if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+		if(LtrHoldr[0] == 'E' || LtrHoldr[0] == 0)
 		{
+			NuSender = false;
+			DeCoderActiviated = false;
+			sprintf(NuLineStr, "%s", DelStr);
+			ptrmsgbx->dispDeCdrTxt(NuLineStr, TFT_GREEN);
+			printf("skipped new line; LtrHoldr =%s\n", LtrHoldr);
+		}
+		else
+		{
+		// if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+		// {
 			NuSender = false;
 			DeCoderActiviated = false;
 			char NuLine[5];
@@ -1588,7 +1589,9 @@ bool chkChrCmplt(void)
 			NuLine[4] = 0;
 			sprintf(NuLineStr, "%s%s %s", DelStr, NuLine, LtrHoldr);
 			ptrmsgbx->dispDeCdrTxt(NuLineStr, TFT_GREEN);
-			xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
+			printf("New line; LtrHoldr =%s; %d\n", LtrHoldr, (uint8_t)LtrHoldr[0] );
+		// 	xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
+		// }
 		}
 	}
 	else if (NuSender)
@@ -1681,7 +1684,16 @@ bool chkChrCmplt(void)
 		if (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5))
 		{
 			if (!DataSetRdy)
+			{
 				printf("\n!!OVERFLOW - Skipping Adv Parser!!\n");
+				/*Need to also purge the S/N queue*/
+				float dummy;
+				int IndxPtr = 0;
+				while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+				{
+					IndxPtr++;
+				}
+			}
 			else
 				printf("\n!!Close to OVERFLOW!!\n");
 		}
@@ -1742,7 +1754,8 @@ bool chkChrCmplt(void)
 					advparser.Dbug = true;
 				}
 				/*Sync advparser.wrdbrkFtcr to current wrdbrkFtcr*/
-				// advparser.wrdbrkFtcr = wrdbrkFtcr;//20250216 decided to de-link the two
+				advparser.wrdbrkFtcr = wrdbrkFtcr;//20250216 decided to de-link the two
+				//printf("wrdbrkFtcr: %4.1f\n", wrdbrkFtcr);
 				/*Perpare advparser, by 1st copying current decoder symbol sets into local advparser arrays*/
 				int IndxPtr = 0;
 #if USE_TST_DATA

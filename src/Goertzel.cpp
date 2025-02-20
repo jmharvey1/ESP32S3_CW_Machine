@@ -368,11 +368,17 @@ void ComputeMags(unsigned long now)
 
 		if (xQueueSend(ToneSN_que, &S2N, pdMS_TO_TICKS(2)) == pdFALSE)//used byLVGLMsgBox to drive the S/N shown on the Display
 		{
-			// printf("Failed to push 'pksigH' to 'RxSig_que' \n");
+			printf("Failed to push 'S2N' to 'ToneSN_que' \n");
 		}
 		if (xQueueSend(ToneSN_que2, &S2N, pdMS_TO_TICKS(2)) == pdFALSE)// Used ultimately by the Advanced Post Parser to seperate good key timing from questionable entries
 		{
-			// printf("Failed to push 'pksigH' to 'RxSig_que' \n");
+			printf("Failed to push 'S2N' to 'ToneSN_que2' \n");
+			float dummy;
+			int IndxPtr = 0;
+			while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+			{
+				IndxPtr++;
+			}
 		}
 		//printf("ToneSN_que2, &S2N: %5.1f; now:%d\n", S2N, (uint16_t)now);
 	}
@@ -857,8 +863,27 @@ void Chk4KeyDwn(float NowLvl)
 					TmpEvntTime = EvntTimeBuf[MBpntr];
 	
 				}
-				xQueueSend(KeyEvnt_que, &TmpEvntTime, (TickType_t)0);
-				xQueueSend(KeyState_que, &Sentstate, (TickType_t)0);
+				
+				if(xQueueSend(KeyEvnt_que, &TmpEvntTime, (TickType_t)0) == pdFALSE)
+				{ 
+					printf("!!! KeyEvnt_que FULL !!!\n");
+					unsigned long dummy;
+					int IndxPtr = 0;
+					while (xQueueReceive(KeyEvnt_que, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+					{
+						IndxPtr++;
+					}
+				}
+				if(xQueueSend(KeyState_que, &Sentstate, (TickType_t)0) == pdFALSE)
+				{ 
+					printf("!!! KeyState_que !!!\n");
+					uint8_t dummy;
+					int IndxPtr = 0;
+					while (xQueueReceive(KeyState_que, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+					{
+						IndxPtr++;
+					}
+				}
 				//printf("\tKeyEvnt_que, EvntTime: %d; State: %d\n", (uint16_t)TmpEvntTime, Sentstate);
 				//if(!Sentstate) printf("\tKeyEvnt_que, &TmpEvntTime: &d\n", (uint16_t)TmpEvntTime);//testing debugging
 				KeyEvntSR(Sentstate, TmpEvntTime);

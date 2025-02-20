@@ -55,6 +55,7 @@ SemaphoreHandle_t sem_gui_ready;
 #endif
 SemaphoreHandle_t lvgl_mux;
 SemaphoreHandle_t lvgl_semaphore = NULL;
+SemaphoreHandle_t RingBuf_semaphore = NULL;
 // static TaskHandle_t Txt_Gen_Task_hndl = NULL;
 // static TaskHandle_t vgl_port_task_hndl = NULL;
 i2c_master_bus_handle_t i2c_master_bus_handle = nullptr; // added here for waveshare touch support
@@ -1634,6 +1635,7 @@ void LVGLMsgBox::InitDsplay(void)
 	ESP_ERROR_CHECK(esp_lcd_touch_new_i2c_gt911(tp_io_handle, &lcd_touch_config, &tp));
 	printf("lcd_touch_handle %p\n", tp);
 	lvgl_semaphore = xSemaphoreCreateMutex();
+	RingBuf_semaphore = xSemaphoreCreateMutex();
 	ESP_LOGI(TAG, "Initialize LVGL library");
 	lv_init();
 	void *buf1 = NULL; // will be used by lvgl as a staging area (memory space) to create display images/maps before posting to display ST7262
@@ -1722,20 +1724,24 @@ void LVGLMsgBox::ReBldDsplay(void)
 	}
 	ReStrSettings();
 	// TODO this may need more thought
-	RingbufPntr2 = 0;
-
-	/*reset pointers & counters*/
-	cursorX = cursorY = curRow = cnt = offset = CursorPntr = 0;
-	RingbufPntr1--;
-	if (RingbufPntr1 < 0)
-		RingbufPntr1 = RingBufSz - 1;
-	Bump = true;
-	bool curflg = SOTFlg;
-	setSOTFlg(curflg); // one way to refresh the SOT/STR status box without having to reinvent the wheel
-	while (RingbufPntr1 != RingbufPntr2)
+	if (pdTRUE == xSemaphoreTake(RingBuf_semaphore, 100 / portTICK_PERIOD_MS))
 	{
-		vTaskDelay(pdMS_TO_TICKS(1));
-	}
+		RingbufPntr2 = 0;
+
+		/*reset pointers & counters*/
+		cursorX = cursorY = curRow = cnt = offset = CursorPntr = 0;
+		RingbufPntr1--;
+		if (RingbufPntr1 < 0)
+			RingbufPntr1 = RingBufSz - 1;
+		Bump = true;
+		bool curflg = SOTFlg;
+		setSOTFlg(curflg); // one way to refresh the SOT/STR status box without having to reinvent the wheel
+		while (RingbufPntr1 != RingbufPntr2)
+		{
+			vTaskDelay(pdMS_TO_TICKS(1));
+		}
+		xSemaphoreGive(RingBuf_semaphore);
+	} else printf("xSemaphoreTake(RingBuf_semaphore FAILED B\n");
 	CursorPntr = StrdPntr;
 }
 /* normally called by the Keyboard parser process
@@ -1945,26 +1951,30 @@ void LVGLMsgBox::dispDeCdrTxt(char Msgbuf[50], uint16_t Color)
 #ifdef AutoCorrect
 	printf("[%s]", Msgbuf);
 #endif
-	while (Msgbuf[msgpntr] != 0)
+	if (pdTRUE == xSemaphoreTake(RingBuf_semaphore, 450 / portTICK_PERIOD_MS))// this can fail, when the advanced post parser takes a long time
 	{
-		if (RingbufPntr1 < RingBufSz - 1)
-			DeCdrRingbufChar[RingbufPntr1 + 1] = 0;
-		else
-			DeCdrRingbufChar[0] = 0;
-		DeCdrRingbufChar[RingbufPntr1] = Msgbuf[msgpntr];
+		while (Msgbuf[msgpntr] != 0)
+		{
+			if (RingbufPntr1 < RingBufSz - 1)
+				DeCdrRingbufChar[RingbufPntr1 + 1] = 0;
+			else
+				DeCdrRingbufChar[0] = 0;
+			DeCdrRingbufChar[RingbufPntr1] = Msgbuf[msgpntr];
 /*Added for lvgl*/
 #ifdef AutoCorrect
-		if (DeCdrRingbufChar[RingbufPntr1] == ' ')
-			printf("%c; RingbufPntr1 %d\n", DeCdrRingbufChar[RingbufPntr1], RingbufPntr1);
+			if (DeCdrRingbufChar[RingbufPntr1] == ' ')
+				printf("%c; RingbufPntr1 %d\n", DeCdrRingbufChar[RingbufPntr1], RingbufPntr1);
 #endif
-		// printf("%c; RingbufPntr1 %d\n",Msgbuf[msgpntr], RingbufPntr1);
-		/*Not needed for vlgl display*/
-		// DeCdrRingbufClr[RingbufPntr1] = Color;
-		RingbufPntr1++;
-		if (RingbufPntr1 == RingBufSz)
-			RingbufPntr1 = 0;
-		msgpntr++;
-	}
+			// printf("%c; RingbufPntr1 %d\n",Msgbuf[msgpntr], RingbufPntr1);
+			/*Not needed for vlgl display*/
+			// DeCdrRingbufClr[RingbufPntr1] = Color;
+			RingbufPntr1++;
+			if (RingbufPntr1 == RingBufSz)
+				RingbufPntr1 = 0;
+			msgpntr++;
+		}
+		xSemaphoreGive(RingBuf_semaphore);
+	} else printf("xSemaphoreTake(RingBuf_semaphore FAILED C\n");
 };
 /*New for lvgl based screen
 Pathway to display text in the keyboard (CW send space)
@@ -2092,16 +2102,22 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 	{
 		lvgl_update_KyBrdWPM(WPMbuf);
 	}
-	if (RingbufPntr2 != RingbufPntr1)
-	{ //we have a decoded character to print, So, from the accumulated keyup events(ratios), find the minimum S/N used in the construction of this character
-		float Nu_SN = 0.0;
-		float Min_SN = 10000; //equivalent to S/N = 80db
-		while(xQueueReceive(ToneSN_que, (void *)&Nu_SN, pdMS_TO_TICKS(3)) == pdTRUE)
-		{
-			if(Nu_SN < Min_SN) Min_SN = Nu_SN;
+	if (pdTRUE == xSemaphoreTake(RingBuf_semaphore, 100 / portTICK_PERIOD_MS))
+	{
+		if (RingbufPntr2 != RingbufPntr1)
+		{ // we have a decoded character to print, So, from the accumulated keyup events(ratios), find the minimum S/N used in the construction of this character
+			float Nu_SN = 0.0;
+			float Min_SN = 10000; // equivalent to S/N = 80db
+			while (xQueueReceive(ToneSN_que, (void *)&Nu_SN, pdMS_TO_TICKS(3)) == pdTRUE)
+			{
+				if (Nu_SN < Min_SN)
+					Min_SN = Nu_SN;
+			}
+			if (Min_SN != 10000)
+				lvgl_update_SN(20 * log10(Min_SN)); // calculate S/N in dBs, & pass the found value to lvgl display
 		}
-		if(Min_SN != 10000) lvgl_update_SN(20 * log10(Min_SN));//calculate S/N in dBs, & pass the found value to lvgl display 
-	}
+		xSemaphoreGive(RingBuf_semaphore);
+	} else printf("xSemaphoreTake(RingBuf_semaphore FAILED D\n");
 	if ((OldStrTxtFlg != StrTxtFlg) & !setupFlg)
 	{
 		OldStrTxtFlg = StrTxtFlg;
@@ -2122,43 +2138,45 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		UpdtKyBrdCrsr = false;
 	}
 
-	// if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, pdMS_TO_TICKS(1)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
-	if (!BlkDcdUpDts)
-	{
-		while (RingbufPntr2 != RingbufPntr1)
+	if (!BlkDcdUpDts) //will be 'true' while the Advanced post parser is working. so display updates will be blocked
+	{ // its safe to go ahead & update decoded (RX) text area with whats currrently stored in the ring buffer
+		if (pdTRUE == xSemaphoreTake(RingBuf_semaphore, 100 / portTICK_PERIOD_MS))
 		{
-			NuTxt = true;
-			char curChar = DeCdrRingbufChar[RingbufPntr2];
-			Pgbuf[0] = curChar;
-			// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Start\n");
-			//  post  this character at the end of text shown in the decoded text space on the waveshare display
-			Update_textarea(DecdTxtArea, curChar);
-			// printf("Decoded textarea char %c\n", curChar);
-			//  sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Complete\n");
-			if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
+			while (RingbufPntr2 != RingbufPntr1)
 			{
-				// sprintf(LogBuf,"Msg2 Delete Initiated/n");
-				// if (!this->Delete(true, 1))
-				// 	printf("Msg2 Delete FAILED!!!/n");
-				// sprintf(LogBuf,"Msg2 Delete Completed/n");
-			}
-			else if (curChar == 10)
-			{	// test for "line feed" character
-				/*LVGL version shouldn't  a /DisplCrLf() function*/
-				// DisplCrLf();
-				//  printf("cnt:%d; \n", cnt);
-			}
-			else // at this point, whatever is left shoud be regular text
-			{
-				//
-			}
+				NuTxt = true;
+				char curChar = DeCdrRingbufChar[RingbufPntr2];
+				Pgbuf[0] = curChar;
+				// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Start\n");
+				//  post  this character at the end of text shown in the decoded text space on the waveshare display
+				Update_textarea(DecdTxtArea, curChar);
+				// printf("Decoded textarea char %c\n", curChar);
+				//  sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Complete\n");
+				if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
+				{
+					// sprintf(LogBuf,"Msg2 Delete Initiated/n");
+					// if (!this->Delete(true, 1))
+					// 	printf("Msg2 Delete FAILED!!!/n");
+					// sprintf(LogBuf,"Msg2 Delete Completed/n");
+				}
+				else if (curChar == 10)
+				{	// test for "line feed" character
+					/*LVGL version shouldn't  a /DisplCrLf() function*/
+					// DisplCrLf();
+					//  printf("cnt:%d; \n", cnt);
+				}
+				else // at this point, whatever is left shoud be regular text
+				{
+					//
+				}
 
-			RingbufPntr2++;
-			if (RingbufPntr2 == RingBufSz)
-				RingbufPntr2 = 0;
-			// NxtRngBfrNdx = 	RingbufPntr2;
-		} // End while (RingbufPntr2 != RingbufPntr1)
-		//	xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
+				RingbufPntr2++;
+				if (RingbufPntr2 == RingBufSz)
+					RingbufPntr2 = 0;
+				// NxtRngBfrNdx = 	RingbufPntr2;
+			} // End while (RingbufPntr2 != RingbufPntr1)
+			xSemaphoreGive(RingBuf_semaphore);
+		} else printf("xSemaphoreTake(RingBuf_semaphore FAILED E\n");
 	}
 	/*now update any pending keyboard text entries*/
 	while (KeyBrdRingbufPntr2 != KeyBrdPntr1)
@@ -2247,9 +2265,13 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 	if (Bump) // Bump gets set only when coming back from settings screen
 	{
 		Bump = false;
-		RingbufPntr1++;
-		if (RingbufPntr1 == RingBufSz)
-			RingbufPntr1 = 0;
+		if (pdTRUE == xSemaphoreTake(RingBuf_semaphore, 100 / portTICK_PERIOD_MS))
+		{
+			RingbufPntr1++;
+			if (RingbufPntr1 == RingBufSz)
+				RingbufPntr1 = 0;
+			xSemaphoreGive(RingBuf_semaphore);
+		} else printf("xSemaphoreTake(RingBuf_semaphore FAILED F\n");
 		// dispStat(LastStatus, LastStatClr);
 		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2 BUMP true, lvgl_update_RxStats(); Start\n");
 		lvgl_update_RxStats(LastStatus);
@@ -2989,31 +3011,39 @@ void LVGLMsgBox::Exit_Settings(int paramptr)
 
 bool LVGLMsgBox::TestRingBufPtrs(void)
 {
-	if (RingbufPntr1 == RingbufPntr2)
-		return true;
-	else
-		return false;
+	bool stateFlg = false;
+	if (pdTRUE == xSemaphoreTake(RingBuf_semaphore, 100 / portTICK_PERIOD_MS))
+	{
+		if (RingbufPntr1 == RingbufPntr2)
+			stateFlg = true; // return true;
+		// else
+		// 	return false;
+		xSemaphoreGive(RingBuf_semaphore);
+	} else printf("xSemaphoreTake(RingBuf_semaphore FAILED G\n");
+	return stateFlg;
 };
 int LVGLMsgBox::XferRingbuf(char Bfr[50])
 {
 	/*find end of Buffer*/
 	int i = 0;
-	// printf("ringbuf content:%c",'"');
-	// while(Bfr[i] !=0) i++;
-	while (RingbufPntr1 != RingbufPntr2)
+	if (pdTRUE == xSemaphoreTake(RingBuf_semaphore, 100 / portTICK_PERIOD_MS))
 	{
-		Bfr[i] = DeCdrRingbufChar[RingbufPntr2];
-		// printf("%c", DeCdrRingbufChar[RingbufPntr2]);
-		i++;
-		// Bfr[i] = 0;
-		// if(i == 49){// not likely to ever happen
-		//	Bfr[i-1] = 0;
-		//	return;
-		// }
-		RingbufPntr2++;
-		if (RingbufPntr2 == RingBufSz)
-			RingbufPntr2 = 0;
-	}
+		while (RingbufPntr1 != RingbufPntr2)
+		{
+			Bfr[i] = DeCdrRingbufChar[RingbufPntr2];
+			// printf("%c", DeCdrRingbufChar[RingbufPntr2]);
+			i++;
+			// Bfr[i] = 0;
+			// if(i == 49){// not likely to ever happen
+			//	Bfr[i-1] = 0;
+			//	return;
+			// }
+			RingbufPntr2++;
+			if (RingbufPntr2 == RingBufSz)
+				RingbufPntr2 = 0;
+		}
+		xSemaphoreGive(RingBuf_semaphore);
+	} else printf("xSemaphoreTake(RingBuf_semaphore FAILED A\n");
 	// printf("%c\n",'"');
 	return i;
 };
