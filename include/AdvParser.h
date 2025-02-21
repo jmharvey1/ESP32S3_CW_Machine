@@ -938,6 +938,7 @@ public:
     int KeyUpPtr = 0;
     int KeyDwnPtr = 0;
     int wpm = 0; //upated from DcodeCW.cpp
+    int RingbufPntr1 = 0;//set/updated from DcodeCW.cpp, just prior to starting the Advparser task. will be checked as part of posting any change to the display
     inline uint16_t Get_LtrBrkVal(void) { return this->LtrBrkVal; }
     inline uint16_t Get_DahVal(void) { return this->AvgDahVal; }
 	inline uint16_t Get_space(void)  { return this->AvgSmblDedSpc; }

@@ -1551,6 +1551,7 @@ bool chkChrCmplt(void)
 	////////////////////////////////////////////////////////////////////
 	/*20250213 - New code to manage display when 'sender' change has been detected*/
 	/*The following Code effectively inserts a new line and 'New Sender' markers to denote a change in sender*/
+	/*Note: DeCoderActiviated only gets set to 'true' when the realtime decoder passes a character to be displayed*/
 	if (NuSender && DeCoderActiviated) /* ADC tone processing 'addSmpl()' detected Sender change - Start following text on a new line*/
 	{
 		int i = 0;
@@ -1807,8 +1808,10 @@ bool chkChrCmplt(void)
 							}
 						}
 					}
+					LtrHoldr[i] = 0;
 				}
-
+				/*clear LtrHoldr & reset LtrPtr*/
+				LtrPtr =0;
 /*Make Sure a 'space' has been inserted after this text data set*/
 #ifdef AutoCorrect
 				printf("\n - Insert Wordbreak Space & start 'AdvParserTask' -\n");
@@ -1823,6 +1826,7 @@ bool chkChrCmplt(void)
 					// printf("Sender Changed induced Wrd Break\n");
 					SndrChng = false;
 				}
+				advparser.RingbufPntr1 = ptrmsgbx->Get_RingbufPntr1();
 				vTaskResume(AdvParserTaskHandle);
 				/*20250217 apply wordbreak increase based on testing done above*/
 				if (incWrdBrk)

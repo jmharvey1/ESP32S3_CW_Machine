@@ -270,10 +270,11 @@ public:
 	void ClrDcdTA(void);
 	void HiLite_Seltcd_Setting(int paramptr, int oldparamptr);
 	void Exit_Settings(int paramptr);
-	bool TestRingBufPtrs(void);
-	int XferRingbuf(char Bfr[50] );
+	bool TestRingBufPtrs(int LastKnownPtr);
+	int XferRingbuf(char Bfr[50], int oldPtr);
 	inline uint8_t Get_KyBrdBat_level(void) { return KyBrdBatLvl; }
 	inline void Str_KyBrdBat_level(uint8_t Lvl) { KyBrdBatLvl = Lvl; }
+	inline int Get_RingbufPntr1(void) { return RingbufPntr1; }
 	// void DelLastNtry(void);
 };
 #ifdef __cplusplus

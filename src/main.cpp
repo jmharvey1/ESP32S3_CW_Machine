@@ -98,6 +98,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250213 DcodeCW.cpp - New code to manage display when 'sender' change has been detected*/
 /*20250217 DcodeCW.cpp - Added wordbreak incrementing & Goertzelcpp - reduced sample buffering 6 to 3*/
 /*20250221 DcodeCW.cpp - Reworked 'Space' insertion code*/
+/*20250221 Reworked xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx) code, AdvParserTask() deletCnt & advparser.Msgbuf rebuild*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -272,7 +273,7 @@ float b1 = -1.309777513510262;
 float b2 = 0.8280078134573279;
 void Calc_IIR_BPFltrCoef(float Fc, float Fs, float Q); 
 ////////////////////
-
+int curOwner =0; //used for debugging xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx)
 LVGLMsgBox lvglmsgbx(StrdTxt);
 //CWSNDENGN CWsndengn(&DotClk_hndl, &tft, &lvglmsgbx);
 CWSNDENGN CWsndengn(&DotClk_hndl, &lvglmsgbx);
@@ -761,6 +762,7 @@ void DisplayUpDt(void *param)
       /*make sure AdvanceParserTask isn't active before preceeding*/
       if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, pdMS_TO_TICKS(15)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
       {
+        curOwner =2;
         bool lpagn = true;
         while (lpagn) //(TickType_t)10
         {
@@ -783,7 +785,7 @@ void DisplayUpDt(void *param)
         /* We have finished accessing the shared resource.  Release the
         semaphore. */
         xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
-      } else printf("xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx FAILED\n"); 
+      } else printf("xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx FAILED; cur Owner:%d\n", curOwner); 
       
       //printf("Cur ADC Sample Rate: %d\n", cur_smpl_rate);// just for diagnostic testing
       bool HeapOK = heap_caps_check_integrity_all(true);
@@ -1071,46 +1073,70 @@ void AdvParserTask(void *param)
     uint8_t OldLstChr;
     if (!same)
     {
+      deletCnt++; //increment by just because the the DcodeCW chkChrCmplt() appended a space before launching the AdvParserTask
       /*need to block display update task during this 'if()' code */
       if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
       {
+        curOwner = 1;
         bool abort = false;
 #ifdef DeBgQueue
         printf("advparser.Msgbuf;'%s'; GetLastChar('%c') \n", advparser.Msgbuf, (char)LstChr);
-#endif        
+#endif
         OldLstChr = LstChr;
         /*Configure DCodeCW.cpp to erase/delete original text*/
         /*Add word break space to post parsed text*/
-        char RingBufTst = 'T';
+        // char RingBufTst = 'T';
         /*returns true if the 2 buffer pointers are the same*/
-         ringbuf[0] = ringbuf[1] = ringbuf[2] = ringbuf[3] = 0;
-        while(bufcharcnt == 0)
+        ringbuf[0] = ringbuf[1] = ringbuf[2] = ringbuf[3] = 0;
+        int oldPtr = advparser.RingbufPntr1;
+        if (!lvglmsgbx.TestRingBufPtrs(oldPtr))
         {
-          if (!lvglmsgbx.TestRingBufPtrs())
-          {
-            bufcharcnt = lvglmsgbx.XferRingbuf(ringbuf);
-            RingBufTst = 'F';
-            #ifdef AutoCorrect 
-            printf(" bufcharcnt:%d; ringbuf:'%s' \n", bufcharcnt, ringbuf);
-            #endif
-          }
-          if (bufcharcnt == 0)
-            vTaskDelay(pdMS_TO_TICKS(25));
+          bufcharcnt = lvglmsgbx.XferRingbuf(ringbuf, oldPtr);
+          // RingBufTst = 'F';
+          //deletCnt += bufcharcnt;//don't need to add this because what ever is here hasn't made it to the display
+#ifdef AutoCorrect
+          printf(" bufcharcnt:%d; ringbuf:'%s' \n", bufcharcnt, ringbuf);
+#endif
         }
+#ifdef AutoCorrect        
+        else
+        {
+          printf("NO RingBuffer Conflict' \n");
+        }
+#endif        
+        // while(bufcharcnt == 0)
+        // {
+        //   int oldPtr = advparser.RingbufPntr1;
+        //   if (!lvglmsgbx.TestRingBufPtrs(oldPtr))
+        //   {
+        //     bufcharcnt = lvglmsgbx.XferRingbuf(ringbuf, oldPtr);
+        //     RingBufTst = 'F';
+        //     #ifdef AutoCorrect
+        //     printf(" bufcharcnt:%d; ringbuf:'%s' \n", bufcharcnt, ringbuf);
+        //     #endif
+        //   }
+        //   if (bufcharcnt == 0)
+        //     vTaskDelay(pdMS_TO_TICKS(25));
+        // }
         LstChr = lvglmsgbx.GetLastChar();
-        #ifdef AutoCorrect 
-        if(LstChr != OldLstChr) printf("!!! LstChr:'%c' != OldLstChr:'%c'\n", LstChr, OldLstChr);
-        #endif
+#ifdef AutoCorrect
+        if (LstChr != OldLstChr)
+          printf("!!! LstChr:'%c' != OldLstChr:'%c'\n", LstChr, OldLstChr);
+#endif
         // advparser.Msgbuf[NuMsgLen] = 0x20; // 0x5f;//0x20;
         // advparser.Msgbuf[NuMsgLen + 1] = 0x0;
         char tmpbuf[30];
-        //int OlddeletCnt = deletCnt;
+        // int OlddeletCnt = deletCnt;
+        // if (deletCnt > 0)
+        // {
+        //   /*20250113 new method to find final/actual delete count*/
+        //   if (bufcharcnt > 1)
+        //     deletCnt++;
+        //   if (bufcharcnt == 1 && (LstChr != OldLstChr))
+        //     deletCnt++;
+        //   /*End new find delete count method*/
         if (deletCnt > 0)
-        {
-          /*20250113 new method to find final/actual delete count*/
-          if(bufcharcnt>1) deletCnt++;
-          if(bufcharcnt == 1 && (LstChr != OldLstChr)) deletCnt++;
-          /*End new find delete count method*/
+        {  
           char DelStr[30];
           if (deletCnt > 29)
           {
@@ -1118,7 +1144,7 @@ void AdvParserTask(void *param)
             deletCnt = 29;
             printf("\n deletCnt capped @ 29\n");
           }
-          if(!abort)
+          if (!abort)
           {
             for (int i = 0; i < deletCnt; i++)
             {
@@ -1138,24 +1164,24 @@ void AdvParserTask(void *param)
              Due to RTOS Variances in process sequencing/timing, there can be 3 different states in the Decoded text area
              ringbuffer the following 'if' code addresses each of the 3 cases
             */
-            if (bufcharcnt == 1 && ringbuf[0] != ' ')
+            if (bufcharcnt >0 && ringbuf[0] != ' ')
               sprintf(advparser.Msgbuf, "%s%s %s", DelStr, tmpbuf, ringbuf); // AdvParser running behind schedule
-            else if (bufcharcnt > 1)
-              sprintf(advparser.Msgbuf, "%s%s%s ", ringbuf, DelStr, tmpbuf); // AdvParser running faster than expected
+            else if (bufcharcnt >0 && ringbuf[0] == ' ')
+              sprintf(advparser.Msgbuf, "%s%s%s ", DelStr, tmpbuf, ringbuf); // AdvParser running faster than expected
             else
               sprintf(advparser.Msgbuf, "%s%s ", DelStr, tmpbuf); // normal/expected case
             /*for test/debug, show/print the before & after results*/
             // printf("old txt:%s;  new txt:%s\n\tdelete cnt: %d; advparser.LtrPtr %d; new txt length: %d; RingBufTst=%c; bufcharcnt: %d; ringbuf: %c%s%c; Space Corrected = %c(%d/%c%c%C) \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, ptr, RingBufTst, bufcharcnt, '"', ringbuf, '"', spacemarker, LstChr, '"', LstChr, '"');
           }
         }
-        if(!abort)
+        if (!abort)
         {
           if (advparser.Dbug)
             printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
 #ifdef AutoCorrect
           printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
 #endif
-// printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
+          // printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
           CptrTxt = false;
           lvglmsgbx.dispDeCdrTxt(advparser.Msgbuf, TFT_GREEN); // Added for lvgl; Note: color value is meaningless
           CptrTxt = true;
@@ -1163,7 +1189,7 @@ void AdvParserTask(void *param)
           /*now should be safe resume displayupdate task*/
         }
         xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
-      }
+      } else printf("xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx FAILED; cur Owner:%d\n", curOwner);
       /*assuming the Adv parser did a better job of decoding sync the real time decoder to the Adv parser timing values/WPM*/
       SyncAdvPrsrWPM();
       // printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);

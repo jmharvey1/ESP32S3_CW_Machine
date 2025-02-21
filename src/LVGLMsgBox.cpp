@@ -3012,25 +3012,26 @@ void LVGLMsgBox::Exit_Settings(int paramptr)
 	MutexLckId = 0;
 };
 
-bool LVGLMsgBox::TestRingBufPtrs(void)
+bool LVGLMsgBox::TestRingBufPtrs(int LastKnownPtr)
 {
 	bool stateFlg = false;
 	if (pdTRUE == xSemaphoreTake(RingBuf_semaphore, 100 / portTICK_PERIOD_MS))
 	{
-		if (RingbufPntr1 == RingbufPntr2)
-			stateFlg = true; // return true;
-		// else
-		// 	return false;
+		// if (RingbufPntr1 == RingbufPntr2)
+		// 	stateFlg = true; // return true;
+		if (RingbufPntr1 == LastKnownPtr)
+			stateFlg = true;
 		xSemaphoreGive(RingBuf_semaphore);
 	} else printf("xSemaphoreTake(RingBuf_semaphore FAILED G\n");
 	return stateFlg;
 };
-int LVGLMsgBox::XferRingbuf(char Bfr[50])
+int LVGLMsgBox::XferRingbuf(char Bfr[50], int oldPtr)
 {
 	/*find end of Buffer*/
 	int i = 0;
 	if (pdTRUE == xSemaphoreTake(RingBuf_semaphore, 100 / portTICK_PERIOD_MS))
 	{
+		RingbufPntr2 = oldPtr;
 		while (RingbufPntr1 != RingbufPntr2)
 		{
 			Bfr[i] = DeCdrRingbufChar[RingbufPntr2];
