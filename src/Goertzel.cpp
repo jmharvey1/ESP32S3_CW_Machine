@@ -368,11 +368,15 @@ void ComputeMags(unsigned long now)
 
 		if (xQueueSend(ToneSN_que, &S2N, pdMS_TO_TICKS(2)) == pdFALSE)//used byLVGLMsgBox to drive the S/N shown on the Display
 		{
+			#ifdef DeBgCrash
 			printf("Failed to push 'S2N' to 'ToneSN_que' \n");
+			#endif
 		}
 		if (xQueueSend(ToneSN_que2, &S2N, pdMS_TO_TICKS(2)) == pdFALSE)// Used ultimately by the Advanced Post Parser to seperate good key timing from questionable entries
 		{
+			#ifdef DeBgCrash
 			printf("Failed to push 'S2N' to 'ToneSN_que2' \n");
+			#endif
 			float dummy;
 			int IndxPtr = 0;
 			while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)

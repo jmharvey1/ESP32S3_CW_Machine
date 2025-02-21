@@ -398,9 +398,6 @@ void CWSNDENGN::SOTmode(void)
 	//printf("State: %d\n",state);
 	if (SOTFlg && (state >0))
 	{	
-		// char buf[20];
-		// sprintf(buf, "WHILE LOOP S:%d", state);
-		// pMsgBx->dispMsg(buf, TFT_YELLOW);
 		/*something is going on, so wait for the current character to complete*/
 		bool BGHilite = pMsgBx->getBGHilite();
 		//int cnt = 0;

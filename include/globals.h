@@ -13,9 +13,9 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
-
+//#define DeBgCrash //uncomment to debug displayupdate lockup/crash
 //#define DeBgQueue //uncomment to debug Key up & down event time queues
-//#define AutoCorrect //uncomment to debug Post parser delete & replace process 
+#define AutoCorrect //uncomment to debug Post parser delete & replace process 
 /*Added here just to get past compile error for references no longer needed for lvgl version of this project*/
 // Default color definitions
 #define TFT_BLACK       0x0000      /*   0,   0,   0 */

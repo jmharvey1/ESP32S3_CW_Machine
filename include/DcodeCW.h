@@ -502,7 +502,7 @@ void DbgRptr(bool dbgFLg, char pBuf[], char pStr[]);
 void DblChkDitDah(void);
 void SetLtrBrk(void);
 bool chkChrCmplt(void);
-//void insertionSort(uint16_t arr[], int n);
+void ResetLstWrdDataSets(void);
 void StrechLtrcmplt(unsigned long StrchPrd);
 int CalcAvgPrd(unsigned long thisdur);
 int CalcWPM(int dotT, int dahT, int spaceT);

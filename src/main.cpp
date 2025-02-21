@@ -97,6 +97,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250212 Created seperate task/process to freq Calc & detect sender change*/
 /*20250213 DcodeCW.cpp - New code to manage display when 'sender' change has been detected*/
 /*20250217 DcodeCW.cpp - Added wordbreak incrementing & Goertzelcpp - reduced sample buffering 6 to 3*/
+/*20250221 DcodeCW.cpp - Reworked 'Space' insertion code*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -1026,24 +1027,26 @@ void AdvParserTask(void *param)
     // printf("AdvParserTask Launched\n"); //added to verify task management
 
     BlkDcdUpDts = true;
+    /*start Post parser by evaluating the current datasets*/
     advparser.EvalTimeData();
+    /*At this point the the post parser completed the evaluation & constructed its version of the last word 
+    decoded by the realtime decoder process*/
     /*Now compare Advparser decoded text to original text; If not the same,
     replace displayed with Advparser version*/
     bool same = true;
     bool Tst4Match = true;
     int i;
     int FmtchPtr; // now only used for debugging
-    /*Scan/compare last word displayed w/ advpaser's version*/
+    /*start Scan/compare last word displayed w/ advpaser's version*/
     int NuMsgLen = advparser.GetMsgLen();
     int LtrPtr = advparser.LtrPtr;
-    // wrdbrkFtcr = advparser.wrdbrkFtcr;//20250216 decided to de-link the two
-    if (NuMsgLen > LtrPtr || NuMsgLen < LtrPtr)
+    if (NuMsgLen > LtrPtr || NuMsgLen < LtrPtr) // easy test
     { // if the advparser test string is longer, then delete the last word printed
       same = false;
       i = LtrPtr;
     }
     else
-    {
+    { /*1st test didn't show a difference. So test character by character*/
       for (i = 0; i < LtrPtr; i++)
       {
         if (advparser.Msgbuf[i] == 0)
@@ -1056,12 +1059,10 @@ void AdvParserTask(void *param)
           FmtchPtr = i; // now only used for debugging
           same = false;
         }
-        // if (advparser.LtrHoldr[i] == 0)
-        //   break;
       }
     }
 
-    /*If they don't match, replace displayed text with AdvParser's version*/
+    /*If they don't match (same = false), replace displayed text with AdvParser's version*/
     int deletCnt = LtrPtr; // 0; // moved to here to support lvgl debugging
     int bufcharcnt = 0;
     char ringbuf[6];
@@ -1167,7 +1168,9 @@ void AdvParserTask(void *param)
       SyncAdvPrsrWPM();
       // printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
     } // else printf("old txt: %s\n", advparser.LtrHoldr);
-
+#ifdef AutoCorrect
+    else printf("old txt:'%s'\n", advparser.LtrHoldr);
+#endif
     if (advparser.Dbug)
       printf("%s\n", advparser.LtrHoldr);
 
@@ -2284,8 +2287,7 @@ uint8_t Read_NVS_Str(const char *key, char *value)
       }
       break;
     case ESP_ERR_NVS_NOT_FOUND:
-      // sprintf(Title, "%s: has not been initialized yet!\n", key);
-      // lvglmsgbx.dispMsg(Title, TFT_RED);
+      /*TODO could need support code here*/
       break;
     default:
       sprintf(Title, "Error (%s) reading %s!\n", esp_err_to_name(ret), key);
@@ -2363,9 +2365,6 @@ uint8_t Write_NVS_Str(const char *key, char *value)
       else
       {
         /* exit point when everything works as it should */
-        // sprintf(Title, "%s string saved %d characters\n", key, sizeof(&value));
-        // lvglmsgbx.dispMsg(Title, TFT_GREEN);
-        // delay(3000);
         stat = 1;
         break;
       }

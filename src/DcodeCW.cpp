@@ -34,7 +34,7 @@
  * 20250213 Added sanity check flag 'DeCoderActiviated' to the above code
  * 20250213 Added SyncAdvPrsrWPM() to improve real time decoder's ability to sync up with new sender
  * 20250217 Added wordbreak incrementing based on disproportionate words containing characters of only 2 symbol count or less
- *
+ * 20250221 Reworked 'Space' insertion code, and reset data sets management, to better protect one word parsing, from the next.
  *  */
 
 // #include <SetUpCwDecoder.h>
@@ -1573,7 +1573,9 @@ bool chkChrCmplt(void)
 			DeCoderActiviated = false;
 			sprintf(NuLineStr, "%s", DelStr);
 			ptrmsgbx->dispDeCdrTxt(NuLineStr, TFT_GREEN);
+			#ifdef DeBgCrash
 			printf("skipped new line; LtrHoldr =%s\n", LtrHoldr);
+			#endif
 		}
 		else
 		{
@@ -1588,8 +1590,13 @@ bool chkChrCmplt(void)
 			NuLine[3] = ' ';
 			NuLine[4] = 0;
 			sprintf(NuLineStr, "%s%s %s", DelStr, NuLine, LtrHoldr);
+#ifdef AutoCorrect
+			printf("NuSender string:%s\n", NuLineStr);
+#endif
 			ptrmsgbx->dispDeCdrTxt(NuLineStr, TFT_GREEN);
+			#ifdef DeBgCrash
 			printf("New line; LtrHoldr =%s; %d\n", LtrHoldr, (uint8_t)LtrHoldr[0] );
+			#endif
 		// 	xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
 		// }
 		}
@@ -1600,25 +1607,7 @@ bool chkChrCmplt(void)
 	unsigned long Now = pdTICKS_TO_MS(xTaskGetTickCount()); //(GetTimr5Cnt()/10);
 	if ((Now - letterBrk1) > 35000)
 		letterBrk1 = Now - 10000; // keep "letterBrk1" from becoming an absurdly large value
-	/*if true key is 'up' and looks like a change in sender has occured. So force a word break*/
-	// if (LclKeyState == 1 && ForcedWrdBrk)
-	// { /*Added 20250210 */
-	// 	// if(LtrPtr >= 1)
-	// 	// {
-	// 	ForcedWrdBrk = false;
-	// 	letterBrk = Now -10;
-	// 	wordBrkFlg = false;
-	// 	SndrChng = true;
-	// 	char NuLine[4];
-	// 	NuLine[0] = 13; //carriage return
-	// 	NuLine[1] = 10; // line feed
-	// 	NuLine[1] = ' ';
-	// 	NuLine[2] = 0;
-	// 	ptrmsgbx->dispDeCdrTxt(NuLine, TFT_GREENYELLOW);
-	// 	// }
-	// 	// else ForcedWrdBrk = false; //false alarm no real info available. reset and wait for another flag
-	// }
-
+	
 	// check to see if enough time has passed since the last key closure to signify that the character is complete
 	if (LclKeyState == 0) // if this is the case, key is closed & should not be doing a letter complete
 	{
@@ -1685,7 +1674,9 @@ bool chkChrCmplt(void)
 		{
 			if (!DataSetRdy)
 			{
+				#ifdef DeBgCrash
 				printf("\n!!OVERFLOW - Skipping Adv Parser!!\n");
+				#endif
 				/*Need to also purge the S/N queue*/
 				float dummy;
 				int IndxPtr = 0;
@@ -1694,8 +1685,10 @@ bool chkChrCmplt(void)
 					IndxPtr++;
 				}
 			}
+			#ifdef DeBgCrash
 			else
-				printf("\n!!Close to OVERFLOW!!\n");
+							printf("\n!!Close to OVERFLOW!!\n");
+			#endif
 		}
 		// if (DeCd_KeyUpPtr < IntrvlBufSize && DeCd_KeyDwnPtr >= 1)
 		if (DeCd_KeyDwnPtr != 0 && !KDwnFnd)
@@ -1818,17 +1811,12 @@ bool chkChrCmplt(void)
 
 /*Make Sure a 'space' has been inserted after this text data set*/
 #ifdef AutoCorrect
-				printf("Insert Wordbreak Space\n");
+				printf("\n - Insert Wordbreak Space & start 'AdvParserTask' -\n");
 #endif
 				char space[2];
 				space[0] = ' ';
 				space[1] = 0;
 				ptrmsgbx->dispDeCdrTxt(space, TFT_GREENYELLOW);
-				// dispMsg(space);
-				//  while (CodeValBuf[0] > 0)
-				//  {
-				//  	DisplayChar(CodeValBuf[0]);
-				//  }
 				/*now we can start/resart the post parsing process */
 				if (SndrChng)
 				{
@@ -1849,7 +1837,17 @@ bool chkChrCmplt(void)
 			}
 			else if (wpm >= 36)
 			{
-
+				if(ValidWrdBrk)
+				{
+#ifdef AutoCorrect
+				printf("\n - Insert Wordbreak Space, & SKIP 'AdvParserTask', wpm >= 36  -\n");
+#endif
+				char space[2];
+				space[0] = ' ';
+				space[1] = 0;
+				ptrmsgbx->dispDeCdrTxt(space, TFT_GREENYELLOW);
+				ResetLstWrdDataSets(); //clear old data related to this word;				
+				}
 				// DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // resetbuffer pntrs
 				// float dummy;
 				// while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
@@ -1881,6 +1879,17 @@ bool chkChrCmplt(void)
 			}
 			else // wpm < 36
 			{
+				if(ValidWrdBrk)
+				{
+#ifdef AutoCorrect
+				printf("\n - Insert Wordbreak Space, & SKIPP advparser (other) -\n");
+#endif
+				char space[2];
+				space[0] = ' ';
+				space[1] = 0;
+				ptrmsgbx->dispDeCdrTxt(space, TFT_GREENYELLOW);
+				ResetLstWrdDataSets(); //clear old data related to this word;
+				}					
 #ifdef DeBgQueue
 				printf("advparser SKIPPED - LtrPtr:%d<1, Current WPM:%d too low or High or DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d\n", LtrPtr, wpm, DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
 #endif
@@ -2140,6 +2149,37 @@ bool chkChrCmplt(void)
 	}
 	return done;
 }
+//////////////////////////////////////////////////////////////////////
+/*
+* This method was originally setup to reset(clear) the storage containers
+normally used by the AdvPostParser to reconstruct text origianlly decoder by the 'real time' decoder
+for text sent between 12 & 35 WPM
+*/
+void ResetLstWrdDataSets(void)
+{
+	DeCd_KeyDwnPtr = DeCd_KeyUpPtr = chkcnt = 0; // resetbuffer pntrs
+	float dummy;
+	while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+	{
+		if (DeBug)
+			printf("ToneSN_que2 flush %5.2f\n", dummy);
+	}
+	unsigned long EvntTime;
+	while (xQueueReceive(KeyEvnt_que, (void *)&EvntTime, pdMS_TO_TICKS(1)) == pdTRUE)
+	{
+	}
+	uint8_t Kstate;
+	while (xQueueReceive(KeyState_que, (void *)&Kstate, pdMS_TO_TICKS(10)) == pdTRUE)
+	{
+	}
+	SnglLtrWrdCnt = 0;
+	/*If we're here, it should also be safe to reset the following parameters*/
+	for (int i = 0; i < LtrPtr; i++)
+		LtrHoldr[i] = 0;
+	LtrPtr = 0;
+	ValidChrCnt = 0;
+	WrdChrCnt = 0;
+};
 //////////////////////////////////////////////////////////////////////
 // void insertionSort(uint16_t arr[], int n) {
 //     for (int i = 1; i < n; i++) {uint16_t key = arr[i]; int j = i - 1; while (j >= 0 && arr[j] > key) {
@@ -2922,22 +2962,6 @@ void dispMsg(char Msgbuf[50])
 			}
 			while (MsgChrCnt[1] != 0)
 			{ // delete display of ever how many characters were printed in the last decodeval (may be more than one letter generated)
-				/*for diagnosit testing*/
-				// switch (DeleteID)
-				// {
-				// case 0:
-				// 	tmpbuf[0] = 0x30;
-				// 	break;
-				// case 1:
-				// 	tmpbuf[0] = 0x31;
-				// 	break;
-				// case 2:
-				// 	tmpbuf[0] = 0x32;
-				// 	break;
-				// case 3:
-				// 	tmpbuf[0] = 0x33;
-				// 	break;
-				// }
 				tmpbuf[0] = 0x8; // ASCII symbol for "Backspace"
 				tmpbuf[1] = 0;
 				ptrmsgbx->dispDeCdrTxt(tmpbuf, TFT_GREENYELLOW);
@@ -2994,15 +3018,20 @@ void dispMsg(char Msgbuf[50])
 		tmpbuf[0] = curChar;
 		tmpbuf[1] = 0;
 		DeCoderActiviated = true;
-		ptrmsgbx->dispDeCdrTxt(tmpbuf, TFT_GREENYELLOW);
-		/*now add the just decoded character to DcddChrBuf */
-		for (int i = 0; i < sizeof(DcddChrBuf) - 1; i++)
+#ifdef AutoCorrect
+		if(curChar == ' ') printf("!!Found Embedded ' ' in dipMsg()!!\n");
+#endif
+		if (curChar != ' ')
 		{
-			DcddChrBuf[i] = DcddChrBuf[i + 1];
+			ptrmsgbx->dispDeCdrTxt(tmpbuf, TFT_GREENYELLOW);
+			/*now add the just decoded character to DcddChrBuf */
+			for (int i = 0; i < sizeof(DcddChrBuf) - 1; i++)
+			{
+				DcddChrBuf[i] = DcddChrBuf[i + 1];
+			}
+			DcddChrBuf[sizeof(DcddChrBuf) - 2] = curChar;
+			DcddChrBuf[sizeof(DcddChrBuf) - 1] = 0;
 		}
-		DcddChrBuf[sizeof(DcddChrBuf) - 2] = curChar;
-		DcddChrBuf[sizeof(DcddChrBuf) - 1] = 0;
-
 		// char tmpStrBuf[9];
 		// for (int i = 0; i < sizeof(tmpStrBuf); i++)
 		// {

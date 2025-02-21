@@ -465,13 +465,11 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 		{
 			sprintf(buf2, "CharCnt: %d", ta_charCnt);
 			lv_label_set_text(label2, buf2);
-		}
 #ifdef AutoCorrect
-		if (TxtArea == DecdTxtArea)
-		{
-			printf("<%c>", bufChar);
+			printf("<%c>", bufChar); // for diagnostic purposes show the character just 'printed' on the display
+#endif			
 		}
-#endif
+
 	} // end bypass set mutex
 	else
 	{
@@ -1942,7 +1940,10 @@ void LVGLMsgBox::syncDfltwSettings(void)
 	}
 	return;
 };
-/*this is the normal input point for text that's to appear in the decoded text area of the lvgl display*/
+/*This is the normal input point for text that's to ultimately appear, in the decoded text area, of the lvgl display
+* Note: this doesn't actually 'print' the characters, it just places them in a 'holding tank' to be appleid later,
+* when the 'updatedisplay task has time to do it
+*/
 void LVGLMsgBox::dispDeCdrTxt(char Msgbuf[50], uint16_t Color)
 {
 	int msgpntr = 0;
@@ -1955,26 +1956,28 @@ void LVGLMsgBox::dispDeCdrTxt(char Msgbuf[50], uint16_t Color)
 	{
 		while (Msgbuf[msgpntr] != 0)
 		{
+			DeCdrRingbufChar[RingbufPntr1] = Msgbuf[msgpntr];
+#ifdef AutoCorrect
+			if (DeCdrRingbufChar[RingbufPntr1] == ' ')//highlite (note) where embedded 'spaces' are located in the holding buffer 
+				printf("'%c' found @ RingbufPntr1: %d\n", DeCdrRingbufChar[RingbufPntr1], RingbufPntr1);
+#endif
+			/*mark the current end, of the 'yet to be printed' character string is, with a NULL (0) terminator*/
 			if (RingbufPntr1 < RingBufSz - 1)
 				DeCdrRingbufChar[RingbufPntr1 + 1] = 0;
 			else
 				DeCdrRingbufChar[0] = 0;
-			DeCdrRingbufChar[RingbufPntr1] = Msgbuf[msgpntr];
-/*Added for lvgl*/
-#ifdef AutoCorrect
-			if (DeCdrRingbufChar[RingbufPntr1] == ' ')
-				printf("%c; RingbufPntr1 %d\n", DeCdrRingbufChar[RingbufPntr1], RingbufPntr1);
-#endif
 			// printf("%c; RingbufPntr1 %d\n",Msgbuf[msgpntr], RingbufPntr1);
-			/*Not needed for vlgl display*/
-			// DeCdrRingbufClr[RingbufPntr1] = Color;
+			/*prepare the buffer for the next update, by indexing the ringbuffer, to the next available position*/
 			RingbufPntr1++;
 			if (RingbufPntr1 == RingBufSz)
 				RingbufPntr1 = 0;
 			msgpntr++;
 		}
 		xSemaphoreGive(RingBuf_semaphore);
-	} else printf("xSemaphoreTake(RingBuf_semaphore FAILED C\n");
+	} 
+	#ifdef DeBgCrash	
+	else printf("xSemaphoreTake(RingBuf_semaphore FAILED C\n");
+	#endif
 };
 /*New for lvgl based screen
 Pathway to display text in the keyboard (CW send space)
