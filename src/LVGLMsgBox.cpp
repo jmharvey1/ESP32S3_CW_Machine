@@ -1463,7 +1463,7 @@ static esp_err_t i2c_master_init(void)
 	i2c_device_config_t lcd_touch_panel_io_config = {
 		.dev_addr_length = I2C_ADDR_BIT_LEN_7,
 		.device_address = (0x5D), // GT911 chip address
-		.scl_speed_hz = 400000,
+		.scl_speed_hz = 100000,
 	};
 	/*JMH ADD*/
 	ESP_LOGD(TAG, "Create I2C BUS");

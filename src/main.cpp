@@ -801,7 +801,7 @@ void DisplayUpDt(void *param)
 }
 ///////////////////////////////////////////////////////////////////////////////////////
 /*
-* Convert accumulated sample count needed to produce 40 'zero crossings' (tone cyles) to frequency
+* Convert accumulated sample count needed to produce 40 'zero crossings' (tone cyles) to frequency,
 * and second, look for tone frequency change, indicating a change in 'sender'
 */
 void ToneFreqTask(void *param)
@@ -832,11 +832,9 @@ void ToneFreqTask(void *param)
               Calc_IIR_BPFltrCoef((float)AvgToneFreq, SAMPLING_RATE, 3.7071);
               xSemaphoreGive(IIR_Coef_mutx);
             }
-            //Calc_IIR_BPFltrCoef((float)AvgToneFreq, SAMPLING_RATE, 3.7071);
           }
           else
           {
-            // AvgToneFreq = _DemodFreq;
             AvgToneFreq = (int)((1 + (4 * AvgToneFreq + _DemodFreq) / 5));
           }
           /*Now test/check for sender change based on '_DemodFreq' freq change */
@@ -846,20 +844,23 @@ void ToneFreqTask(void *param)
             if (OutofBndCnt == 0)
             {
               OutOfBndFrq = _DemodFreq;
+              OutofBndCnt++;
             }
             else if ((abs(OutOfBndFrq - _DemodFreq) > 5)) //20250218  > 4
             { /*OutOfBndFrq reset*/
               OutOfBndFrq = _DemodFreq;
               OutofBndCnt = 0;
             }
-            OutofBndCnt++;
-            //printf("_DemodFreq: %d;\tCurSendrFreq: %d\tOutofBndCnt: %d\n", _DemodFreq, (uint16_t)CurSendrFreq, OutofBndCnt);
+            else if ((abs(OutOfBndFrq - _DemodFreq) <= 5))
+            {
+              OutofBndCnt++;
+            }
+            // printf("_DemodFreq: %d;\tOutOfBndFrq: %d;\tCurSendrFreq: %d\tOutofBndCnt: %d\n", _DemodFreq, OutOfBndFrq, (uint16_t)CurSendrFreq, OutofBndCnt);
 
-            if (OutofBndCnt >= 3)
+            if (OutofBndCnt >= 4)
             {
               OutofBndCnt = 0;
-              CurSendrFreq = (float)_DemodFreq;//(float)AvgToneFreq;
-              //intrglerr = 0.0; // reset error term
+              CurSendrFreq = (float)_DemodFreq;
               /*if here, we just had a shift in the incoming tone of more than 15hz,
               so assume new 'sender', & force a wordbreak in the decoded text
               by setting the expected wordbreak time to 0 */
@@ -870,6 +871,7 @@ void ToneFreqTask(void *param)
           else
           {
             OutofBndCnt = 0;
+            // printf("_DemodFreq: %d;\tOutOfBndFrq: %d;\tCurSendrFreq: %d\tOutofBndCnt: %d\n", _DemodFreq, OutOfBndFrq, (uint16_t)CurSendrFreq, OutofBndCnt);
           }
           float tempval = ((float)AvgToneFreq - CurSendrFreq) / 100;
           if (tempval > 0.1)
@@ -877,10 +879,6 @@ void ToneFreqTask(void *param)
           if (tempval < -0.1)
             tempval = -0.1;
           CurSendrFreq = CurSendrFreq + tempval;
-          // float tempval   = ((((11.0 *(float)CurSendrFreq) + (float)AvgToneFreq) / 12.0));
-          // CurSendrFreq =(int)tempval;// add correction for current sender slow drift in freq
-          // if((tempval - (float)CurSendrFreq) > 0.5) CurSendrFreq++;
-
         } // end if (_DemodFreq > 450)
       }
     }
@@ -1296,8 +1294,7 @@ void app_main()
 											                   // ESP_LOG_INFO,       /*!< Information messages which describe normal flow of events */
 											                   // ESP_LOG_DEBUG,      /*!< Extra information which is not necessary for normal use (values, pointers, sizes, etc). */
 											                   // ESP_LOG_VERBOSE     /*!< Bigger chunks of debugging information, or frequent messages which can potentially flood the output. */
-
-  // Configure CW send IO pin aka 'KEY'
+                                         // Configure CW send IO pin aka 'KEY'
   gpio_config_t io_conf;
   io_conf.intr_type = GPIO_INTR_DISABLE;
   io_conf.mode = GPIO_MODE_OUTPUT;
@@ -1424,7 +1421,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     ret = nvs_flash_init();
   }
   ESP_ERROR_CHECK(ret);
-
+  
   /*Initialize display and load splash screen*/
   lvglmsgbx.InitDsplay();
   // sprintf(Title, " ESP32s3 CW Machine (%s)\n", RevDate); // sprintf(Title, "CPU CORE: %d\n", (int)xPortGetCoreID());

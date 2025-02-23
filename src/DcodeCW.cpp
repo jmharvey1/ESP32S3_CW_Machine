@@ -1568,19 +1568,17 @@ bool chkChrCmplt(void)
 			DelStr[i] = 0x0;
 		else
 			DelStr[14] = 0x0;
-		if(LtrHoldr[0] == 'E' || LtrHoldr[0] == 0)
-		{
-			NuSender = false;
-			DeCoderActiviated = false;
-			sprintf(NuLineStr, "%s", DelStr);
-			ptrmsgbx->dispDeCdrTxt(NuLineStr, TFT_GREEN);
-			#ifdef DeBgCrash
-			printf("skipped new line; LtrHoldr =%s\n", LtrHoldr);
-			#endif
-		}
-		else
-		{
-		// if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+		// if(LtrHoldr[0] == 'E' || LtrHoldr[0] == 0)
+		// {
+		// 	NuSender = false;
+		// 	DeCoderActiviated = false;
+		// 	sprintf(NuLineStr, "%s", DelStr);
+		// 	ptrmsgbx->dispDeCdrTxt(NuLineStr, TFT_GREEN);
+		// 	#ifdef DeBgCrash
+		// 	printf("skipped new line; LtrHoldr =%s\n", LtrHoldr);
+		// 	#endif
+		// }
+		// else
 		// {
 			NuSender = false;
 			DeCoderActiviated = false;
@@ -1598,9 +1596,8 @@ bool chkChrCmplt(void)
 			#ifdef DeBgCrash
 			printf("New line; LtrHoldr =%s; %d\n", LtrHoldr, (uint8_t)LtrHoldr[0] );
 			#endif
-		// 	xSemaphoreGive(DsplUpDt_AdvPrsrTsk_mutx);
+		
 		// }
-		}
 	}
 	else if (NuSender)
 		NuSender = false;
