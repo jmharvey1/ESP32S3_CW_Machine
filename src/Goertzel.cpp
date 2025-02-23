@@ -190,7 +190,7 @@ void PlotIfNeed2(void)
 		// sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)CurLvl, (int)SqlchLvl, (int)NoiseFlr, KeyState, (int)AvgNoise, (int)AdjSqlch-500, NFkeystate, PltGudSig);//standard plot display
 		// sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)ToneThresHold, (int)CurLvl, (int)SigDect, KeyState, NFkeystate, (int)AvgNoise, (int)AdjSqlch-90, ClimCnt);
 
-		sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)ToneThresHold, (int)CurLvl, (int)NoiseFlr, KeyState, NFkeystate, (int)AvgNoise, (int)curNois); // ltrCmplt//standard plot display
+		sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)ToneThresHold, (int)CurLvl, (int)NoiseFlr, KeyState, NFkeystate, (int)AvgNoise, (int)curNois, ltrCmplt); // ltrCmplt//standard plot display
 		
 		//sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)ToneThresHold, (int)CurLvl, (int)NoiseFlr, (int)CapturdSN, NFkeystate, (int)AvgNoise, (int)curNois);
 		// sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)CurLvl, (int)NFlrBase, NFlrRatio, (int)NoiseFlr, KeyState, (int)AvgNoise, (int)AdjSqlch-500, NFkeystate);

@@ -19,6 +19,7 @@
 /*20241230 Added method ClrDcdTA(void) to support 'clear Decoded Text' space/area*/
 /*20250203 Moved S/N log calc to dispMsg2()*/
 /*20250203 Revised S/N process to show minimum value for displayed character*/
+/*20250203 changed i2c clock to 100Khz had been 400Khz, but found some display touch chips would not work w/ the faster data clock*/
 #include <stdio.h>
 #include <math.h>
 #include "sdkconfig.h"
@@ -1463,7 +1464,7 @@ static esp_err_t i2c_master_init(void)
 	i2c_device_config_t lcd_touch_panel_io_config = {
 		.dev_addr_length = I2C_ADDR_BIT_LEN_7,
 		.device_address = (0x5D), // GT911 chip address
-		.scl_speed_hz = 100000,
+		.scl_speed_hz = 100000, // had been 400000 but found some display touch would not work w/ the faster data clock
 	};
 	/*JMH ADD*/
 	ESP_LOGD(TAG, "Create I2C BUS");

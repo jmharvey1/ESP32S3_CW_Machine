@@ -56,6 +56,7 @@
  * 20250119 added code to ensure last dataset entry was treated as a letterbreak, & other code to ensure alldit & alldah flags are cleared when appropriate
  * 20250210 added S/N checks to use only 'valid' time interval
  * 20250217 Tweak to BldKyUpBktTbl()/Letter Break code
+ * 20250223 BldKyUpBktTbl(void) changed letterbreak rule tests to include intervals of 0.65 the current dah interval
  * */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -84,7 +85,7 @@ AdvParser::AdvParser(void) // TFT_eSPI *tft_ptr, char *StrdTxt
     this->BugKey = 0; // paddle rules
     this->AllDit = false;
     this->LstGltchEvnt = 0;
-    // xTaskCreate(AdvParserTask, "AdvParserTask Task", 8192, NULL, 2, &AdvParserTaskHandle);
+    // xTaskCreate(AdvParserTask, "AdvParserTask Task", 8192, NULL, 2, &AdvParser44100TaskHandle);
 
     // ptft = tft_ptr;
     // pStrdTxt = StrdTxt;
@@ -234,7 +235,7 @@ void AdvParser::FindTopPtr(void)
     uint8_t MaxDahPtr = TopPtr;
     //printf("Start: FindTopPtr(); TopPtr:%d; BtmPtr: %d \n", TopPtr, BtmPtr);
     float ratio = (float)KeyDwnBuckts[TopPtr].Intrvl / (float)KeyDwnBuckts[TopPtr - 1].Intrvl;
-    while ((KeyDwnBuckts[TopPtr].Intrvl > 900) && (TopPtr > BtmPtr) && ratio < 1.4)
+    while ((KeyDwnBuckts[TopPtr].Intrvl > 900) && (TopPtr > BtmPtr) && ratio < 1.441004)
     { // Ignore dah intervals > 4WPM
         if (KeyDwnBuckts[TopPtr].Cnt >= MaxDahCnt)
         {
@@ -307,11 +308,11 @@ void AdvParser::BldKyUpBktTbl(void)
     // for (int i = 1; i < KeyUpPtr; i++)
     bool DoSlopeChk = true;
     uint16_t stopchkval = (int)(1.7 * this->AvgDahVal);
-    uint16_t MinltrBrkVal = (int)(0.70 * this->AvgDahVal);
+    uint16_t MinltrBrkVal = (int)(0.65 * this->AvgDahVal); // changed from .7 to .65 20250223
     for (int i = 0; i <= SortdPtr - 1; i++)
     {   
         int chk = 0;
-        if (i < SortdPtr)
+        if (i < SortdPtr-1)
         {
             TmpSlope = CurLtrBrkSlope;
             if ((this->SortdUpIntrvls[i + 1] - this->SortdUpIntrvls[i]) <= 9)
