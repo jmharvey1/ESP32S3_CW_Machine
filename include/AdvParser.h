@@ -833,6 +833,7 @@ private:
         {"QRY", "MARY", 3, 0}, //780
         {"BETNR", "BETTER", 5, 0}, //781
         {"WATB", "WATTS", 4, 0}, //782
+        {"CQDE", "CQ DE ", 4, 0}, //783
         
     };
     
@@ -854,6 +855,7 @@ private:
     int TmpUpIntrvlsPtr = 0;
     int StrLength = 0; //MsgBuf indx pointer to character printed as Debug output
     //int wpm =0; //upated from DcodeCW.cpp through this class method EvalTimeData()
+    int LstEndPtr =0;// used as part of the decision making code to increment wrdbrkfctor
     float DahVarPrcnt;
     float MaxDt2DhRatio;
     float KeyupVarPrcnt; //added 20241117
@@ -923,6 +925,7 @@ public:
     int LtrPtr = 0;
     /*controls debug USB serial print*/
     bool Dbug = false;
+    bool WrdBrkAdjFlg = false;
     int KeyType = 0;//used for the display's status indicator("S" or "E")
     float AvgSmblDedSpc;
     float wrdbrkFtcr = 1.0;

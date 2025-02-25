@@ -57,6 +57,7 @@
  * 20250210 added S/N checks to use only 'valid' time interval
  * 20250217 Tweak to BldKyUpBktTbl()/Letter Break code
  * 20250223 BldKyUpBktTbl(void) changed letterbreak rule tests to include intervals of 0.65 the current dah interval
+ * 20250225 reworked 'wrdbrkFtcr' compesation code & reanbled updates from tha Adavance post past paser back to the real time decoder
  * */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -1316,7 +1317,8 @@ void AdvParser::EvalTimeData(void)
 
     /*Now have everything needed, to rebuild/parse this group, of Key Down/Up times*/
     this->LstLtrBrkCnt = 0;
-    bool WrdBrkAdjFlg = false;
+    this->LstEndPtr = 0;
+    WrdBrkAdjFlg = false;
     /*Sequence through the original data set and parse the keydwn intervals into dits & dahs 
     followed by testing for letterbreaks, based on the select 'rule set'*/
     while (n < TmpUpIntrvlsPtr) // ''n' initially is 0
@@ -1448,11 +1450,13 @@ void AdvParser::EvalTimeData(void)
                 /*20250219 removed to verify that this was the only entry that was affecting the AdcParser 'wrdbrkFtcr' value.
                 Note: at this time, there is no code that deccrements this value; i.e., it only increases*/
                 // if (((EndPtr >= 3 && this->Msgbuf[EndPtr - 3] == ' ') || EndPtr == 2) && this->Msgbuf[EndPtr - 2] != 'A' && this->Msgbuf[EndPtr - 2] != 'I')
-
-                // {
-                //     this->wrdbrkFtcr += 0.15;
-                //     WrdBrkAdjFlg = true;
-                // }
+                if(LstEndPtr == EndPtr-2 || EndPtr == 2)
+                {// if true we had a one letter word, not very likely so should be safe to increase the 'wrdbrkFtcr'
+                    this->wrdbrkFtcr += 0.15;
+                    WrdBrkAdjFlg = true;
+                    if (DbgWrdBrkFtcr) printf("\t\t  Parser wordBrk+: %d; wrdbrkFtcr: %5.3f; CurParseWord: %s; LstEndPtr:%d; EndPtr:%d\n", (uint16_t)this->WrdBrkVal, this->wrdbrkFtcr, this->Msgbuf, LstEndPtr, EndPtr);
+                }
+                LstEndPtr = EndPtr;
             }
             this->LstLtrBrkCnt = 0;
         }
@@ -1496,16 +1500,22 @@ void AdvParser::EvalTimeData(void)
             SymbSet = 1; // reset the symbolset for the next character
         }
         n++;
-        /*Move this degug print to here so that the above DBug print is in play, it can complete before this print executes */
-        if (DbgWrdBrkFtcr && WrdBrkAdjFlg)
-        {
-            WrdBrkAdjFlg = false;
-            printf("Parser wordBrk+: %d; wrdbrkFtcr: %5.3f; CurParseWord: %s\n", (uint16_t)this->WrdBrkVal, this->wrdbrkFtcr, this->Msgbuf);
-        }
+        
         // printf("n:%d; LstLtrBrkCnt: %d \n", n, this->LstLtrBrkCnt);
     }
+    /*Move this degug print to here so that the above DBug print is in play, it can complete before this print executes */
+    // if (DbgWrdBrkFtcr && WrdBrkAdjFlg)
+    // {
+    //     //WrdBrkAdjFlg = false;
+    //     printf("Parser wordBrk+: %d; wrdbrkFtcr: %5.3f; CurParseWord: %s\n", (uint16_t)this->WrdBrkVal, this->wrdbrkFtcr, this->Msgbuf);
+    // }
     /*Text string Analysis complete*/
     this->FixClassicErrors(); // now do a final check to look & correct classic parsing errors
+    if (DbgWrdBrkFtcr)
+    {
+        printf("\t\t\tParser CurwordBrk: %d; CurwrdbrkFtcr: %5.3f; Post AdvParse text: %s\n", (uint16_t)this->WrdBrkVal, this->wrdbrkFtcr, this->Msgbuf);
+    }
+    
     if (Dbug)
     {
         printf("%d; %d\n\n", KeyDwnPtr, KeyUpPtr);

@@ -439,7 +439,7 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 					p -= del - lastWrdBrk;
 					del = lastWrdBrk;
 				}
-				printf("ta_charCnt:%d; del:%d; lastWrdBrk:%d\n\n", ta_charCnt, del, lastWrdBrk);
+				//printf("ta_charCnt:%d; del:%d; lastWrdBrk:%d\n\n", ta_charCnt, del, lastWrdBrk);
 				memcpy(Oldp, p, max - del); // shift the remaining text to the original start location
 				Oldp = (char *)realloc(Oldp, 1 + (max - del));
 				ta_charCnt = (max - del) + 1;

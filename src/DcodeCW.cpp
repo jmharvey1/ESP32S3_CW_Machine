@@ -1716,7 +1716,7 @@ bool chkChrCmplt(void)
 			if (DataSetRdy && (LtrPtr >= 1 || DeCd_KeyDwnPtr >= 9) && ((wpm > 11) || (LtrPtr > 3)) && (wpm < 36) && (DeCd_KeyDwnPtr == DeCd_KeyUpPtr)) // don't try to reparse if the key up & down pointers arent equal
 			{
 				if (DbgWrdBrkFtcr)
-					printf("\t\tPerpAdvParser  %s\n", LtrHoldr); // dont do "post parsing" with just one letter or WPMs <= 13
+					printf("\t\tPrepAdvParser  %s\n", LtrHoldr); // dont do "post parsing" with just one letter or WPMs <= 13
 				/*Auto-word break adjustment test*/
 				if (LtrPtr == 1)
 				{
@@ -1831,7 +1831,7 @@ bool chkChrCmplt(void)
 					wrdbrkFtcr += 0.15; // = 2.0
 					ApplyWrdFctr(wrdbrkFtcr);
 					if (DbgWrdBrkFtcr)
-						printf("\t\tA wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
+						printf("\t\tA wordBrk+: %d; wrdbrkFtcr: %5.3f; CurStr %s\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr);
 				}
 				RunAdvPrsr = true;
 				LckHiSpd = false;

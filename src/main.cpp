@@ -100,6 +100,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250221 DcodeCW.cpp - Reworked 'Space' insertion code*/
 /*20250221 Reworked xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx) code, AdvParserTask() deletCnt & advparser.Msgbuf rebuild*/
 /*20250225 LVGLMsgBox.cpp - now initializing 'lastWrdBrk' = 98, instead of =0 to stop display lockup in noisy environment*/
+/*20250225 AdvParser.cpp - reworked 'wrdbrkFtcr' compesation code & reanbled updates from tha Adavance post past paser back to the real time decoder */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -1191,6 +1192,7 @@ void AdvParserTask(void *param)
       } else printf("xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx FAILED; cur Owner:%d\n", curOwner);
       /*assuming the Adv parser did a better job of decoding sync the real time decoder to the Adv parser timing values/WPM*/
       SyncAdvPrsrWPM();
+      if(advparser.WrdBrkAdjFlg) wrdbrkFtcr = advparser.Get_wrdbrkFtcr();
       // printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
     } // else printf("old txt: %s\n", advparser.LtrHoldr);
 #ifdef AutoCorrect
