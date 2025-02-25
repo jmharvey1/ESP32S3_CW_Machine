@@ -20,6 +20,7 @@
 /*20250203 Moved S/N log calc to dispMsg2()*/
 /*20250203 Revised S/N process to show minimum value for displayed character*/
 /*20250203 changed i2c clock to 100Khz had been 400Khz, but found some display touch chips would not work w/ the faster data clock*/
+/*20250225 now initializing 'lastWrdBrk' = 98, instead of =0 to stop display lockup in noisy environment*/
 #include <stdio.h>
 #include <math.h>
 #include "sdkconfig.h"
@@ -125,6 +126,7 @@ static lv_style_t style_chkbx;
 static lv_style_t TAstyle;
 static lv_style_t TASettingsStyle;
 static lv_style_t Cursorstyle;
+static lv_style_t style_win1;
 static lv_color_t Dflt_bg_clr;
 static bool first_run = false;
 // static float Nu_SN = 0.0;
@@ -356,7 +358,7 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 			lv_textarea_set_cursor_pos(TxtArea, LV_TEXTAREA_CURSOR_LAST);
 			CurPos = lv_textarea_get_cursor_pos(TxtArea);
 		}
-		if (bufChar == 0x08)
+		if (bufChar == 0x08) // CW machine 'delete last char' command
 		{
 			if (TxtArea == SendTxtArea)
 			{
@@ -398,13 +400,14 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 			ta_charCnt = strlen(p);
 			if (updateCharCnt && (TxtArea == SendTxtArea))
 				CurKyBrdCharCnt = ta_charCnt;
-			int del = 1 - (max - ta_charCnt);
+			//int del = 1 - (max - ta_charCnt);
+			int del = 1 + (ta_charCnt - max);
 			if (del > 0)
 			{
 				del = 0;
 				// p += del;
 				int w = 0;
-				int lastWrdBrk = 0;
+				int lastWrdBrk = 98;
 				char *TaBuf = (char *)(Oldp);
 				lv_point_t Scrn_pt;
 				lv_draw_label_dsc_t label_dsc;
@@ -436,7 +439,7 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 					p -= del - lastWrdBrk;
 					del = lastWrdBrk;
 				}
-				// printf("del %d\n\n", del);
+				printf("ta_charCnt:%d; del:%d; lastWrdBrk:%d\n\n", ta_charCnt, del, lastWrdBrk);
 				memcpy(Oldp, p, max - del); // shift the remaining text to the original start location
 				Oldp = (char *)realloc(Oldp, 1 + (max - del));
 				ta_charCnt = (max - del) + 1;
@@ -858,7 +861,6 @@ void Bld_Help_scrn(void)
 	if (ui_Help == NULL)
 	{
 		ui_Help = lv_obj_create(NULL);
-		lv_obj_clear_flag(ui_Help, LV_OBJ_FLAG_SCROLLABLE); /// Flags
 		lv_style_reset(&style_btn);
 		lv_style_set_border_width(&style_btn, 1);
 		lv_style_set_border_opa(&style_btn, LV_OPA_100);
@@ -872,6 +874,9 @@ void Bld_Help_scrn(void)
 		lv_win_add_title(win3, "Help (press 'F9' to exit this screen)");
 		lv_obj_set_size(win3, 800, 480);
 		cont3 = lv_win_get_content(win3);
+		lv_obj_clear_flag(cont3, LV_OBJ_FLAG_SCROLLABLE); /// Flags
+		lv_obj_set_style_bg_color(cont3,lv_palette_main(LV_PALETTE_TEAL),LV_PART_MAIN);
+    	lv_obj_set_style_bg_opa(cont3, 100, LV_PART_MAIN| LV_STATE_DEFAULT);
 		Helpta = lv_textarea_create(cont3);
 		lv_obj_set_size(Helpta, 760, 400); // width & Height
 		lv_obj_set_pos(Helpta, 0, 0);
@@ -898,6 +903,9 @@ void Bld_Scope_scrn(void)
 	if (ui_Scope == NULL)
 	{
 		ui_Scope = lv_obj_create(NULL);
+		//lv_obj_t * cont = lv_win_get_content(ui_Scope);  /*Content can be added here*/
+    	lv_obj_set_style_bg_color(ui_Scope,lv_palette_main(LV_PALETTE_GREEN),LV_PART_MAIN);
+    	lv_obj_set_style_bg_opa(ui_Scope, 100, LV_PART_MAIN| LV_STATE_DEFAULT);
 		lv_obj_clear_flag(ui_Scope, LV_OBJ_FLAG_SCROLLABLE); /// Flags
 
 		ui_Chart1 = lv_chart_create(ui_Scope);
@@ -1150,6 +1158,7 @@ void Bld_LVGL_GUI(void)
 
 	if (!first_run)
 	{
+		lv_style_init(&style_win1);
 		lv_style_init(&style_bar);
 		lv_style_init(&TAstyle);
 		lv_style_init(&Cursorstyle);
@@ -1163,9 +1172,10 @@ void Bld_LVGL_GUI(void)
 	/*Part of 2 screen support*/
 	lv_style_reset(&style_btn);
 	lv_style_reset(&style_label);
-	if (!NiteMode)
+	if (!NiteMode){
 		lv_style_reset(&style_bar);
-
+	}
+	lv_style_set_bg_color(&style_win1, lv_palette_main(LV_PALETTE_DEEP_ORANGE));	
 	lv_style_set_text_font(&style_label, &lv_font_montserrat_18);
 	lv_style_set_text_opa(&style_label, LV_OPA_100);
 	lv_style_set_text_color(&style_label, lv_color_black());
@@ -1184,9 +1194,13 @@ void Bld_LVGL_GUI(void)
 	{
 		char Title[100];
 		char RevDate[12] = TODAY;
-		// printf("win1 = lv_win_create(scr_1, title_height);\n");
 		title_height = 20;
+		//lv_obj_add_style(scr_1, &style_win1, LV_PART_MAIN);
 		win1 = lv_win_create(scr_1, title_height);
+		lv_obj_t * cont = lv_win_get_content(win1);  /*Content can be added here*/
+    	lv_obj_set_style_bg_color(cont,lv_palette_main(LV_PALETTE_GREEN),LV_PART_MAIN);
+    	lv_obj_set_style_bg_opa(cont, 100, LV_PART_MAIN| LV_STATE_DEFAULT);
+		lv_obj_clear_flag(cont, LV_OBJ_FLAG_SCROLLABLE); 
 		sprintf(Title, " ESP32s3 CW Machine (%s)", RevDate);
 		lv_win_add_title(win1, Title);
 		lv_obj_set_size(win1, 800, 480);

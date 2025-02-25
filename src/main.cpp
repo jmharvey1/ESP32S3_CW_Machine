@@ -99,6 +99,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250217 DcodeCW.cpp - Added wordbreak incrementing & Goertzelcpp - reduced sample buffering 6 to 3*/
 /*20250221 DcodeCW.cpp - Reworked 'Space' insertion code*/
 /*20250221 Reworked xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx) code, AdvParserTask() deletCnt & advparser.Msgbuf rebuild*/
+/*20250225 LVGLMsgBox.cpp - now initializing 'lastWrdBrk' = 98, instead of =0 to stop display lockup in noisy environment*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

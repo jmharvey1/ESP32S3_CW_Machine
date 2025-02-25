@@ -2044,7 +2044,7 @@ bool chkChrCmplt(void)
 					ShrtLtrBrkCnt = 0;
 					uint16_t NuLtrBrkVal = (uint16_t)(advparser.Get_wrdbrkFtcr() * (float)advparser.Get_LtrBrkVal());
 					printf("Too Many Ts & Es- Resetting Parameters:\n\tltrBrk: Old %d; new %d", (uint16_t)ltrBrk, NuLtrBrkVal);
-					if (NuLtrBrkVal != 0)
+					if (NuLtrBrkVal != 0 && wpm < 35)
 					{
 						uint16_t NuWrdBrk = advparser.GetWrdBrkIntrval();
 						uint16_t DahVal = advparser.Get_DahVal();
@@ -3339,6 +3339,7 @@ void CLrDCdValBuf(void)
 	OldDeCodeVal = 0;
 };
 /////////////////////////////////////////////////////////////////////////
+/*Only called from/by the AdvParserTask found in main.cpp*/
 void SyncAdvPrsrWPM(void)
 {
 	uint16_t DahVal = advparser.Get_DahVal();
