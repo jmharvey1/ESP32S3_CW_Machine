@@ -25,6 +25,7 @@
 /*20250217 Changed Buffer size from 6 to 3 - Found the extended delay was no longer needed*/
 /*20250217 Reworked S/N capture and changed Avgnoise code for white set value to improve false key down detection*/
 /*20250219 Reworked AvgNoise, S2N(signal to Noise ratio [in Db]) & ToneThresHold */
+/*2025026 added crude 'inactivity' check, to improve noise spike rejection */
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -84,12 +85,14 @@ float NFlrBase = 0;
 float avgKeyDwn = 1200 / 15;
 float curNois = 0;
 float OldcurNois = 0;
+float OldcurNois1 = 0;
 int NFlrRatio = 0;
 uint8_t GlthCnt = 0;
 bool StrngSigFLg = false; // used as part of the glitch detection process
 
 uint8_t Sentstate = 1;
 bool GltchFlg = false;
+volatile unsigned long LclnoSigStrt = 0;
 volatile unsigned long noSigStrt; // this is primarily used in the DcodeCW.cpp task; but declared here as part of a external/global declaration
 volatile unsigned long wordBrk;	  // this is primarily used in the DcodeCW.cpp task; but declared here as part of a external/global declaration
 float TARGET_FREQUENCYC = 750;	  // Hz// For ESP32 version moved declaration to DcodeCW.h
@@ -190,7 +193,7 @@ void PlotIfNeed2(void)
 		// sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)CurLvl, (int)SqlchLvl, (int)NoiseFlr, KeyState, (int)AvgNoise, (int)AdjSqlch-500, NFkeystate, PltGudSig);//standard plot display
 		// sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)ToneThresHold, (int)CurLvl, (int)SigDect, KeyState, NFkeystate, (int)AvgNoise, (int)AdjSqlch-90, ClimCnt);
 
-		sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)ToneThresHold, (int)CurLvl, (int)NoiseFlr, KeyState, NFkeystate, (int)AvgNoise, (int)curNois, ltrCmplt); // ltrCmplt//standard plot display
+		sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)ToneThresHold, (int)CurLvl, (int)NoiseFlr, (int)AvgNoise, (int)curNois, KeyState, NFkeystate, ltrCmplt); // ltrCmplt//standard plot display
 		
 		//sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)ToneThresHold, (int)CurLvl, (int)NoiseFlr, (int)CapturdSN, NFkeystate, (int)AvgNoise, (int)curNois);
 		// sprintf(PlotTxt, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", (int)CurLvl, (int)NFlrBase, NFlrRatio, (int)NoiseFlr, KeyState, (int)AvgNoise, (int)AdjSqlch-500, NFkeystate);
@@ -414,9 +417,21 @@ void ComputeMags(unsigned long now)
 	curNois = (SigPk - NoiseFlr);
 	//curNois *= 2;
 	if (OldcurNois > curNois)
+	{
 		NoisUp = false;
+	}
+		float tempNois = curNois;
+		//curNois = (tempNois + OldcurNois)/2; 
+		if(OldcurNois < curNois) curNois = OldcurNois;
+		if(OldcurNois1 < curNois) curNois = OldcurNois1;
+		OldcurNois1 = OldcurNois;
+		OldcurNois = tempNois;	
 
 	float curpk = 1.7*curNois;
+	if ((pdTICKS_TO_MS(xTaskGetTickCount()) - noSigStrt) > 5000)
+		{ 
+			curpk *=2;
+		}
 	if(NowLvl>curpk) curpk = NowLvl;	
 	if(ToneThresHold <  curpk && (NowLvl>curNois))
 	{
@@ -461,7 +476,7 @@ void ComputeMags(unsigned long now)
 	// }
 	/*now to aviod false key dtection, set minimum noise value*/
 	if (curNois< 1500) curNois = 1500;
-	OldcurNois = curNois;
+	
 	
 	/*Now look to see if the noise is increasing
 	And if it is, Add a differential term/componet to the ToneThresHold*/
@@ -610,6 +625,7 @@ void Chk4KeyDwn(float NowLvl)
 	// float ToneLvl = magB; // tone level delayed by six samples
 	bool GudTone = true;
 	unsigned long FltrPrd = 0;
+	if(LclnoSigStrt ==0) LclnoSigStrt = pdTICKS_TO_MS(xTaskGetTickCount());
 	// printf("Chk4KeyDwn\n");
 	if (avgDit <= 1200 / 35) // WPM is the denominator here
 	{						 /*High speed code keying process*/
@@ -732,6 +748,7 @@ void Chk4KeyDwn(float NowLvl)
 		else
 		{ // if we're here, we just ended a keydown event
 			float thisKDprd = (float)(TmpEvntTime - StrtKeyDwn);
+			LclnoSigStrt = pdTICKS_TO_MS(xTaskGetTickCount());
 			//printf("thisKDprd = %5.0f\n", thisKDprd);
 			if ((thisKDprd > 1200 / 60) && (thisKDprd < 1200 / 5))
 			{ // test to see if this interval looks like a real morse code driven event

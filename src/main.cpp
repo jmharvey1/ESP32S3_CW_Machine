@@ -101,6 +101,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250221 Reworked xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx) code, AdvParserTask() deletCnt & advparser.Msgbuf rebuild*/
 /*20250225 LVGLMsgBox.cpp - now initializing 'lastWrdBrk' = 98, instead of =0 to stop display lockup in noisy environment*/
 /*20250225 AdvParser.cpp - reworked 'wrdbrkFtcr' compesation code & reanbled updates from tha Adavance post past paser back to the real time decoder */
+/*2025026 Goertzelcpp - added crude 'inactivity' check, to improve noise spike rejection*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -2089,7 +2090,7 @@ void ProcsKeyEntry(uint8_t keyVal)
   else if ((keyVal == 0x9F))
   { // Cntrl+"P"; CW decode ADC plot Enable/Disable
     PlotFlg = !PlotFlg;
-    if(PlotFlg) printf("ToneThresHold\tCurLvl\tNoiseFlr\tKeyState\tNFkeystate\tAvgNoise\tcurNois\n"); //ltrCmplt
+    if(PlotFlg) printf("ToneThresHold\tCurLvl\tNoiseFlr\tAvgNoise\tcurNois\tKeyState\tNFkeystate\tltrCmplt\n"); //ltrCmplt
     // DFault.AutoTune = AutoTune;
     vTaskDelay(250);
     return;
