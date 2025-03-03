@@ -26,6 +26,7 @@
 /*20250217 Reworked S/N capture and changed Avgnoise code for white set value to improve false key down detection*/
 /*20250219 Reworked AvgNoise, S2N(signal to Noise ratio [in Db]) & ToneThresHold */
 /*2025026 added crude 'inactivity' check, to improve noise spike rejection */
+/*20250302 Rewrote interface between Goertzel & DcodeCW to pass all timing info via queues to reduce loading/ADC dma dropouts*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -55,7 +56,7 @@ bool TmpSlwFlg = false;
 bool NoisFlg = false; // In ESP32 world NoisFlg is not used & is always false
 bool AutoTune = true; // false; //true;
 bool Scaning = false;
-
+bool noiseflg = false;
 int ModeVal = 0;
 int N = 0; // Block size sample 6 cycles of a 750Hz tone; ~8ms interval
 int NL = Goertzel_SAMPLE_CNT / 2;
@@ -93,6 +94,7 @@ bool StrngSigFLg = false; // used as part of the glitch detection process
 uint8_t Sentstate = 1;
 bool GltchFlg = false;
 volatile unsigned long LclnoSigStrt = 0;
+volatile unsigned long LstLclnoSigStrt = 0;
 volatile unsigned long noSigStrt; // this is primarily used in the DcodeCW.cpp task; but declared here as part of a external/global declaration
 volatile unsigned long wordBrk;	  // this is primarily used in the DcodeCW.cpp task; but declared here as part of a external/global declaration
 float TARGET_FREQUENCYC = 750;	  // Hz// For ESP32 version moved declaration to DcodeCW.h
@@ -165,6 +167,8 @@ bool SndS_N = false;
 bool SndS_N2 = false;
 uint8_t KeyUpSmplCnt = 0;
 int CapturdSN = 0;
+int state3Cntr = 0;
+const TickType_t xDelay = 2/ portTICK_PERIOD_MS;
 ////////////////////////////////////////
 void CurMdStng(int MdStng)
 {
@@ -263,7 +267,10 @@ void InitGoertzel(void)
 	// printf( buf);
 }
 
-/* Call this routine for every sample. */
+/* 
+* Call this routine for every sample. 
+* this builds the goertzel coefficients for the next magnitude calculation
+*/
 void ProcessSample(int sample, int Scnt)
 {
 	char Smpl[10];
@@ -322,13 +329,15 @@ float GetMagnitudeSquared(float q1, float q2, float Coeff, int SmplCnt)
 /*Main entry point calc next Goertezl sample set*/
 void ComputeMags(unsigned long now)
 {
+	/*Cast the 'now' timestamp to 'TmpEvntTime' to be used/referenced in the Chk4KeyDwn() routine*/
 	TmpEvntTime = now;
+	// magL = magC;
 	// magC = Grtzl_Gain * 4.0*sqrt(GetMagnitudeSquared(Q1C, Q2C, coeffC, NC));
 	// magH = Grtzl_Gain * 4.0*sqrt(GetMagnitudeSquared(Q1H, Q2H, coeffH, NH));
 	// magL = Grtzl_Gain * 4.0*sqrt(GetMagnitudeSquared(Q1, Q2, coeffL, NL));
 	magC = Grtzl_Gain * 10.0 * sqrt(GetMagnitudeSquared(Q1C, Q2C, coeffC, NC));
-	magH = Grtzl_Gain * 10.0 * sqrt(GetMagnitudeSquared(Q1H, Q2H, coeffH, NH));
-	magL = Grtzl_Gain * 10.0 * sqrt(GetMagnitudeSquared(Q1, Q2, coeffL, NL));
+	//magH = Grtzl_Gain * 10.0 * sqrt(GetMagnitudeSquared(Q1H, Q2H, coeffH, NH));
+	//magL = Grtzl_Gain * 10.0 * sqrt(GetMagnitudeSquared(Q1, Q2, coeffL, NL));
 	/*Added the following to preload the current sample set to be combined with next incoming data set*/
 	if (SlwFlg)
 	{
@@ -340,7 +349,9 @@ void ComputeMags(unsigned long now)
 		}
 	}
 	/*End of preload process */
-	CurLvl = (magC + magL + magH) / 3;
+	//CurLvl = (magC + magL + magH) / 3;
+	CurLvl = magC;
+	// if(magL > CurLvl) CurLvl = magL;
 	// if (CurLvl < 50)
 	// 	CurLvl = NowLvl; // something went wrong use last datapoint
 	NowLvl = CurLvl;	 //'NowLvl will be used later for showing current LED state
@@ -415,69 +426,46 @@ void ComputeMags(unsigned long now)
 	}
 	bool NoisUp = true;
 	curNois = (SigPk - NoiseFlr);
-	//curNois *= 2;
+	
 	if (OldcurNois > curNois)
 	{
 		NoisUp = false;
 	}
 		float tempNois = curNois;
-		//curNois = (tempNois + OldcurNois)/2; 
 		if(OldcurNois < curNois) curNois = OldcurNois;
 		if(OldcurNois1 < curNois) curNois = OldcurNois1;
 		OldcurNois1 = OldcurNois;
 		OldcurNois = tempNois;	
 
 	float curpk = 1.7*curNois;
-	if ((pdTICKS_TO_MS(xTaskGetTickCount()) - noSigStrt) > 5000)
-		{ 
-			curpk *=2;
-		}
-	if(NowLvl>curpk) curpk = NowLvl;	
-	if(ToneThresHold <  curpk && (NowLvl>curNois))
+	if(noiseflg)
+	{ 
+		// int msinterval = (pdTICKS_TO_MS(xTaskGetTickCount()) - LstLclnoSigStrt);
+		// printf("\tLst Keyup:%d\n", msinterval);
+		// vTaskDelay(xDelay);
+		LclnoSigStrt = LstLclnoSigStrt;
+	}
+	//if ((pdTICKS_TO_MS(xTaskGetTickCount()) - LclnoSigStrt) > 15000)
+	if (now - LclnoSigStrt > 15000)
 	{
-		ToneThresHold = ((5*ToneThresHold) + (curpk))/6;
+		// printf("\t\t15 Second Dead period Exceeded\n");
+		curpk *= 2;
+	}
+	if(NowLvl>curpk) curpk = NowLvl;	
+	if((ToneThresHold <  curpk) && (NowLvl>curNois)) //20250228 added '(ToneThresHold <  NoiseFlr)' as a precheck that we're not about to detect a keydown envent in the 'Chk4KeyDwn()' section/function
+	{
+		// if( (ToneThresHold <  NoiseFlr))
+		// {
+			ToneThresHold = ((5*ToneThresHold) + (curpk))/6;
+		// }
+		// else ToneThresHold = ((15*ToneThresHold) + (curpk))/16;
 	} 
 	else ToneThresHold = ((45*ToneThresHold) + (0.9*ToneThresHold))/46;
-	/*20250123 the next line was added to stop overshoot of the curNois (threshold point/value) for loud high speed Signals*/
-	// if (curNois > 90000)
-	// 	curNois = 90000;
-	// if (curNois > 30000)
-	// {
-	// 	if (NoisUp)
-	// 	{
-	// 		curNois *= 0.6;
-	// 		if (curNois < 30000)
-	// 			curNois = 30000;
-	// 		ToneThresHold = ((19 * ToneThresHold) + (curNois)) / 20;
-	// 	}
-	// 	else
-	// 	{
-	// 		ToneThresHold = ((59 * ToneThresHold) + (OldcurNois)) / 60;
-	// 	}
-	// }
-	// else
-	// {
-	// 	if (NoisUp)
-	// 	{
-	// 		//curNois *= 1.7;
-	// 		if (curNois > 40000)
-	// 			curNois = 40000;
-			 
-	// 		/*this establishes the tone detect level during white noise conditions
-	// 		and tends to keep it at, or above, the noise peaks*/
-	// 		//ToneThresHold = ((4*ToneThresHold) + (8*curNois))/5;
-	// 		ToneThresHold = ((45*ToneThresHold) + (8*curNois))/46;
-	// 	}
-	// 	else
-	// 	{
-	// 		//ToneThresHold = ((19 * ToneThresHold) + (6*OldcurNois)) / 20;
-	// 		ToneThresHold = ((69*ToneThresHold) + (6*curNois))/90;
-	// 	}
-	// }
+	
 	/*now to aviod false key dtection, set minimum noise value*/
 	if (curNois< 1500) curNois = 1500;
-	
-	
+	if (ToneThresHold <= 8420) ToneThresHold = 8420;
+	if (AvgNoise <= 8420) AvgNoise = 8420;
 	/*Now look to see if the noise is increasing
 	And if it is, Add a differential term/componet to the ToneThresHold*/
 	int LstNLvlIndx = NoisPtr - 1;
@@ -625,7 +613,7 @@ void Chk4KeyDwn(float NowLvl)
 	// float ToneLvl = magB; // tone level delayed by six samples
 	bool GudTone = true;
 	unsigned long FltrPrd = 0;
-	if(LclnoSigStrt ==0) LclnoSigStrt = pdTICKS_TO_MS(xTaskGetTickCount());
+	if(LclnoSigStrt ==0) LclnoSigStrt = TmpEvntTime; //pdTICKS_TO_MS(xTaskGetTickCount());
 	// printf("Chk4KeyDwn\n");
 	if (avgDit <= 1200 / 35) // WPM is the denominator here
 	{						 /*High speed code keying process*/
@@ -730,7 +718,7 @@ void Chk4KeyDwn(float NowLvl)
 		/*20250123 new approach to finding where/when to reset the threshold tone detect level
 		Note: the 'or' curNois vs NowLvl test is based on the curNois dropping below the CurLvl(nowlvl)
 		even in a noisy environment as a way to detect the presence of a tone */
-		if ((state != OLDstate))//if (state && (state != OLDstate)) // || (curNois < NowLvl/4))//(curNois < 0.75* NowLvl))
+		if ((state != OLDstate))
 		{ /* Just transistion from keydown to keyup */
 			float tmpcurnoise = ((AvgNoise - NFlrBase) / 2) + NFlrBase;
 			AvgNoise = tmpcurnoise;
@@ -748,7 +736,12 @@ void Chk4KeyDwn(float NowLvl)
 		else
 		{ // if we're here, we just ended a keydown event
 			float thisKDprd = (float)(TmpEvntTime - StrtKeyDwn);
-			LclnoSigStrt = pdTICKS_TO_MS(xTaskGetTickCount());
+			if(!noiseflg)
+			{
+				LstLclnoSigStrt = LclnoSigStrt; 
+				//LclnoSigStrt = pdTICKS_TO_MS(xTaskGetTickCount());
+				LclnoSigStrt = Now2;
+			}
 			//printf("thisKDprd = %5.0f\n", thisKDprd);
 			if ((thisKDprd > 1200 / 60) && (thisKDprd < 1200 / 5))
 			{ // test to see if this interval looks like a real morse code driven event
@@ -849,9 +842,15 @@ void Chk4KeyDwn(float NowLvl)
 				else
 					LEDGREEN = (int)CurLvl;
 				if (Sentstate)
+				{
 					chkcnt++;
+					//printf("\tchkcnt:%d; TmpEvntTime:%d", chkcnt, TmpEvntTime);
+				}
 				if(Sentstate)
-				{   uint16_t CycleInterval = (uint16_t)(TmpEvntTime- OldCycleTime);
+				{   
+					uint16_t CycleInterval = (uint16_t)(TmpEvntTime- OldCycleTime);
+					//printf("\n\tchkcnt:%d; CycleInterval:%d", chkcnt, CycleInterval);
+					//printf("\n\tchkcnt:%d", chkcnt);
 					if( ((CycleInterval) < 69) && OldCycleTime!=0) // incountered a keyup keydwn & back to keyup in an interval that represents >35wpm
 					{
 						if(setcnt>0)
@@ -887,6 +886,7 @@ void Chk4KeyDwn(float NowLvl)
 				
 				if(xQueueSend(KeyEvnt_que, &TmpEvntTime, (TickType_t)0) == pdFALSE)
 				{ 
+					/*TODO need to work out better way to recognize & rest/clear this buffer*/
 					printf("!!! KeyEvnt_que FULL !!!\n");
 					unsigned long dummy;
 					int IndxPtr = 0;
@@ -897,6 +897,7 @@ void Chk4KeyDwn(float NowLvl)
 				}
 				if(xQueueSend(KeyState_que, &Sentstate, (TickType_t)0) == pdFALSE)
 				{ 
+					/*TODO need to work out better way to recognixe & rest/clear this buffer*/
 					printf("!!! KeyState_que !!!\n");
 					uint8_t dummy;
 					int IndxPtr = 0;
@@ -907,17 +908,51 @@ void Chk4KeyDwn(float NowLvl)
 				}
 				//printf("\tKeyEvnt_que, EvntTime: %d; State: %d\n", (uint16_t)TmpEvntTime, Sentstate);
 				//if(!Sentstate) printf("\tKeyEvnt_que, &TmpEvntTime: &d\n", (uint16_t)TmpEvntTime);//testing debugging
-				KeyEvntSR(Sentstate, TmpEvntTime);
+				//KeyEvntSR(Sentstate, TmpEvntTime);
+				vTaskResume( KeyEvntTaskTaskHandle );
+				//xTaskNotifyGive(KeyEvntTaskTaskHandle);
+			}
+			else
+			{
+				state3Cntr++;
+				if(state3Cntr==2)
+				{
+					state3Cntr = 0;
+				TmpEvntTime = EvntTimeBuf[MBpntr];
+				if(xQueueSend(KeyEvnt_que, &TmpEvntTime, (TickType_t)0) == pdFALSE)
+				{ 
+					/*TODO need to work out better way to recognize & rest/clear this buffer*/
+					printf("!!! KeyEvnt_que FULL state 3!!!\n");
+					unsigned long dummy;
+					int IndxPtr = 0;
+					while (xQueueReceive(KeyEvnt_que, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+					{
+						IndxPtr++;
+					}
+				}
+				uint8_t dummy = 3;
+				if(xQueueSend(KeyState_que, &dummy, (TickType_t)0) == pdFALSE)
+				{ 
+					/*TODO need to work out better way to recognixe & rest/clear this buffer*/
+					printf("!!! KeyState_que state 3 !!!\n");
+					//uint8_t dummy;
+					int IndxPtr = 0;
+					while (xQueueReceive(KeyState_que, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+					{
+						IndxPtr++;
+					}
+				}
+			}
 			}
 		}
 		
 	}
 	if (Sentstate)
-	{ // 1 = Keyup, or "no tone" state; 0 = Keydown
-		if (chkChrCmplt() && SlwFlg != TmpSlwFlg)
-		{ // key is up
-			SlwFlg = TmpSlwFlg;
-		}
+	{ // 1 = Keyup, or "no tone"; Sentstate 0 = Keydown
+		// if (chkChrCmplt(TmpEvntTime) && SlwFlg != TmpSlwFlg)
+		// { // key is up
+		// 	SlwFlg = TmpSlwFlg;
+		// }
 		if (CalGtxlParamFlg)
 		{
 			CalGtxlParamFlg = false;
@@ -925,8 +960,8 @@ void Chk4KeyDwn(float NowLvl)
 			showSpeed();
 		}
 	}
-	else
-		SetLtrBrk(); // key is down; so reset/recalculate new letter-brake clock value
+	// else
+	// 	SetLtrBrk(TmpEvntTime); // key is down; so reset/recalculate new letter-brake clock value
 
 	int pksigH = (int)(LEDGREEN / 1000);
 	/*Push returned "state" values on the que */

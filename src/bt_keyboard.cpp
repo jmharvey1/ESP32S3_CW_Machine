@@ -2452,8 +2452,6 @@ void BTKeyboard::devices_scan(int seconds_wait_time)
         // free the results
         esp_hid_scan_results_free(results);
         printf("Close BLE dev 'failed Connection' wait period DONE\n");
-        //printf("launching 'BLE Scan Task' from %s\n", __func__);
-        //xTaskCreatePinnedToCore(BLE_scan_tsk, "BLE Scan Task", 8192, NULL, 1, &BLEscanTask_hndl, 0);
         PairFlg1 = false;
         return;        
       }

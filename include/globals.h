@@ -49,6 +49,6 @@ extern int curOwner;
 extern bool mutexFLG;//JMH Added
 extern bool Touch_mutex;
 extern bool ForcedWrdBrk;
-
+extern bool noiseflg;
 
 #endif /* INC_GLOBALS_H_ */

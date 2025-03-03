@@ -102,6 +102,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250225 LVGLMsgBox.cpp - now initializing 'lastWrdBrk' = 98, instead of =0 to stop display lockup in noisy environment*/
 /*20250225 AdvParser.cpp - reworked 'wrdbrkFtcr' compesation code & reanbled updates from tha Adavance post past paser back to the real time decoder */
 /*2025026 Goertzelcpp - added crude 'inactivity' check, to improve noise spike rejection*/
+/*20250302 Rewrote interface between Goertzel & DcodeCW to pass all timing info via queues to reduce loading/ADC dma dropouts*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -196,7 +197,7 @@ QueueHandle_t RxSig_que;
 static const int ToneSN_que_len = 25;//50
 QueueHandle_t ToneSN_que;
 QueueHandle_t ToneSN_que2;
-static const int KeyEvnt_que_len = (2*IntrvlBufSize) -3;//50;
+static const int KeyEvnt_que_len = (16*IntrvlBufSize) -3;//50;
 static const int KeyState_que_len = KeyEvnt_que_len;
 QueueHandle_t KeyEvnt_que;
 QueueHandle_t KeyState_que;
@@ -418,6 +419,8 @@ void addSmpl(int k, int i, int *pCntrA)
   out_z2 = out_z1;
   out_z1 = IIRBPOut;
   decimated = IIRBPOut;
+  k = (int)decimated;
+
 
   /*2nd stage */
   // IIRBPOut =
@@ -431,7 +434,7 @@ void addSmpl(int k, int i, int *pCntrA)
   // out_z4 = out_z3;
   // out_z3 = IIRBPOut;
   // decimated = IIRBPOut;
-  k = (int)decimated;
+  //k = (int)decimated;
   const int ToneThrsHld = 100; // 100; // minimum usable peak tone value; Anything less is noise
   if (AutoTune)
   {
@@ -481,16 +484,35 @@ void addSmpl(int k, int i, int *pCntrA)
        //DemodFreq = (int)((float)PeriodCntr * (float)SAMPLING_RATE) / (float)SmplCNt;
       // freq_int = DemodFreq;
       /*20250212 moved freq Calc to its own process*/
+      #ifndef POSTADC
       if (xQueueSend(ToneFrq_que, &SmplCNt, pdMS_TO_TICKS(2)) == pdFALSE)
       {
         printf("Failed to push 'PeriodCntr' to 'ToneFrq_que' \n");
       }
       vTaskResume(ToneFreqTaskHandle);
+      #endif
       /*reset for next round of samples*/
       SmplCNt = 0;
     }
     Oldk = k;
   }
+
+  //  /*IIR manual method */
+  //  float decimated = float(k);
+  //  if (xSemaphoreTake(IIR_Coef_mutx, pdMS_TO_TICKS(3)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+  //  {
+  //    IIRBPOut = a0 * decimated + a1 * in_z1 + a2 * in_z2 - b1 * out_z1 - b2 * out_z2;
+  //    xSemaphoreGive(IIR_Coef_mutx);
+  //  }
+  //  // float IIRBPOut = a0 * decimated + a1 * in_z1 + a2 * in_z2 - b1 * out_z1 - b2 * out_z2;
+  //  in_z2 = in_z1;
+  //  in_z1 = decimated;
+  //  out_z2 = out_z1;
+  //  out_z1 = IIRBPOut;
+  //  decimated = IIRBPOut;
+  //  k = (int)decimated;
+ 
+#ifndef POSTADC 
   if (ScopeFlg)
   {
     if (!SmplSetRdy && !ScopeArm && (k < 50)) //&& (k < ToneThrsHld/2))
@@ -512,8 +534,12 @@ void addSmpl(int k, int i, int *pCntrA)
     }
   }
   ProcessSample(k, i);
+#endif  
 /* uncomment for diagnostic testing; graph raw ADC samples*/
 #ifdef POSTADC
+  // char Smpl[10];
+  // sprintf(Smpl, "%d\n", k);
+  // printf(Smpl);
   if ((*pCntrA < (6 * Goertzel_SAMPLE_CNT)) && UrTurn)
   {
     if ((*pCntrA == Goertzel_SAMPLE_CNT) || (*pCntrA == 2 * Goertzel_SAMPLE_CNT) || (*pCntrA == 3 * Goertzel_SAMPLE_CNT) || (*pCntrA == 4 * Goertzel_SAMPLE_CNT) || (*pCntrA == 5 * Goertzel_SAMPLE_CNT))
@@ -523,12 +549,19 @@ void addSmpl(int k, int i, int *pCntrA)
     }
     else if (*pCntrA != 0)
       Smpl_buf[*pCntrA] = k;
+
+    // char Smpl[10];
+    // sprintf(Smpl, "%d.\t%d\n", *pCntrA, Smpl_buf[*pCntrA]);
+    // printf(Smpl);
+
     *pCntrA += 1;
   }
+  
   if ((*pCntrA == (6 * Goertzel_SAMPLE_CNT)) || !UrTurn)
   {
     UrTurn = false;
     *pCntrA = 0;
+    vTaskResume(CWDecodeTaskHandle);
     // Smpl_buf[*pCntrA] = 2000; // place a marker at the the begining of the next set
   }
 #endif
@@ -539,6 +572,9 @@ void addSmpl(int k, int i, int *pCntrA)
 /* Goertzel Task; Process ADC buffer*/
 void GoertzelHandler(void *param)
 {
+// #ifdef POSTADC  
+//   char Smpl[10];
+// #endif  
   static uint32_t thread_notification;
   static const char *TAG2 = "ADC_Read";
   // uint16_t curclr = 0;
@@ -548,12 +584,15 @@ void GoertzelHandler(void *param)
   int pksig = 0;
   int k;
   int offset = 0;
+  int OLDltrCmplt;
+  bool restore = false;
   /*for Waveshare/ESP32s3 & based on 11 bit ADC output; Set bias to 1024*/
   int BIAS = 1800; // 1844+150; // based reading found when no signal applied to ESP32Cw_Machine_ADC_init
   int Smpl_CntrA = 0;
   bool FrstPass = true;
   int pksigH = 0;
   int sigSmplCnt = 0;
+  unsigned long LstNowTime = 0;
   // bool updt = false;
   InitGoertzel(); // make sure the Goertzel Params are setup & ready to go
   /*The following is just for time/clock testing/veification */
@@ -575,6 +614,17 @@ void GoertzelHandler(void *param)
     if (thread_notification)
     { // Goertzel data samples ready for processing
       unsigned long Now = EvntStart; //pdTICKS_TO_MS(xTaskGetTickCount());
+      if(Now - LstNowTime >5)
+      {
+        if(!restore) OLDltrCmplt = ltrCmplt;
+        restore = true;
+        ltrCmplt = -15000;//printf("%d\t%d\n", (int)Now, (int)LstNowTime );
+      } else if (restore)
+      {
+        restore = false;
+        ltrCmplt = OLDltrCmplt;
+      }
+      LstNowTime = Now;
       if(SmplSetDone){
         BIAS = BIAS + BiasError;
         bias_int = BIAS;
@@ -638,7 +688,6 @@ void GoertzelHandler(void *param)
 
 #ifdef POSTADC
         skip1 = true;
-
         if (!skip1)
         {
 #endif          
@@ -670,7 +719,8 @@ void GoertzelHandler(void *param)
           // cur_smpl_rate = ((ret_num) * 250) / sampleIntrvl;
 #ifdef POSTADC        
         }// end if(!skip)
-#endif        
+        //vTaskDelay(pdMS_TO_TICKS(10));
+#endif
       }
       else if (ret == ESP_ERR_TIMEOUT)
       {
@@ -912,14 +962,17 @@ void CWDecodeTask(void *param)
     if (thread_notification)
     {
       //printf("CWDecodeTask CoreID: %d\n", xPortGetCoreID());
+#ifndef POSTADC      
       Dcodeloop();
       vTaskDelay(pdMS_TO_TICKS(2)); //this task under normal conditions runs all the time So insert a breather to allow Watchdog to reset
       //printf("CWDecodeTask complete\n");
+#endif      
       /* uncomment for diagnostic testing; graph ADC samples; Note: companion code in addSmpl(int k, int i, int *pCntrA) needs to be uncommented too */
       /* Pull accumulated "ADC sample" values from buffer & print to serial port*/
-#ifdef POSTADC      
-      if(!UrTurn){
-        /* 
+#ifdef POSTADC
+      if (!UrTurn)
+      {
+        /*
         uint32_t freq = 120*1000;//48*1000;
         uint32_t interval = APB_CLK_FREQ / (ADC_LL_CLKM_DIV_NUM_DEFAULT + ADC_LL_CLKM_DIV_A_DEFAULT / ADC_LL_CLKM_DIV_B_DEFAULT+1) /4 / freq;
         uint32_t Smpl_rate = 1000000/interval;
@@ -927,17 +980,32 @@ void CWDecodeTask(void *param)
         sprintf(buf, "interval: %d; SmplRate: %d\n", (int)interval, (int)Smpl_rate);
         printf(buf);
         */
-       if(bt_keyboard.PairFlg)
-        for (int Smpl_CntrA = 0; Smpl_CntrA < 6 * Goertzel_SAMPLE_CNT; Smpl_CntrA++)
+        int pauscntr = 0;
+        int smplftr = 80;
+        if (bt_keyboard.PairFlg)
         {
-          if(Smpl_buf[Smpl_CntrA] !=0){
-            sprintf(Smpl, "%d\n", Smpl_buf[Smpl_CntrA]);
+          int stop = (6 * Goertzel_SAMPLE_CNT) / smplftr;
+          for (int Raw_ADC_Smpl_ptr = 0; Raw_ADC_Smpl_ptr< stop; Raw_ADC_Smpl_ptr++)
+          {
+            int ptr = smplftr * Raw_ADC_Smpl_ptr;
+            int val = Smpl_buf[ptr];
+
+            // sprintf(Smpl, "%d.\t%d\n",ptr, val);
+            sprintf(Smpl, "%d\n", val);
             printf(Smpl);
-            
+            pauscntr++;
+            if (pauscntr == 250) // this prevents watchdog timer error/crash
+            {
+              pauscntr = 0;
+              vTaskDelay(1);
+            }
           }
         }
-         UrTurn = true;
+        UrTurn = true;
       }
+      
+      //vTaskDelay(pdMS_TO_TICKS(25));
+      vTaskSuspend(NULL);
 #endif /* POSTADC */     
       /* END code for diagnostic testing; graph ADC samples; */
       
@@ -1024,6 +1092,7 @@ void AdvParserTask(void *param)
   /*Used diagnose Advance parser CPU usage*/
   // UBaseType_t uxHighWaterMark;
   // unsigned long AdvPStart = 0;
+  //#define SpclTst
   while (1)
   {
     /* Sleep until instructed to resume from DcodeCW.cpp */
@@ -1182,6 +1251,9 @@ void AdvParserTask(void *param)
 #ifdef AutoCorrect
           printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
 #endif
+#ifdef SpclTst
+          printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
+#endif
           // printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
           CptrTxt = false;
           lvglmsgbx.dispDeCdrTxt(advparser.Msgbuf, TFT_GREEN); // Added for lvgl; Note: color value is meaningless
@@ -1197,6 +1269,9 @@ void AdvParserTask(void *param)
       // printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
     } // else printf("old txt: %s\n", advparser.LtrHoldr);
 #ifdef AutoCorrect
+    else printf("old txt:'%s'\n", advparser.LtrHoldr);
+#endif
+#ifdef SpclTst
     else printf("old txt:'%s'\n", advparser.LtrHoldr);
 #endif
     if (advparser.Dbug)
@@ -1331,7 +1406,7 @@ void app_main()
       "AdvParser Task", /* Name of the task */
       5148,  /*old Stack size in words 4096*/
       NULL,  /* Task input parameter */
-      2,  /* Priority of the task */
+      1,  /* Priority of the task */
       &AdvParserTaskHandle,  /* Task handle. */
       1); /* Core where the task should run */
   if (AdvParserTaskHandle == NULL)
@@ -1339,32 +1414,18 @@ void app_main()
 
   vTaskSuspend( AdvParserTaskHandle );
   //////////////////////////////////////////////
-  // xTaskCreatePinnedToCore(
-  //     KeyEvntTask, /* Function to implement the task */
-  //     "KeyEvnt Task", /* Name of the task */
-  //     4096,  /* Stack size in words */
-  //     NULL,  /* Task input parameter */
-  //     2,  /* Priority of the task */
-  //     &KeyEvntTaskTaskHandle,  /* Task handle. */
-  //     0); /* Core where the task should run */
-  // if (KeyEvntTaskTaskHandle == NULL)
-  //   ESP_LOGI(TAG, "KeyEvnt Task handle FAILED");
+  xTaskCreatePinnedToCore(
+      KeyEvntTask, /* Function to implement the task */
+      "KeyEvnt Task", /* Name of the task */
+      4096,  /* Stack size in words */
+      NULL,  /* Task input parameter */
+      12,  /* Priority of the task */
+      &KeyEvntTaskTaskHandle,  /* Task handle. */
+      0); /* Core where the task should run */
+  if (KeyEvntTaskTaskHandle == NULL)
+    ESP_LOGI(TAG, "KeyEvnt Task handle FAILED");
 
-  // vTaskSuspend( KeyEvntTaskTaskHandle );
-/////////////////////////////////////////////////
-/*Not currently using this approach/method*/
-  //  xTaskCreatePinnedToCore(
-  //    UpDtRxSigTask, /* Function to implement the task */
-  //     "UpDtRxSig Task", /* Name of the task */
-  //     4096,  /* Stack size in words */
-  //     NULL,  /* Task input parameter */
-  //     1,  /* Priority of the task */
-  //     &UpDtRxSigTaskHandle,  /* Task handle. */
-  //     1); /* Core where the task should run */
-  // if (UpDtRxSigTaskHandle == NULL)
-  //   ESP_LOGI(TAG, "UpDtRxSig Task handle FAILED");
-
-  // vTaskSuspend( UpDtRxSigTaskHandle );
+  vTaskSuspend( KeyEvntTaskTaskHandle );
 ///////////////////////////////////////////////  
   
   xTaskCreatePinnedToCore(
@@ -1379,7 +1440,7 @@ void app_main()
   if (CWDecodeTaskHandle == NULL)
     ESP_LOGI(TAG, "CW Decoder Task handle FAILED");
 
-  xTaskCreate(GoertzelHandler, "Goertzel Task", 8192, NULL, 5, &GoertzelTaskHandle); // priority used to be 3
+  xTaskCreate(GoertzelHandler, "Goertzel Task", 8192, NULL, 10, &GoertzelTaskHandle); // priority used to be 3
   if (GoertzelTaskHandle == NULL)
     ESP_LOGI(TAG, "Goertzel Task Task handle FAILED");
 
@@ -1525,10 +1586,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
       vTaskDelay(pdMS_TO_TICKS(20));
     }
   }
-  /*create a scan task for reconnect*/
-  // xTaskCreatePinnedToCore(BLE_scan_tsk, "BLE Scan Task", 8192, NULL, 1, &BLEscanTask_hndl, 0);
-  // vTaskSuspend( BLEscanTask_hndl);
-  #endif /* USE_KYBrd*/
+#endif /* USE_KYBrd*/
   /*initialize & start continuous DMA ADC conversion process*/
   Cw_Machine_ADC_init(channel, sizeof(channel) / sizeof(adc_channel_t), &adc_handle);
   
@@ -1773,9 +1831,6 @@ void DsplTmr_callback(TimerHandle_t xtimer)
       portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
       // printf("DsplTmr_callback->xHigherPriorityTaskWoken\n"); // this happens a lot
     }
-    // vTaskDelete(DsplUpDtTaskHandle);
-    // xTaskCreatePinnedToCore(DisplayUpDt, "DisplayUpDate Task", 8192, NULL, 3, &DsplUpDtTaskHandle, 0);
-    // printf("DisplayUpDt task Deleted & ReCreate. Now will Restart it\n");
     vTaskDelay((TickType_t)100);
     printf("Attempting to restart DisplayUpDt task\n");
     if (xTaskResumeFromISR(DsplUpDtTaskHandle) == pdTRUE)
