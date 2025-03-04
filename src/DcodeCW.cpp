@@ -2257,24 +2257,24 @@ bool chkChrCmplt(unsigned long TimeStmp)
 
 			if (DeCodeVal >= 2)
 			{
-				//if (LtrPtr == 1 && (LtrHoldr[LtrPtr - 1] == 'T' || LtrHoldr[LtrPtr - 1] == 'E'))
+				//20250304 - not used any longer. Was part of a scheme to detect inactivity & Boost threshold val
 				/*as part of the noise detect & overide code check for E, H, I, S, & 5's*/
-				if (DeCodeVal == 2 || DeCodeVal == 4  || DeCodeVal == 8 || DeCodeVal == 16 || DeCodeVal == 32)
-				{
-					noiseflg = true;
-					VldChrCnt = 0;
-					// printf("\nEIS Detected; noiseflg = true\n");
-				}
-				else if(noiseflg)
-				{
-					VldChrCnt++;
-					// printf("VldChrCnt %d; noiseflg = true\n", VldChrCnt);
-					if(VldChrCnt >=2)
-					{
-						VldChrCnt = 0;
-						noiseflg = false;
-					} 
-				} 
+				// if (DeCodeVal == 2 || DeCodeVal == 4  || DeCodeVal == 8 || DeCodeVal == 16 || DeCodeVal == 32)
+				// {
+				// 	noiseflg = true;
+				// 	VldChrCnt = 0;
+				// 	// printf("\nEIS Detected; noiseflg = true\n");
+				// }
+				// else if(noiseflg)
+				// {
+				// 	VldChrCnt++;
+				// 	// printf("VldChrCnt %d; noiseflg = true\n", VldChrCnt);
+				// 	if(VldChrCnt >=2)
+				// 	{
+				// 		VldChrCnt = 0;
+				// 		noiseflg = false;
+				// 	} 
+				// } 
 				if (DeCodeVal == 2 || DeCodeVal == 3)
 					ShrtLtrBrkCnt++; // copied either a 'T' or 'E'
 				else

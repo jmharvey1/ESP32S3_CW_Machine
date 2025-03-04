@@ -29,6 +29,7 @@
 /*20250302 Rewrote interface between Goertzel & DcodeCW to pass all timing info via queues to reduce loading/ADC dma dropouts*/
 /*20250303 Reworked scaling values & running averages for threshold & AvgNois values & and removed inactivity check implemented 20250226
 * 		   And made 'send' timing changes to keystate & keyevent queues*/
+/*20250304 changed Avgnoise logic to ignore 'keydown' state change, Allowing threshold level to ride colser to the noisefloor*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -58,7 +59,8 @@ bool TmpSlwFlg = false;
 bool NoisFlg = false; // In ESP32 world NoisFlg is not used & is always false
 bool AutoTune = true; // false; //true;
 bool Scaning = false;
-bool noiseflg = false;
+//20250304 not used any longer. Was part of a scheme to detect inactivity & Boost threshold val
+// bool noiseflg = false;
 int ModeVal = 0;
 int N = 0; // Block size sample 6 cycles of a 750Hz tone; ~8ms interval
 int NL = Goertzel_SAMPLE_CNT / 2;
@@ -95,8 +97,9 @@ bool StrngSigFLg = false; // used as part of the glitch detection process
 
 uint8_t Sentstate = 1;
 bool GltchFlg = false;
-volatile unsigned long LclnoSigStrt = 0;
-volatile unsigned long LstLclnoSigStrt = 0;
+//20250304 not used any longer. Was part of a scheme to detect inactivity & Boost threshold val
+//volatile unsigned long LclnoSigStrt = 0;
+//volatile unsigned long LstLclnoSigStrt = 0;
 volatile unsigned long noSigStrt; // this is primarily used in the DcodeCW.cpp task; but declared here as part of a external/global declaration
 volatile unsigned long wordBrk;	  // this is primarily used in the DcodeCW.cpp task; but declared here as part of a external/global declaration
 float TARGET_FREQUENCYC = 750;	  // Hz// For ESP32 version moved declaration to DcodeCW.h
@@ -329,7 +332,7 @@ float GetMagnitudeSquared(float q1, float q2, float Coeff, int SmplCnt)
 	// PhazAng = 360 * ((atan(real / imag)) / (2 * M_PI));
 	return result;
 }
-/*Main entry point calc CURRENT Goertezl sample set*/
+/*Main entry point. Calc CURRENT Goertezl sample set*/
 void ComputeMags(unsigned long now)
 {
 	/*Cast the 'now' timestamp to 'TmpEvntTime' to be used/referenced in the Chk4KeyDwn() routine*/
@@ -441,19 +444,16 @@ void ComputeMags(unsigned long now)
 		OldcurNois = tempNois;	
 
 	float curpk = 3.0*curNois;//20250303 1.7*curNois;
-	if(noiseflg)
-	{ 
-		// int msinterval = (pdTICKS_TO_MS(xTaskGetTickCount()) - LstLclnoSigStrt);
-		// printf("\tLst Keyup:%d\n", msinterval);
-		// vTaskDelay(xDelay);
-		LclnoSigStrt = LstLclnoSigStrt;
-	}
-	//if ((pdTICKS_TO_MS(xTaskGetTickCount()) - LclnoSigStrt) > 15000)
-	if (now - LclnoSigStrt > 15000)
-	{
-		// printf("\t\t15 Second Dead period Exceeded\n");
-		//curpk *= 2;
-	}
+	//20250304 not used any longer. Was part of a scheme to detect inactivity & Boost threshold val
+	// if(noiseflg)
+	// { 
+	// 	LclnoSigStrt = LstLclnoSigStrt;
+	// }
+	// if (now - LclnoSigStrt > 15000)
+	// {
+	// 	// printf("\t\t15 Second Dead period Exceeded\n");
+	// 	//curpk *= 2;
+	// }
 	if(NowLvl>curpk) curpk = NowLvl;	
 	if((ToneThresHold <  curpk) && (NowLvl>curNois)) //20250228 added '(ToneThresHold <  NoiseFlr)' as a precheck that we're not about to detect a keydown envent in the 'Chk4KeyDwn()' section/function
 	{
@@ -624,8 +624,7 @@ void Chk4KeyDwn(float NowLvl)
 	// float ToneLvl = magB; // tone level delayed by six samples
 	bool GudTone = true;
 	unsigned long FltrPrd = 0;
-	if(LclnoSigStrt ==0) LclnoSigStrt = TmpEvntTime; //pdTICKS_TO_MS(xTaskGetTickCount());
-	// printf("Chk4KeyDwn\n");
+	//if(LclnoSigStrt ==0) LclnoSigStrt = TmpEvntTime; //20250304 not used any longer. Was part of a scheme to detect inactivity & Boost threshold val
 	if (avgDit <= 1200 / 35) // WPM is the denominator here
 	{						 /*High speed code keying process*/
 		if (CurLvl > ToneThresHold)
@@ -699,7 +698,8 @@ void Chk4KeyDwn(float NowLvl)
 		tmpcurnoise = ((CurLvl - NFlrBase) / 2) + NFlrBase;
 		if (state != OLDstate)
 		{ //this resets the 'AvgNoise' value right at the moment keydown has just been detected
-			AvgNoise = tmpcurnoise; //20250219 changed from, AvgNoise = tmpcurnoise
+			//AvgNoise = tmpcurnoise; //20250219 changed from, AvgNoise = tmpcurnoise
+			if (state != 0) AvgNoise = tmpcurnoise; //20250304 changed from,above logic to get avgnoise & threshold to track closer to noise floor during keydown interval
 			OLDstate = state;
 		}
 
@@ -746,12 +746,12 @@ void Chk4KeyDwn(float NowLvl)
 		else
 		{ // if we're here, we just ended a keydown event
 			float thisKDprd = (float)(TmpEvntTime - StrtKeyDwn);
-			if(!noiseflg)
-			{
-				LstLclnoSigStrt = LclnoSigStrt; 
-				//LclnoSigStrt = pdTICKS_TO_MS(xTaskGetTickCount());
-				LclnoSigStrt = Now2;
-			}
+			// not used any longer. Was part of a scheme to detect inactivity & Boost threshold val
+			// if(!noiseflg)
+			// {
+			// 	LstLclnoSigStrt = LclnoSigStrt; 
+			// 	LclnoSigStrt = Now2;
+			// }
 			//printf("thisKDprd = %5.0f\n", thisKDprd);
 			if ((thisKDprd > 1200 / 60) && (thisKDprd < 1200 / 5))
 			{ // test to see if this interval looks like a real morse code driven event

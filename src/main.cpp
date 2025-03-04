@@ -104,6 +104,7 @@ esp_event_loop_args_t event_task_args = {
 /*2025026 Goertzelcpp - added crude 'inactivity' check, to improve noise spike rejection*/
 /*20250302 Rewrote interface between Goertzel & DcodeCW to pass all timing info via queues to reduce loading/ADC dma dropouts*/
 /*20250303 Clean up work to Goertzel.cpp, DcodeCW.cpp, & AdvParser.cpp files*/
+/*20250304 Goertzelcpp - Changed Avgnoise logic to ignore 'keydown' state change, improving noisy tone dection while still maintaining high noise immunity*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
