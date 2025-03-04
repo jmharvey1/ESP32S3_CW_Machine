@@ -280,6 +280,12 @@ void StartDecoder(LVGLMsgBox *pttftmsgbx)
 
 } /* END SetUp Code */
 /////////////////////////////////////////
+/*
+* 20230303 Now the main handoff/interface, with the Goertzel tone/key detection routine.
+* This routine runs continuously. But waits for entries/updates from the two 'time' & 'state' queues.
+* There is a 3rd queue (S/N). Info, from that queue, is collected, at "word break" intervals (detction points),
+* and is unpacked & repackaged as an array/data set, & passed on to the 'advanced post parser', when needed.
+*/
 void KeyEvntTask(void *param)
 {
 //#define DeBgQueue
@@ -291,7 +297,7 @@ void KeyEvntTask(void *param)
 	// unsigned long OldOldTime;
 	while (1)
 	{
-		PostFlg = true;
+		PostFlg = false; //true; //set to 'true' for testing only
 		// thread_notification = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 		// if (thread_notification)
 		// {
@@ -314,7 +320,7 @@ void KeyEvntTask(void *param)
 						ResetInterval = (uint16_t)wordBrk;
 					if (interval < ResetInterval)
 					{
-						if (Kstate == 1) // key is actually up, but have the time value to calculate Key Down interval
+						if (Kstate == 1) // key is actually up, but now have the time value(s) to calculate Key Down interval
 						{
 							KeyDwnIntrvls[DeCd_KeyDwnPtr] = interval;
 
@@ -357,10 +363,16 @@ void KeyEvntTask(void *param)
 #endif
 						}
 						KeyEvntSR(Kstate, EvntTime);
+						if (Sentstate)
+						{ // 1 = Keyup, or "no tone"; Sentstate 0 = Keydown
+							chkChrCmplt(EvntTime);
+						}
+						else
+							SetLtrBrk(EvntTime);
 					}
 					else // interval since last key event has been too long to be part of any preceeding events; So flush and restart a new data set
 					{
-						if (Kstate == 1) // Key Down
+						if (Kstate == 1) // Key had been Down
 						{
 #ifdef DeBgQueue
 							// printf("Key DOWN NdX-reset; interval:%d > 750\n", interval);
@@ -374,7 +386,7 @@ void KeyEvntTask(void *param)
 							}
 						}
 						else
-						{
+						{ //Kstate = 0
 #ifdef DeBgQueue
 							printf("\nKeyEvntTask - Key UP NdX-reset; interval:%d > ResetInterval:%d\n", interval, (uint16_t)ResetInterval);
 #endif
@@ -405,26 +417,26 @@ void KeyEvntTask(void *param)
 										// printf("ToneSN_que2 flush 6\n");
 									}
 								}
-								else if (Kstate == 3)
-								{
-#ifdef DeBgQueue
-									printf("done = false; Replaced KeyUp interval:%d with Cur ResetInterval:%d\n", KeyUpIntrvls[DeCd_KeyUpPtr - 1], (uint16_t)ResetInterval);
-#endif
-									KeyUpIntrvls[DeCd_KeyUpPtr - 1] = (uint16_t)ResetInterval;
-								}
+// 								else if (Kstate == 3)
+// 								{
+// #ifdef DeBgQueue
+// 									printf("done = false; Replaced KeyUp interval:%d with Cur ResetInterval:%d\n", KeyUpIntrvls[DeCd_KeyUpPtr - 1], (uint16_t)ResetInterval);
+// #endif
+// 									KeyUpIntrvls[DeCd_KeyUpPtr - 1] = (uint16_t)ResetInterval;
+// 								}
 							}
 							else
 							{
-								KeyEvntSR(Kstate, EvntTime); // just doing this to get the latest event time & key state registered in the realtime decoder
 								ResetLstWrdDataSets();
 #ifdef DeBgQueue								
 								printf("\tResetLstWrdDataSets - complete\n");
-#endif								
+#endif
 							}
-						}
+							KeyEvntSR(Kstate, EvntTime); // just doing this to get the latest event time & key state registered in the realtime decoder
+						} //end keystate = 0
 					}
 				}
-				else
+				else // keystate is '3'. So use it as a heart beat signal, to pace the support decsion making part, of the realtime decoder
 				{
 					if (Sentstate)
 					{ // 1 = Keyup, or "no tone"; Sentstate 0 = Keydown
@@ -1379,6 +1391,11 @@ void GrabBack(bool IsDah)
 	}
 }
 ////////////////////////////////////////////////////////////////////////////////////////////
+/*
+* Today about all this task does is move the accumlated CodeVal(s) into the search & translate to ASCII 
+* method (DisplayChar()), which in turn
+* passes those results to the display via LVGLMsgBox handeler.
+*/
 void Dcodeloop(void)
 {
 	int BtnWaitCnt = 1; // had been 10
@@ -1835,7 +1852,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 		printf("stepB\n");
 	if ((ValidWrdBrk) 
 	|| ((LtrPtr >= 6) && (LtrHoldr[LtrPtr - 2] == 'D') && (LtrHoldr[LtrPtr - 1] == 'E')) 
-	|| ((ValidChrCnt >= 12)) 
+	|| ((ValidChrCnt >= 16)) 
 	|| SndrChng)
 	{
 		if (Dbg)

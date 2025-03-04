@@ -103,6 +103,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250225 AdvParser.cpp - reworked 'wrdbrkFtcr' compesation code & reanbled updates from tha Adavance post past paser back to the real time decoder */
 /*2025026 Goertzelcpp - added crude 'inactivity' check, to improve noise spike rejection*/
 /*20250302 Rewrote interface between Goertzel & DcodeCW to pass all timing info via queues to reduce loading/ADC dma dropouts*/
+/*20250303 Clean up work to Goertzel.cpp, DcodeCW.cpp, & AdvParser.cpp files*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

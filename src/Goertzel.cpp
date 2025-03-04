@@ -27,6 +27,8 @@
 /*20250219 Reworked AvgNoise, S2N(signal to Noise ratio [in Db]) & ToneThresHold */
 /*2025026 added crude 'inactivity' check, to improve noise spike rejection */
 /*20250302 Rewrote interface between Goertzel & DcodeCW to pass all timing info via queues to reduce loading/ADC dma dropouts*/
+/*20250303 Reworked scaling values & running averages for threshold & AvgNois values & and removed inactivity check implemented 20250226
+* 		   And made 'send' timing changes to keystate & keyevent queues*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -159,6 +161,7 @@ int OldLvlBufptr =0;
 float OldLvlBuf[OldLvlBufSize];
 int NoisPtr = 0;
 float ToneThresHold = 0;
+//float NuToneThresHold = 0;
 int ClimCnt = 0;
 int KeyDwnCnt = 0;
 int GData[Goertzel_SAMPLE_CNT];
@@ -326,7 +329,7 @@ float GetMagnitudeSquared(float q1, float q2, float Coeff, int SmplCnt)
 	// PhazAng = 360 * ((atan(real / imag)) / (2 * M_PI));
 	return result;
 }
-/*Main entry point calc next Goertezl sample set*/
+/*Main entry point calc CURRENT Goertezl sample set*/
 void ComputeMags(unsigned long now)
 {
 	/*Cast the 'now' timestamp to 'TmpEvntTime' to be used/referenced in the Chk4KeyDwn() routine*/
@@ -437,7 +440,7 @@ void ComputeMags(unsigned long now)
 		OldcurNois1 = OldcurNois;
 		OldcurNois = tempNois;	
 
-	float curpk = 1.7*curNois;
+	float curpk = 3.0*curNois;//20250303 1.7*curNois;
 	if(noiseflg)
 	{ 
 		// int msinterval = (pdTICKS_TO_MS(xTaskGetTickCount()) - LstLclnoSigStrt);
@@ -449,18 +452,21 @@ void ComputeMags(unsigned long now)
 	if (now - LclnoSigStrt > 15000)
 	{
 		// printf("\t\t15 Second Dead period Exceeded\n");
-		curpk *= 2;
+		//curpk *= 2;
 	}
 	if(NowLvl>curpk) curpk = NowLvl;	
 	if((ToneThresHold <  curpk) && (NowLvl>curNois)) //20250228 added '(ToneThresHold <  NoiseFlr)' as a precheck that we're not about to detect a keydown envent in the 'Chk4KeyDwn()' section/function
 	{
-		// if( (ToneThresHold <  NoiseFlr))
-		// {
-			ToneThresHold = ((5*ToneThresHold) + (curpk))/6;
-		// }
-		// else ToneThresHold = ((15*ToneThresHold) + (curpk))/16;
+		//ToneThresHold = ((5*ToneThresHold) + (curpk))/6;
+		ToneThresHold = ((9*ToneThresHold) + (curpk))/10;
+		//NuToneThresHold = ((9*NuToneThresHold) + (curpk))/10;
+
 	} 
-	else ToneThresHold = ((45*ToneThresHold) + (0.9*ToneThresHold))/46;
+	else
+	{
+		ToneThresHold = ((45*ToneThresHold) + (0.9*ToneThresHold))/46;
+		//NuToneThresHold = ((45*NuToneThresHold) + (0.9*NuToneThresHold))/46;	
+	} 
 	
 	/*now to aviod false key dtection, set minimum noise value*/
 	if (curNois< 1500) curNois = 1500;
@@ -496,7 +502,8 @@ void ComputeMags(unsigned long now)
 	/* This sets the squelch point with/when only white noise is applied*/
 	if (!toneDetect)
 	{
-		AvgNoise = ((99 * AvgNoise) + (1.4 * SigPk)) / 100;
+		//AvgNoise = ((99 * AvgNoise) + (1.4 * SigPk)) / 100;
+		AvgNoise = ((99 * AvgNoise) + (1.4 * SigPk)) / 100;//20250303
 	}
 	else
 	{
@@ -561,8 +568,10 @@ void ComputeMags(unsigned long now)
 	}
 
 	/*This 'if' stops the Blue plot line from going below the Grey line*/
-	if (ToneThresHold < AvgNoise)
-		ToneThresHold = AvgNoise; // 20231022 added this to lessen the chance that noise might induce a false keydown at the 1st of a letter/character
+	if (ToneThresHold < AvgNoise) ToneThresHold = AvgNoise; // 20231022 added this to lessen the chance that noise might induce a false keydown at the 1st of a letter/character
+	
+	//if (NuToneThresHold < AvgNoise) NuToneThresHold = AvgNoise;
+	
 	AdjSqlch = ToneThresHold;
 	if (AdjSqlch < 1500)
 		AdjSqlch = 1500; // 20230814 make sure squelch lvl is always above the "no input signal" level; this stops the decoder from generating random characters when no signal is applied
@@ -581,6 +590,8 @@ void ComputeMags(unsigned long now)
 			GudSig = 0;
 		}
 	}
+	//if(NoiseFlr> curNois)
+	//NuToneThresHold  = ((9*ToneThresHold) - 2*(NoiseFlr - curNois))/10;
 	Ready = true;
 	NuMagData = 0x1;
 	/* The Following (Commented out) code will generate the CW code for "5" with a Calibrated 31ms "keydown" period */
@@ -687,10 +698,9 @@ void Chk4KeyDwn(float NowLvl)
 		float tmpcurnoise;
 		tmpcurnoise = ((CurLvl - NFlrBase) / 2) + NFlrBase;
 		if (state != OLDstate)
-		{
-			AvgNoise = 0.75*tmpcurnoise; //20250219 changed from, AvgNoise = tmpcurnoise
+		{ //this resets the 'AvgNoise' value right at the moment keydown has just been detected
+			AvgNoise = tmpcurnoise; //20250219 changed from, AvgNoise = tmpcurnoise
 			OLDstate = state;
-			// printf("tmpcurnoise = ((CurLvl-NFlrBase)/2) + NFlrBase\n");
 		}
 
 		if (!state)
@@ -884,7 +894,7 @@ void Chk4KeyDwn(float NowLvl)
 	
 				}
 				
-				if(xQueueSend(KeyEvnt_que, &TmpEvntTime, (TickType_t)0) == pdFALSE)
+				if(xQueueSend(KeyEvnt_que, &TmpEvntTime, (TickType_t)10) == pdFALSE)
 				{ 
 					/*TODO need to work out better way to recognize & rest/clear this buffer*/
 					printf("!!! KeyEvnt_que FULL !!!\n");
@@ -895,7 +905,7 @@ void Chk4KeyDwn(float NowLvl)
 						IndxPtr++;
 					}
 				}
-				if(xQueueSend(KeyState_que, &Sentstate, (TickType_t)0) == pdFALSE)
+				if(xQueueSend(KeyState_que, &Sentstate, (TickType_t)10) == pdFALSE)
 				{ 
 					/*TODO need to work out better way to recognixe & rest/clear this buffer*/
 					printf("!!! KeyState_que !!!\n");
@@ -915,37 +925,37 @@ void Chk4KeyDwn(float NowLvl)
 			else
 			{
 				state3Cntr++;
-				if(state3Cntr==2)
+				if (state3Cntr == 2)
 				{
 					state3Cntr = 0;
-				TmpEvntTime = EvntTimeBuf[MBpntr];
-				if(xQueueSend(KeyEvnt_que, &TmpEvntTime, (TickType_t)0) == pdFALSE)
-				{ 
-					/*TODO need to work out better way to recognize & rest/clear this buffer*/
-					printf("!!! KeyEvnt_que FULL state 3!!!\n");
-					unsigned long dummy;
-					int IndxPtr = 0;
-					while (xQueueReceive(KeyEvnt_que, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+					TmpEvntTime = EvntTimeBuf[MBpntr];
+					if (xQueueSend(KeyEvnt_que, &TmpEvntTime, (TickType_t)4) == pdFALSE)
 					{
-						IndxPtr++;
+						/*TODO need to work out better way to recognize & rest/clear this buffer*/
+						printf("!!! KeyEvnt_que FULL state 3!!!\n");
+						unsigned long dummy;
+						int IndxPtr = 0;
+						while (xQueueReceive(KeyEvnt_que, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+						{
+							IndxPtr++;
+						}
 					}
-				}
-				uint8_t dummy = 3;
-				if(xQueueSend(KeyState_que, &dummy, (TickType_t)0) == pdFALSE)
-				{ 
-					/*TODO need to work out better way to recognixe & rest/clear this buffer*/
-					printf("!!! KeyState_que state 3 !!!\n");
-					//uint8_t dummy;
-					int IndxPtr = 0;
-					while (xQueueReceive(KeyState_que, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+					uint8_t dummy = 3;
+					if (xQueueSend(KeyState_que, &dummy, (TickType_t)4) == pdFALSE)
 					{
-						IndxPtr++;
+						/*TODO need to work out better way to recognixe & rest/clear this buffer*/
+						printf("!!! KeyState_que FULL state 3 !!!\n");
+						// uint8_t dummy;
+						int IndxPtr = 0;
+						while (xQueueReceive(KeyState_que, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+						{
+							IndxPtr++;
+						}
 					}
+					vTaskResume( KeyEvntTaskTaskHandle );
 				}
-			}
 			}
 		}
-		
 	}
 	if (Sentstate)
 	{ // 1 = Keyup, or "no tone"; Sentstate 0 = Keydown

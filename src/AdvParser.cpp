@@ -1575,6 +1575,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         float CurSpltPtSlope = 0;
         int start = SortdPtr / 4;
         if(start >= 2) start--;
+        if(start > 3) start = 3;
         int stop = SortdPtr - 1;
         /*20250118 added while loop, in case initial pass didn't find a dit/dah split point*/
         bool keepLookng = true;
