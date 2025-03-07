@@ -701,6 +701,7 @@ void Chk4KeyDwn(float NowLvl)
 			//AvgNoise = tmpcurnoise; //20250219 changed from, AvgNoise = tmpcurnoise
 			if (state != 0) AvgNoise = tmpcurnoise; //20250304 changed from,above logic to get avgnoise & threshold to track closer to noise floor during keydown interval
 			else if(avgDit < 1200 / 35) AvgNoise = 1.25* tmpcurnoise;
+			else AvgNoise = 0.7 * tmpcurnoise;
 			OLDstate = state;
 		}
 

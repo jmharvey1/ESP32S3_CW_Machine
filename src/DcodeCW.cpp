@@ -36,6 +36,7 @@
  * 20250217 Added wordbreak incrementing based on disproportionate words containing characters of only 2 symbol count or less
  * 20250221 Reworked 'Space' insertion code, and reset data sets management, to better protect one word parsing, from the next.
  * 20250302 Rewrote interface between Goertzel & DcodeCW to pass all timing info via queues to reduce loading/ADC dma dropouts
+ * 20250306 Reworked chkChrCmplt() to improve maintaining 'data set' synchronization
  *   */
 
 // #include <SetUpCwDecoder.h>
@@ -455,143 +456,143 @@ void KeyEvntTask(void *param)
 	//////////////////////////////////////////////////////////////////////////////////////////
 	/*Normally converts queue data into into array data just prior, in preparation, to launching the Adv parser task/process
 	Alternately it can purge/reset these queues*/
-	void BldKeyUpDwnDataSet(void)
-	{
-		unsigned long EvntTime;
-		bool lpagn = true;
+// 	void BldKeyUpDwnDataSet(void)
+// 	{
+// 		unsigned long EvntTime;
+// 		bool lpagn = true;
 
-		uint8_t Kstate;
-		uint16_t interval = 0;
-		unsigned long OldOldTime;
-#ifdef DeBgQueue
-	printf("\nBldKeyUpDwnDataSet()\n");
-#endif
-	while (lpagn)
-	{
-		if (xQueueReceive(KeyEvnt_que, (void *)&EvntTime, pdMS_TO_TICKS(1)) == pdTRUE)
-		{
-			if (xQueueReceive(KeyState_que, (void *)&Kstate, pdMS_TO_TICKS(10)) == pdTRUE)
-			{
-				interval = (uint16_t)(EvntTime - OldEvntTime);
-				OldOldTime = OldEvntTime;
-				OldEvntTime = EvntTime;
-				// if (interval < 750)
-				uint16_t ResetInterval = 750;
-				/*20250117 - added this conditional test to establish whats a good 'reset' interval*/
-				if (wordBrk > ResetInterval)
-					ResetInterval = (uint16_t)wordBrk;
-				if (interval < ResetInterval)
-				{
-					if (Kstate) // Key Down
-					{
-						KeyDwnIntrvls[DeCd_KeyDwnPtr] = interval;
-#ifdef DeBgQueue
-						printf("%2d. -%3d\t", DeCd_KeyDwnPtr, interval);
-#endif
-						DeCd_KeyUpPtr = DeCd_KeyDwnPtr; // make sure we keep the two index pointers in sync
-						if (DeCd_KeyDwnPtr < (IntrvlBufSize - 1))
-							DeCd_KeyDwnPtr++;
-					}
-					else if (DeCd_KeyDwnPtr > 0)
-					{
-						KeyUpIntrvls[DeCd_KeyUpPtr] = interval;
-#ifdef DeBgQueue
-						printf("%2d. +%d\n", DeCd_KeyUpPtr, interval);
-// printf("+%d\ttimestampDwn:%d\ttimestampUp:%d\n", interval, (uint16_t)OldOldTime, (uint16_t)OldEvntTime);
-#endif
-						if (DeCd_KeyUpPtr < (IntrvlBufSize - 1))
-							DeCd_KeyUpPtr++;
-					}
-					else if (DeCd_KeyDwnPtr == 0)
-					{ // This is the actual 'sender' wordbreak interval
-// TODO use this interval to guide/set future word break intervals
-#ifdef DeBgQueue
-						printf(" NdX-reset:%d\n", interval);
-#endif
-					}
-					if (DeCd_KeyUpPtr > DeCd_KeyDwnPtr + 1 || DeCd_KeyUpPtr < DeCd_KeyDwnPtr - 1)
-					{
-						/*last time I checked, this was no longer happening*/
-						DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
-						float dummy;
-						while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
-						{
-							// printf("ToneSN_que2 flush 1\n");
-						}
-#ifdef DeBgQueue
-						printf("<---->\n");
-#endif
-					}
-				}
-				else
-				{
-					if (Kstate) // Key Down
-					{
-#ifdef DeBgQueue
-						// printf("Key DOWN NdX-reset; interval:%d > 750\n", interval);
-						printf("Key DOWN NdX-reset; interval:%d > ResetInterval:%d\n", interval, (uint16_t)ResetInterval);
-#endif
-						DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
-						float dummy;
-						while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
-						{
-							// printf("ToneSN_que2 flush 5\n");
-						}
-					}
-					else
-					{
-#ifdef DeBgQueue
-						printf("Key UP NdX-reset; interval:%d > ResetInterval:%d\n", interval, (uint16_t)ResetInterval);
-#endif
+// 		uint8_t Kstate;
+// 		uint16_t interval = 0;
+// 		unsigned long OldOldTime;
+// #ifdef DeBgQueue
+// 	printf("\nBldKeyUpDwnDataSet()\n");
+// #endif
+// 	while (lpagn)
+// 	{
+// 		if (xQueueReceive(KeyEvnt_que, (void *)&EvntTime, pdMS_TO_TICKS(1)) == pdTRUE)
+// 		{
+// 			if (xQueueReceive(KeyState_que, (void *)&Kstate, pdMS_TO_TICKS(10)) == pdTRUE)
+// 			{
+// 				interval = (uint16_t)(EvntTime - OldEvntTime);
+// 				OldOldTime = OldEvntTime;
+// 				OldEvntTime = EvntTime;
+// 				// if (interval < 750)
+// 				uint16_t ResetInterval = 750;
+// 				/*20250117 - added this conditional test to establish whats a good 'reset' interval*/
+// 				if (wordBrk > ResetInterval)
+// 					ResetInterval = (uint16_t)wordBrk;
+// 				if (interval < ResetInterval)
+// 				{
+// 					if (Kstate) // Key Down
+// 					{
+// 						KeyDwnIntrvls[DeCd_KeyDwnPtr] = interval;
+// #ifdef DeBgQueue
+// 						printf("%2d. -%3d\t", DeCd_KeyDwnPtr, interval);
+// #endif
+// 						DeCd_KeyUpPtr = DeCd_KeyDwnPtr; // make sure we keep the two index pointers in sync
+// 						if (DeCd_KeyDwnPtr < (IntrvlBufSize - 1))
+// 							DeCd_KeyDwnPtr++;
+// 					}
+// 					else if (DeCd_KeyDwnPtr > 0)
+// 					{
+// 						KeyUpIntrvls[DeCd_KeyUpPtr] = interval;
+// #ifdef DeBgQueue
+// 						printf("%2d. +%d\n", DeCd_KeyUpPtr, interval);
+// // printf("+%d\ttimestampDwn:%d\ttimestampUp:%d\n", interval, (uint16_t)OldOldTime, (uint16_t)OldEvntTime);
+// #endif
+// 						if (DeCd_KeyUpPtr < (IntrvlBufSize - 1))
+// 							DeCd_KeyUpPtr++;
+// 					}
+// 					else if (DeCd_KeyDwnPtr == 0)
+// 					{ // This is the actual 'sender' wordbreak interval
+// // TODO use this interval to guide/set future word break intervals
+// #ifdef DeBgQueue
+// 						printf(" NdX-reset:%d\n", interval);
+// #endif
+// 					}
+// 					if (DeCd_KeyUpPtr > DeCd_KeyDwnPtr + 1 || DeCd_KeyUpPtr < DeCd_KeyDwnPtr - 1)
+// 					{
+// 						/*last time I checked, this was no longer happening*/
+// 						DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
+// 						float dummy;
+// 						while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+// 						{
+// 							// printf("ToneSN_que2 flush 1\n");
+// 						}
+// #ifdef DeBgQueue
+// 						printf("<---->\n");
+// #endif
+// 					}
+// 				}
+// 				else
+// 				{
+// 					if (Kstate) // Key Down
+// 					{
+// #ifdef DeBgQueue
+// 						// printf("Key DOWN NdX-reset; interval:%d > 750\n", interval);
+// 						printf("Key DOWN NdX-reset; interval:%d > ResetInterval:%d\n", interval, (uint16_t)ResetInterval);
+// #endif
+// 						DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
+// 						float dummy;
+// 						while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+// 						{
+// 							// printf("ToneSN_que2 flush 5\n");
+// 						}
+// 					}
+// 					else
+// 					{
+// #ifdef DeBgQueue
+// 						printf("Key UP NdX-reset; interval:%d > ResetInterval:%d\n", interval, (uint16_t)ResetInterval);
+// #endif
 
-						if (DeCd_KeyDwnPtr >= 4)
-						{
-							LclKeyState = 1;
-#ifdef DeBgQueue
-							//Dbg = true;
-#else
-							Dbg = false;
-#endif
-							letterBrk = EvntTime - 10;
-							// KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)wordBrk;
-							// DeCd_KeyUpPtr++;
-							DeCodeVal = 0;
-							bool gud = chkChrCmplt(EvntTime);
-							// Dbg = false;
-							if (gud)
-							{
-#ifdef DeBgQueue
-								printf("done = true; NdX-reset\n");
-#endif
-								DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
-								float dummy;
-								while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
-								{
-									// printf("ToneSN_que2 flush 6\n");
-								}
-							}
-							else
-							{
-#ifdef DeBgQueue
-								printf("done = false; Replaced KeyUp interval%d with Cur ResetInterval:%d\n", KeyUpIntrvls[DeCd_KeyUpPtr - 1], (uint16_t)ResetInterval);
-#endif
-								KeyUpIntrvls[DeCd_KeyUpPtr - 1] = (uint16_t)ResetInterval;
-							}
-						}
-					}
-				}
-			}
-			else
-			{
-				lpagn = false;
-			}
-		}
-		else
-		{
-			lpagn = false;
-		}
-	}
-}
+// 						if (DeCd_KeyDwnPtr >= 4)
+// 						{
+// 							LclKeyState = 1;
+// #ifdef DeBgQueue
+// 							//Dbg = true;
+// #else
+// 							Dbg = false;
+// #endif
+// 							letterBrk = EvntTime - 10;
+// 							// KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)wordBrk;
+// 							// DeCd_KeyUpPtr++;
+// 							DeCodeVal = 0;
+// 							bool gud = chkChrCmplt(EvntTime);
+// 							// Dbg = false;
+// 							if (gud)
+// 							{
+// #ifdef DeBgQueue
+// 								printf("done = true; NdX-reset\n");
+// #endif
+// 								DeCd_KeyUpPtr = DeCd_KeyDwnPtr = chkcnt = 0;
+// 								float dummy;
+// 								while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
+// 								{
+// 									// printf("ToneSN_que2 flush 6\n");
+// 								}
+// 							}
+// 							else
+// 							{
+// #ifdef DeBgQueue
+// 								printf("done = false; Replaced KeyUp interval%d with Cur ResetInterval:%d\n", KeyUpIntrvls[DeCd_KeyUpPtr - 1], (uint16_t)ResetInterval);
+// #endif
+// 								KeyUpIntrvls[DeCd_KeyUpPtr - 1] = (uint16_t)ResetInterval;
+// 							}
+// 						}
+// 					}
+// 				}
+// 			}
+// 			else
+// 			{
+// 				lpagn = false;
+// 			}
+// 		}
+// 		else
+// 		{
+// 			lpagn = false;
+// 		}
+// 	}
+// }
 //////////////////////////////////////////////////////////////////////////////////////////
 /* In ESP32 No Longer a Stand alone Interurpt; but now called from within Goertzel.cpp*/
 void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
@@ -1717,8 +1718,13 @@ void SetLtrBrk(unsigned long TimeStmp)
 
 ////////////////////////////////////////////////////////////////////////
 /*
-* runs continuously paced/clocked off of Goertzel Chk4Keydwn(),
+* Used to run continuously paced/clocked off of Goertzel Chk4Keydwn(),
 * which runs every 4ms;
+* now runs from KeyEvntTask; runs the equivalent of every 8 ms, 
+* but actually time agnostic since it now gets a 'timestamp' passed to it.
+* Returns 'true' if codeval > 1, & the current keyUp interval exceeded the current letterbreak interval
+* Today, this routins also starts the AdvParser, when the keyup interval exceeds the WordBrk interval,
+* and some text has been decoded.
 */
 bool chkChrCmplt(unsigned long TimeStmp)
 {
@@ -1807,7 +1813,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 	{
 		ltrCmplt = -2800; // doing this for 'plot' state trace
 #ifdef DeBgQueue		
-		printf("\nLtr: %d; DeCodeVal:%d\n", (int)(Now - letterBrk), DeCodeVal);
+		printf("\n%d. Ltr Cmplt XcdByInter: %d; DeCodeVal:%d\n", LtrPtr, (int)(Now - letterBrk), DeCodeVal);
 #endif		
 		if (Dbg)
 			printf("stepA\n");
@@ -1829,7 +1835,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 	float noKeySig = (float)(Now - noSigStrt);
 	if ((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0))
 		ValidWrdBrk = true;
-
+	// this is here mainly as a diagnostic error report
 	if ((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !ValidWrdBrk && PostFlg)
 	{	
 		char KyStateStr[10];
@@ -1857,8 +1863,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 	{
 		if (Dbg)
 			printf("step1\n");
-		// printf("step1\n");
-		// BldKeyUpDwnDataSet();//20250301 commented out; now using task based build process
+		if((chkcnt > DeCd_KeyDwnPtr) && (LtrHoldr[LtrPtr - 2] == 'D') && (LtrHoldr[LtrPtr - 1] == 'E')) chkcnt--;
 		if (chkcnt == DeCd_KeyDwnPtr)
 		{
 			//printf("\nchkcnt%d == DeCd_KeyDwnPt:%d\n", chkcnt, DeCd_KeyDwnPtr);
@@ -1899,6 +1904,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 		// if (DeCd_KeyUpPtr < IntrvlBufSize && DeCd_KeyDwnPtr >= 1)
 		if (DeCd_KeyDwnPtr != 0 && !KDwnFnd)
 		{ // we have both a usable time & place to store it; and at least 1 keydwn interval has been captured
+			/*finish off this data set by adding in a final keyup time interval*/
 			KeyUpIntrvls[DeCd_KeyUpPtr] = (uint16_t)noKeySig;
 #ifdef DeBgQueue
 			printf("%2d. +*%d\n", DeCd_KeyUpPtr, (uint16_t)noKeySig);
@@ -1921,6 +1927,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 				printf("\t1##  %s; DataSetRdy:%d; chkcnt:%d == DeCd_KeyDwnPtr:%d\n", LtrHoldr, (uint8_t)DataSetRdy, chkcnt, DeCd_KeyDwnPtr);
 				printf("\tWORD BREAK - DeCd_KeyDwnPtr: %d; DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
 			}
+			/*final check to make sure we have something the AdvParser can work with*/
 			if (DataSetRdy && DeCd_KeyDwnPtr>=2   //(LtrPtr >= 1 || DeCd_KeyDwnPtr >= 9) 
 				&& ((wpm > 11) || (LtrPtr > 3)) 
 				&& (wpm < 36) 
@@ -2055,6 +2062,9 @@ bool chkChrCmplt(unsigned long TimeStmp)
 			{
 				if(ValidWrdBrk)
 				{
+#ifdef SpclTst
+					printf("+36 txt '%s'\n", LtrHoldr);
+#endif						
 #ifdef AutoCorrect
 				printf("\n - Insert Wordbreak Space, & SKIP 'AdvParserTask', wpm >= 36  -\n");
 #endif
@@ -2107,8 +2117,12 @@ bool chkChrCmplt(unsigned long TimeStmp)
 				space[0] = ' ';
 				space[1] = 0;
 				ptrmsgbx->dispDeCdrTxt(space, TFT_GREENYELLOW);
-				ResetLstWrdDataSets(); //clear old data related to this word;(including S/N queue);
-				}					
+				//ResetLstWrdDataSets(); //clear old data related to this word;(including S/N queue);
+				}
+#ifdef SpclTst
+				printf("-36 txt '%s'; DeCd_KeyDwnPtr%d == DeCd_KeyUpPtr%d == chkcnt: %d; DataSetRdy:%d\n", LtrHoldr, DeCd_KeyDwnPtr, DeCd_KeyUpPtr, chkcnt, (uint8_t)DataSetRdy);
+#endif		
+				LtrHoldr[0] = LtrPtr = DeCd_KeyDwnPtr = DeCd_KeyUpPtr = chkcnt = 0;				
 #ifdef DeBgQueue
 				printf("advparser SKIPPED - LtrPtr:%d<1, Current WPM:%d too low or High or DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d\n", LtrPtr, wpm, DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
 #endif
@@ -2144,8 +2158,11 @@ bool chkChrCmplt(unsigned long TimeStmp)
 		}
 		else
 		{
+#ifdef SpclTst
+			printf("txt '%s'\n", LtrHoldr);
+#endif			
 #ifdef DeBgQueue
-			printf("advparser SKIPPED - no usable KeyUpIntrvls[0],KeyDwnIntrvls[0] data; DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
+			printf("advparser SKIPPED - no usable KeyUpIntrvls[0],KeyDwnIntrvls[0] data; DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d; DeCodeVal:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr, DeCodeVal);
 #endif
 			ResetLstWrdDataSets();
 #ifdef DeBgQueue
@@ -2282,30 +2299,30 @@ bool chkChrCmplt(unsigned long TimeStmp)
 				if (ShrtLtrBrkCnt > 5 && TmpSlwFlg) // had more than 5 E's & T's in a row. Check/verify letterbrk timing && tone (keying intervals)  are slower than 35WPM
 				{
 					ShrtLtrBrkCnt = 0;
-					uint16_t NuLtrBrkVal = (uint16_t)(advparser.Get_wrdbrkFtcr() * (float)advparser.Get_LtrBrkVal());
-					//printf("Too Many Ts & Es- Resetting Parameters:\n\tltrBrk: Old %d; new %d", (uint16_t)ltrBrk, NuLtrBrkVal);
-					if (NuLtrBrkVal != 0 && wpm < 35)
-					{
-						uint16_t NuWrdBrk = advparser.GetWrdBrkIntrval();
-						uint16_t DahVal = advparser.Get_DahVal();
-						uint16_t OldDahVal = (uint16_t)avgDah;
-						uint16_t OldSpace = (uint16_t)space;
-						space = (unsigned long)advparser.Get_space();
-						avgDeadSpace = space;
-						avgDit = (unsigned long)advparser.Get_DitVal();
-						ltrBrk = (unsigned long)advparser.Get_LtrBrkVal();
-						avgDah = (unsigned long)(3 * avgDit);
-						printf("\n\tspace: OldVal %d; new %d\n\tDah: Old %d; new %d\n\twordBrk: Old  %d; new %d\n\tWPM: %d \n", OldSpace, (uint16_t)space, OldDahVal, DahVal, (uint16_t)wordBrk, NuWrdBrk, wpm);
-						if (NuWrdBrk != 0)
-						{
-							wordBrk = (unsigned long)NuWrdBrk;
-							wrdbrkFtcr = 1.0;
-						}
-					}
-					else
-					{
-						printf("Advance Parser- No data Available.\n");
-					}
+					// uint16_t NuLtrBrkVal = (uint16_t)(advparser.Get_wrdbrkFtcr() * (float)advparser.Get_LtrBrkVal());
+					// //printf("Too Many Ts & Es- Resetting Parameters:\n\tltrBrk: Old %d; new %d", (uint16_t)ltrBrk, NuLtrBrkVal);
+					// if (NuLtrBrkVal != 0 && wpm < 35)
+					// {
+					// 	uint16_t NuWrdBrk = advparser.GetWrdBrkIntrval();
+					// 	uint16_t DahVal = advparser.Get_DahVal();
+					// 	uint16_t OldDahVal = (uint16_t)avgDah;
+					// 	uint16_t OldSpace = (uint16_t)space;
+					// 	space = (unsigned long)advparser.Get_space();
+					// 	avgDeadSpace = space;
+					// 	avgDit = (unsigned long)advparser.Get_DitVal();
+					// 	ltrBrk = (unsigned long)advparser.Get_LtrBrkVal();
+					// 	avgDah = (unsigned long)(3 * avgDit);
+					// 	printf("\n\tspace: OldVal %d; new %d\n\tDah: Old %d; new %d\n\twordBrk: Old  %d; new %d\n\tWPM: %d \n", OldSpace, (uint16_t)space, OldDahVal, DahVal, (uint16_t)wordBrk, NuWrdBrk, wpm);
+					// 	if (NuWrdBrk != 0)
+					// 	{
+					// 		wordBrk = (unsigned long)NuWrdBrk;
+					// 		wrdbrkFtcr = 1.0;
+					// 	}
+					// }
+					// else
+					// {
+					// 	printf("Advance Parser- No data Available.\n");
+					// }
 				}
 				int i = 0;
 				while (CodeValBuf[i] > 0)
@@ -2342,7 +2359,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 				}
 			}
 #ifdef DeBgQueue
-			printf("Ltr Cmplt - DeCodeVall:%d\n", DeCodeVal);
+			printf("A Ltr Cmplt - DeCodeVall:%d\n", DeCodeVal);
 #endif
 			if (Pstate == 2)
 			{
@@ -2366,7 +2383,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 			
 			if (Test && NrmFlg)
 			{
-				sprintf(PrntBuf, "Ltr Cmplt - DeCodeVall:%d\n", DeCodeVal);
+				sprintf(PrntBuf, "B Ltr Cmplt - DeCodeVall:%d\n", DeCodeVal);
 				printf(PrntBuf);
 			}
 		}

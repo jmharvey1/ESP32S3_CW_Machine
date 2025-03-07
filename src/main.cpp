@@ -105,6 +105,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250302 Rewrote interface between Goertzel & DcodeCW to pass all timing info via queues to reduce loading/ADC dma dropouts*/
 /*20250303 Clean up work to Goertzel.cpp, DcodeCW.cpp, & AdvParser.cpp files*/
 /*20250304 Goertzelcpp - Changed Avgnoise logic to ignore 'keydown' state change, improving noisy tone dection while still maintaining high noise immunity*/
+/*20250306 reorganized task to core assignments to solve skipped adc data conversions*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -621,6 +622,9 @@ void GoertzelHandler(void *param)
         if(!restore) OLDltrCmplt = ltrCmplt;
         restore = true;
         ltrCmplt = -15000;//printf("%d\t%d\n", (int)Now, (int)LstNowTime );
+#ifdef SpclTst        
+        printf("GAPP/SKIP interval %d\n", (int)(Now - LstNowTime));
+#endif
       } else if (restore)
       {
         restore = false;
@@ -658,11 +662,11 @@ void GoertzelHandler(void *param)
         /*  ESP_LOGI("TASK_ADC", "ret is %x, ret_num is %"PRIu32" bytes", ret, ret_num);*/
         if (CWsndengn.IsActv() && CWsndengn.GetSOTflg())
         {
-          if (xSemaphoreTake(ADCread_disp_refr_timer_mutx, pdMS_TO_TICKS(3)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
-          {
+          // if (xSemaphoreTake(ADCread_disp_refr_timer_mutx, pdMS_TO_TICKS(3)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+          // {
             rdy = true;
-            relseSemphr = true;
-          }
+          //   relseSemphr = true;
+          // }
         }
         else
           rdy = true;
@@ -685,8 +689,8 @@ void GoertzelHandler(void *param)
         }
         /* We have finished accessing the shared resource.  Release the
              semaphore. */
-        if (relseSemphr)
-          xSemaphoreGive(ADCread_disp_refr_timer_mutx);
+        // if (relseSemphr)
+        //   xSemaphoreGive(ADCread_disp_refr_timer_mutx);
 
 #ifdef POSTADC
         skip1 = true;
@@ -1094,7 +1098,7 @@ void AdvParserTask(void *param)
   /*Used diagnose Advance parser CPU usage*/
   // UBaseType_t uxHighWaterMark;
   // unsigned long AdvPStart = 0;
-  //#define SpclTst
+  // #define SpclTst
   while (1)
   {
     /* Sleep until instructed to resume from DcodeCW.cpp */
@@ -1143,7 +1147,7 @@ void AdvParserTask(void *param)
     char spacemarker = 'Y';
     uint8_t LstChr = lvglmsgbx.GetLastChar();
     uint8_t OldLstChr;
-    if (!same)
+    if(!same)
     {
       deletCnt++; //increment by just because the the DcodeCW chkChrCmplt() appended a space before launching the AdvParserTask
       /*need to block display update task during this 'if()' code */
@@ -1254,7 +1258,7 @@ void AdvParserTask(void *param)
           printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
 #endif
 #ifdef SpclTst
-          printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
+          printf("old txt '%s'; new txt '%s'; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
 #endif
           // printf("old txt %s; new txt %s; delete cnt %d; advparser.LtrPtr %d ; new txt length %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
           CptrTxt = false;
@@ -1423,7 +1427,7 @@ void app_main()
       NULL,  /* Task input parameter */
       12,  /* Priority of the task */
       &KeyEvntTaskTaskHandle,  /* Task handle. */
-      0); /* Core where the task should run */
+      1); /* Core where the task should run */
   if (KeyEvntTaskTaskHandle == NULL)
     ESP_LOGI(TAG, "KeyEvnt Task handle FAILED");
 
@@ -1442,7 +1446,7 @@ void app_main()
   if (CWDecodeTaskHandle == NULL)
     ESP_LOGI(TAG, "CW Decoder Task handle FAILED");
 
-  xTaskCreate(GoertzelHandler, "Goertzel Task", 8192, NULL, 10, &GoertzelTaskHandle); // priority used to be 3
+  xTaskCreatePinnedToCore(GoertzelHandler, "Goertzel Task", 8192, NULL, 10, &GoertzelTaskHandle, 1); // priority used to be 3
   if (GoertzelTaskHandle == NULL)
     ESP_LOGI(TAG, "Goertzel Task Task handle FAILED");
 
