@@ -37,6 +37,10 @@
  * 20250221 Reworked 'Space' insertion code, and reset data sets management, to better protect one word parsing, from the next.
  * 20250302 Rewrote interface between Goertzel & DcodeCW to pass all timing info via queues to reduce loading/ADC dma dropouts
  * 20250306 Reworked chkChrCmplt() to improve maintaining 'data set' synchronization
+ * 20250307 increased PrdStack[20] from 10 to 20; added DbgWrdBrkFtcr; 
+ * 			Added/reworked updating 'wordBrk' @ actual 'sender' wordbreak interval; 
+ * 			changed where calling 'SetLtrBrk(EvntTime)' occurs to reduce CPU loading; 
+ * 			added 'DbgAvgDit'; added 'DBugLtrBrkTiming'; plus other minor changes to setting/updating 'WrdBrkFtcr' 
  *   */
 
 // #include <SetUpCwDecoder.h>
@@ -50,7 +54,9 @@
 #define LOW false // JMH ADD for Waveshare Version
 #define HIGH true // JMH ADD for Waveshare Version
 //#define DBugLtrBrkTiming // uncomment to see how letter break timing is developed & syncronized w/ advParser
-bool DbgWrdBrkFtcr = false; // true; //false;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
+bool DbgWrdBrkFtcr = false;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
+bool DbgAvgDit = false;
+bool DbgPeriod = false;
 int ShrtBrk[10];
 int charCnt = 0;
 int shwltrBrk = 0;
@@ -138,6 +144,7 @@ volatile bool valid = LOW;
 volatile bool mark = LOW;
 /*used in dispMsg() to control the AdvParser
 text matches whats been printed to the display*/
+bool OK2Reduc = false; // used to control decrementing the wrdbrkFtcr added 20250308
 bool CptrTxt = true;
 bool dataRdy = LOW;
 bool Bug2 = false;
@@ -208,7 +215,7 @@ unsigned long SpaceStk[MaxIntrvlCnt];	// use this to refine parsing of failed de
 unsigned long SpcIntrvl[MaxIntrvlCnt];	// use this to refine parsing of failed decodeval
 unsigned long SpcIntrvl1[MaxIntrvlCnt]; // use this to refine parsing of failed decodeval
 unsigned long SpcIntrvl2[MaxIntrvlCnt]; // use this to refine parsing of failed decodeval
-unsigned long PrdStack[10];
+unsigned long PrdStack[20];
 int PrdStackPtr = 0;
 int Shrt = 1200;
 int Long1 = 0;
@@ -273,7 +280,7 @@ void StartDecoder(LVGLMsgBox *pttftmsgbx)
 	wrdbrkFtcr = 1.0;
 	OLDwrdbrkFtcr = wrdbrkFtcr;
 	/*initialize period stack with 15WPM dit intervals*/
-	for (int i = 0; i < 10; i++)
+	for (int i = 0; i < 20; i++)
 	{
 		PrdStack[i] = 1200 / 15;
 	}
@@ -349,6 +356,38 @@ void KeyEvntTask(void *param)
 #ifdef DeBgQueue
 							printf("actual 'sender' wordbreak interval:%d\n", interval);
 #endif
+							if (DbgWrdBrkFtcr)	printf("actual 'sender' wordbreak interval:%d\n", interval);
+							if((float)wordBrk > 0.75*(float)interval &&  (float)wordBrk < (float)interval)
+							{
+								float curwrdbrkFtcr = wrdbrkFtcr;
+								unsigned long OldwordBrk = wordBrk;
+								OLDwrdbrkFtcr = curwrdbrkFtcr;
+								float NuWrdBrkFctr = (0.75*(float)interval)/((float)OldwordBrk/curwrdbrkFtcr);
+								ApplyWrdFctr(NuWrdBrkFctr);
+								//wrdbrkFtcr = NuWrdBrkFctr;
+								wrdbrkFtcr = 1.0;
+								if (DbgWrdBrkFtcr)
+								{
+									//printf("\t New wordBrk-: %d; NuWrdBrkFctr: %5.3f; OLDwrdbrkFtcr: %5.3f; OldwordBrk: %d\n", (uint16_t)wordBrk, NuWrdBrkFctr, curwrdbrkFtcr, (uint16_t)OldwordBrk);
+									printf("\t New wordBrk-: %d; wrdbrkFtcr: %5.3f; OLDwrdbrkFtcr: %5.3f; OldwordBrk: %d\n", (uint16_t)wordBrk, wrdbrkFtcr, curwrdbrkFtcr, (uint16_t)OldwordBrk);
+
+								}
+							}
+							else if((float)wordBrk < 0.75*(float)interval)
+							{
+								wrdbrkFtcr = 1.0;
+								OLDwrdbrkFtcr = wrdbrkFtcr;
+								unsigned long OldwordBrk = wordBrk;
+								wordBrk = 4*avgDit;
+								if (DbgWrdBrkFtcr)
+								{
+									//printf("\t New wordBrk-: %d; NuWrdBrkFctr: %5.3f; OLDwrdbrkFtcr: %5.3f; OldwordBrk: %d\n", (uint16_t)wordBrk, NuWrdBrkFctr, curwrdbrkFtcr, (uint16_t)OldwordBrk);
+									printf("\t New wordBrk Reset using 4*avgDit; %d; wrdbrkFtcr: %5.3f; avgDit: %d; OldwordBrk: %d\n", (uint16_t)wordBrk, wrdbrkFtcr, (uint16_t)avgDit, (uint16_t)OldwordBrk);
+
+								}
+
+							}
+							 
 						}
 						if (DeCd_KeyUpPtr > DeCd_KeyDwnPtr + 1 || DeCd_KeyUpPtr < DeCd_KeyDwnPtr - 1)
 						{
@@ -366,10 +405,11 @@ void KeyEvntTask(void *param)
 						KeyEvntSR(Kstate, EvntTime);
 						if (Sentstate)
 						{ // 1 = Keyup, or "no tone"; Sentstate 0 = Keydown
+							SetLtrBrk(EvntTime);
 							chkChrCmplt(EvntTime);
 						}
-						else
-							SetLtrBrk(EvntTime);
+						// else
+						// 	SetLtrBrk(EvntTime);
 					}
 					else // interval since last key event has been too long to be part of any preceeding events; So flush and restart a new data set
 					{
@@ -443,8 +483,8 @@ void KeyEvntTask(void *param)
 					{ // 1 = Keyup, or "no tone"; Sentstate 0 = Keydown
 						chkChrCmplt(EvntTime);
 					}
-					else
-						SetLtrBrk(EvntTime);
+					// else
+					// 	SetLtrBrk(EvntTime);
 				}
 			}
 			// vTaskSuspend(KeyEvntTaskTaskHandle);
@@ -594,7 +634,7 @@ void KeyEvntTask(void *param)
 // 	}
 // }
 //////////////////////////////////////////////////////////////////////////////////////////
-/* In ESP32 No Longer a Stand alone Interurpt; but now called from within Goertzel.cpp*/
+/* In ESP32 No Longer a Stand alone Interurpt; but now called from KeyEvntTask*/
 void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 { // keydown Kstate =0; Keyup Kstate = 1;
 	char tmpbuf[50];
@@ -782,10 +822,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 				}
 			}
 
-			//letterBrk = 0;
-			//letterBrk = ltrBrk + EvntTime;// 2025020302 changed to this to be compatible with KeyEvntTask process
-			//printf("@");
-			SetLtrBrk(EvntTime);// 2025020302 changed to this to be compatible with KeyEvntTask process
+			// SetLtrBrk(EvntTime);// 2025020302 changed to this to be compatible with KeyEvntTask process
 			ltrCmplt = -2200; // letter complete false; used in plot mode, to show where/when letter break detection start
 			if (GudSig)
 				CalcAvgdeadSpace = true;
@@ -851,15 +888,21 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 				noSigStrt = EvntTime;
 				// Prtflg = true; //enable or uncomment for diagnostic testing
 				if (STart != 0)
+				{
 					period = (noSigStrt - STart) + 4; //+4;//jmh 20230706 added this corection value for ESP32;
+					if(DbgPeriod) printf("A period:%d\n", (int)period);
+				}
 				else
+				{
 					period = (noSigStrt - AltSTart) + 4; //+4;//jmh 20230706 added this corection value for ESP32; // Something weird happened so use backup start value
-
+					if(DbgPeriod) printf("B period:%d\n", (int)period);
+				}
 				if (prob)
 				{
 					prob = 0;
 					STart = start1;
 					period = (noSigStrt - STart) + 4; //+4;//jmh 20230706 added this corection value for ESP32
+					if(DbgPeriod) printf("C period:%d\n", (int)period);
 				}
 				lastDit1 = period;
 				WrdStrt = noSigStrt;
@@ -890,7 +933,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 						Long1 = 0;
 						int ValidCnt = 0;
 						DitDahCD = 5;
-						for (int i = 0; i < 10; i++)
+						for (int i = 0; i < 20; i++)
 						{
 							if (PrdStack[i] > Long1)
 								Long1 = PrdStack[i];
@@ -903,7 +946,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 								ValidCnt++;
 						}
 						PrdStackPtr++;
-						if (PrdStackPtr >= 10)
+						if (PrdStackPtr >= 20)
 							PrdStackPtr = 0;
 						PrdStack[PrdStackPtr] = period;
 						if (ValidCnt > 6)
@@ -911,6 +954,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 							if (period < Long1 / 2)
 							{
 								avgDit = (4 * avgDit + period) / 5; // then its a dit
+								if(DbgAvgDit) printf("A avgDit:%d\n", (int)avgDit);
 								DitDahCD = 1;
 							}
 							else if (period > 2 * Shrt)
@@ -921,6 +965,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 							else
 							{
 								avgDit = (4 * avgDit + period) / 5; // treat it as a dit
+								if(DbgAvgDit) printf("B avgDit:%d\n", (int)avgDit);
 								DitDahCD = 3;
 							}
 						}
@@ -949,7 +994,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 						Long1 = 0;
 						int ValidCnt = 0;
 						DitDahCD = 6;
-						for (int i = 0; i < 10; i++)
+						for (int i = 0; i < 20; i++)
 						{
 							if (PrdStack[i] > Long1)
 								Long1 = PrdStack[i];
@@ -962,7 +1007,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 								ValidCnt++;
 						}
 						PrdStackPtr++;
-						if (PrdStackPtr >= 10)
+						if (PrdStackPtr >= 20)
 							PrdStackPtr = 0;
 						PrdStack[PrdStackPtr] = period;
 						if (ValidCnt > 6)
@@ -970,6 +1015,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 							if (period < Long1 / 2)
 							{
 								avgDit = (4 * avgDit + period) / 5; // then its a dit
+								if(DbgAvgDit) printf("C avgDit:%d\n", (int)avgDit);
 								DitDahCD = 1;
 							}
 							else if (period > 2 * Shrt)
@@ -980,6 +1026,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 							else
 							{
 								avgDit = (4 * avgDit + period) / 5; // treat it as a dit
+								if(DbgAvgDit) printf("D avgDit:%d\n", (int)avgDit);
 								DitDahCD = 3;
 							}
 						}
@@ -1003,7 +1050,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 							Long1 = 0;
 							int ValidCnt = 0;
 							DitDahCD = 9;
-							for (int i = 0; i < 10; i++)
+							for (int i = 0; i < 20; i++)
 							{
 								if (PrdStack[i] > Long1)
 									Long1 = PrdStack[i];
@@ -1016,7 +1063,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 									ValidCnt++;
 							}
 							PrdStackPtr++;
-							if (PrdStackPtr >= 10)
+							if (PrdStackPtr >= 20)
 								PrdStackPtr = 0;
 							PrdStack[PrdStackPtr] = period;
 							if (ValidCnt > 6)
@@ -1025,6 +1072,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 								if (period < Long1 / 2)
 								{
 									avgDit = (4 * avgDit + period) / 5; // then its a dit
+									if(DbgAvgDit) printf("E avgDit:%d\n", (int)avgDit);
 									DitDahCD = 1;
 								}
 								else if (period > 2 * Shrt)
@@ -1035,6 +1083,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 								else
 								{
 									avgDit = (4 * avgDit + period) / 5; // treat it as a dit
+									if(DbgAvgDit) printf("F avgDit:%d\n", (int)avgDit);
 									DitDahCD = 3;
 								}
 							}
@@ -1074,7 +1123,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 			blocked = false;
 			return; // overly long key closure; Forget what you got; Go back, & start looking for a new set of events
 		}
-		LtrBrkFlg = true; // Arm (enable) SetLtrBrk() routine
+		// LtrBrkFlg = true; // Arm (enable) SetLtrBrk() routine
 		// test to determine that this is a significant signal (key closure duration) event, & warrants evaluation as a dit or dah
 		if ((float)period < 0.3 * (float)avgDit)
 		{ // if "true", key down event seems to related to noise
@@ -1157,7 +1206,7 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 			/* now go back and look at last keydown entry & see if it suggest something different*/
 			int OldPrdPtr = PrdStackPtr - 1;
 			if (PrdStackPtr == 0)
-				OldPrdPtr = 9;
+				OldPrdPtr = 19;
 			if ((period >= 2 * PrdStack[OldPrdPtr]) && !NrmlDah)
 			{
 				NrmlDah = true;
@@ -1214,10 +1263,11 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 					CalcAvgDah(lastDah);
 			}
 			dahcnt += 1;
-			if (dahcnt > 10)
+			if (dahcnt > 15) /*Had an unusually long series of apparent dahs. Maybe need to start considering a slower WPM*/
 			{
 				dahcnt = 3;
 				avgDit = int(1.5 * float(avgDit));
+				if(DbgAvgDit) printf("G avgDit:%d\n", (int)avgDit);
 			}
 		}
 		else // treat this period as a dit
@@ -1288,6 +1338,9 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 				printf(PrntBuf);
 			}
 		}
+#ifdef DBugLtrBrkTiming
+	printf("KeyEvntSR->DeCodeVall:%d\n", DeCodeVal);
+#endif
 		xSemaphoreGive(DeCodeVal_mutex);
 		blocked = false;
 		FrstSymbl = false;
@@ -1417,6 +1470,7 @@ void Dcodeloop(void)
 		{ // moved this from interrupt routine to reduce time needed to process interupts
 			CalcDitFlg = false;
 			avgDit = (5 * avgDit + lastDit) / 6;
+			if(DbgAvgDit) printf("H avgDit:%d\n", (int)avgDit);
 			curRatio = 1.5 * ((float)(avgDah + avgDeadSpace) / (float)(avgDit + avgDeadSpace));
 		}
 		/* The following if statement is for diagnostic testing/evaluation of the ESP32 KEYISR task */
@@ -1452,6 +1506,7 @@ void Dcodeloop(void)
 void WPMdefault(void)
 {
 	avgDit = 80.0; // average 'Dit' duration
+	if(DbgAvgDit) printf("I avgDit:%d\n", (int)avgDit);
 	avgDeadSpace = avgDit;
 	// printf("A avgDeadSpace:%d\n",(uint16_t)avgDeadSpace);
 	AvgSmblDedSpc = avgDit;
@@ -1537,8 +1592,10 @@ void SetLtrBrk(unsigned long TimeStmp)
 	char tmpbuf[50];
 	char Str[5];
 	bool dbgLtrBrk = false; // true; // Set to true for letterbreak debugging
-	char StrBuf[25];
-	//int slop = pdTICKS_TO_MS(xTaskGetTickCount()) - noSigStrt;
+	char StrBuf[25]; //originally created to support letter brk debugging; today no longer used
+#ifdef DBugLtrBrkTiming
+		printf("\nStart SetLtrBrk(%d)\n", (int)TimeStmp);
+#endif
 	int slop = TimeStmp - noSigStrt;
 	//printf("SetLtrBrk() slop:%d\n", (uint)slop);
 	if (slop >= 4)
@@ -1569,7 +1626,7 @@ void SetLtrBrk(unsigned long TimeStmp)
 		DbgRptr(dbgLtrBrk, StrBuf, Str);
 	}
 	else
-	{
+	{ // decoder operating in 'Normal' (keyboard/paddle) mode; use 'standard' morse timing values.
 		if (avgDeadSpace > avgDit)
 		{
 			space = avgDeadSpace; //((3*space)+avgDeadSpace)/4; //20190717 jmh - Changed to averaging space value to reduce chance of glitches causing mid character letter breaks
@@ -1577,7 +1634,7 @@ void SetLtrBrk(unsigned long TimeStmp)
 			printf("A space:%d\n", (uint16_t)space);
 #endif
 			sprintf(Str, "+");
-			DbgRptr(dbgLtrBrk, StrBuf, Str);
+			DbgRptr(dbgLtrBrk, StrBuf, Str);// 'StrBuf' not used
 		}
 		else
 		{
@@ -1688,10 +1745,11 @@ void SetLtrBrk(unsigned long TimeStmp)
 
 	if (ltrBrk > wordBrk)
 	{
-		// printf("ltrBrk %d > wordBrk\n", (uint16_t)ltrBrk);
+		
 		wordBrk = int(1.1 * float(ltrBrk));
 		wrdbrkFtcr = 1.0;
 		OLDwrdbrkFtcr = wrdbrkFtcr;
+		if (DbgWrdBrkFtcr) printf("\tSetLtrBrk() ltrBrk: %d > wordBrk; !!RESET!! new wordBrk: %d; wrdbrkFtcr: %5.2f\n", (uint16_t)ltrBrk, (uint16_t)wordBrk, wrdbrkFtcr);
 	}
 	/*Now work out what the average intersymbol space time is*/
 	if ((3.18 * (float)deadSpace) < (float)avgDah)
@@ -1699,15 +1757,15 @@ void SetLtrBrk(unsigned long TimeStmp)
 	/*Set dbgLtrBrk = true, when diagnosing letter break timing */
 	if (dbgLtrBrk)
 	{
-		sprintf(PrntBuf, "\tltrBrk: %d; deadSpace: %u; space: %u; avgDeadSpace: %u; AvgSmblDedSpc: %u; avgDah: %u; avgDit: %u\n\r",
-				(uint16_t)ltrBrk, (uint16_t)deadSpace, (uint16_t)space, (uint16_t)avgDeadSpace, (uint16_t)AvgSmblDedSpc, (uint16_t)avgDah, (uint16_t)avgDit);
+		sprintf(PrntBuf, "\tltrBrk: %d; deadSpace: %u; space: %u; avgDeadSpace: %u; AvgSmblDedSpc: %u; avgDah: %u; avgDit: %u; wordBrk: %u\n\n",
+				(uint16_t)ltrBrk, (uint16_t)deadSpace, (uint16_t)space, (uint16_t)avgDeadSpace, (uint16_t)AvgSmblDedSpc, (uint16_t)avgDah, (uint16_t)avgDit, (uint16_t)wordBrk);
 		printf(PrntBuf);
 	}
 	letterBrk = ltrBrk + TimeStmp; // ESP32/Goertzel driven method
 	//printf("New Letter Brk TimeStamp:%d\n", (int)letterBrk);
-#ifdef DBugLtrBrkTiming
-	printf("New Letter Brk TimeStamp:%d\n", (int)letterBrk);
-#endif
+// #ifdef DBugLtrBrkTiming
+// 	printf("\tNew Letter Brk TimeStamp:%d\n\n", (int)letterBrk);
+// #endif
 	// if (BugMode) letterBrk = letterBrk + 0.8 * avgDit ;//20200306 removed to reduce having to deal with multi letter sysmbols
 	if (NuWrd && NuWrdflg)
 	{
@@ -1834,7 +1892,11 @@ bool chkChrCmplt(unsigned long TimeStmp)
 	}
 	float noKeySig = (float)(Now - noSigStrt);
 	if ((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !wordBrkFlg && (DeCodeVal == 0))
+	{
+		OK2Reduc = true;
 		ValidWrdBrk = true;
+	}
+		
 	// this is here mainly as a diagnostic error report
 	if ((noKeySig >= ((float)wordBrk)) && noSigStrt != 0 && !ValidWrdBrk && PostFlg)
 	{	
@@ -1875,10 +1937,11 @@ bool chkChrCmplt(unsigned long TimeStmp)
 		// }
 		// chkcnt = 0;
 
-		// if (ValidWrdBrk)
-		// {
 		if (ValidWrdBrk && DbgWrdBrkFtcr)
-			printf("ValidWrdBrk\n");
+		{
+			printf("RTDcdr - wordBrk:%d; wrdbrkFtcr:%5.3f\n", (int)wordBrk, wrdbrkFtcr);
+
+		}
 		else if (DbgWrdBrkFtcr)
 			printf("Word Break EXCEPTION\n");
 		if (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5))
@@ -1947,7 +2010,8 @@ bool chkChrCmplt(unsigned long TimeStmp)
 						if (oneLtrCntr >= 2)
 						{
 							// printf("     5##  %s\n", LtrHoldr);				// had 2 entries in a row that were just one character in length; lengthen the wordbrk interval
-							wrdbrkFtcr += 0.15; // = 2.0
+							//wrdbrkFtcr += 0.15; // = 2.0
+							wrdbrkFtcr = OLDwrdbrkFtcr +0.15;
 							ApplyWrdFctr(wrdbrkFtcr);
 							if (DbgWrdBrkFtcr)
 								printf("D wordBrk+: %d; wrdbrkFtcr: %5.3f; CurLtr %C\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr[0]);
@@ -2025,6 +2089,12 @@ bool chkChrCmplt(unsigned long TimeStmp)
 								if (DbgWrdBrkFtcr)
 									printf("\t\tincWrdBrk = false @ LtrHoldr[%d] = %c\n", i, LtrHoldr[i]);
 							}
+							if( (LtrHoldr[i] == 'I' && LtrHoldr[i+1] == 'N') || (LtrHoldr[i] == 'T' && LtrHoldr[i+1] == 'E' && LtrHoldr[i+2] == 'N') )
+							{
+								incWrdBrk = false;
+								if (DbgWrdBrkFtcr)
+									printf("\t\tincWrdBrk = false; LtrHoldr = %s\n", LtrHoldr);
+							}
 						}
 					}
 					LtrHoldr[i] = 0;
@@ -2050,10 +2120,12 @@ bool chkChrCmplt(unsigned long TimeStmp)
 				/*20250217 apply wordbreak increase based on testing done above*/
 				if (incWrdBrk)
 				{
+					OLDwrdbrkFtcr = wrdbrkFtcr;
 					wrdbrkFtcr += 0.15; // = 2.0
+					//wrdbrkFtcr = OLDwrdbrkFtcr +0.15;
 					ApplyWrdFctr(wrdbrkFtcr);
 					if (DbgWrdBrkFtcr)
-						printf("\t\tA wordBrk+: %d; wrdbrkFtcr: %5.3f; CurStr %s\n", (uint16_t)wordBrk, wrdbrkFtcr, LtrHoldr);
+						printf("\t\tA wordBrk+: %d; wrdbrkFtcr: %5.3f; OLDwrdbrkFtcr: %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr, OLDwrdbrkFtcr);
 				}
 				RunAdvPrsr = true;
 				LckHiSpd = false;
@@ -2094,7 +2166,8 @@ bool chkChrCmplt(unsigned long TimeStmp)
 					oneLtrCntr++;
 					if (oneLtrCntr >= 2)
 					{ // had 2 entries in a row that were just one character in lenght; shorten the wordbrk interval
-						wrdbrkFtcr += 0.2;
+						//wrdbrkFtcr += 0.2;
+						wrdbrkFtcr = OLDwrdbrkFtcr +0.2;
 						ApplyWrdFctr(wrdbrkFtcr);
 						if (DbgWrdBrkFtcr)
 							printf("B wordBrk+: %d; wrdbrkFtcr: %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr);
@@ -2546,6 +2619,7 @@ int CalcAvgPrd(unsigned long thisdur)
 			//       sprintf(TmpMthd,"%s",DahMthd);
 			//       sprintf(DahMthd,"%s A:%d ;",TmpMthd, avgDah);
 			avgDit = avgDah / 3;
+			if(DbgAvgDit) printf("J avgDit:%d\n", (int)avgDit);
 			//       if(avgDit <63){
 			//    	   avgDit +=0;
 			//       }
@@ -2578,6 +2652,7 @@ int CalcAvgPrd(unsigned long thisdur)
 						//            sprintf(TmpMthd,"%s",DahMthd);
 						//            sprintf(DahMthd,"%s B;", TmpMthd);
 						avgDit = avgDah / 3;
+						if(DbgAvgDit) printf("K avgDit:%d\n", (int)avgDit);
 						//            if(avgDit <63){
 						//            	avgDit +=0;//
 						//            }
@@ -2589,6 +2664,7 @@ int CalcAvgPrd(unsigned long thisdur)
 						//          sprintf(TmpMthd,"%s",DahMthd);
 						//          sprintf(DahMthd,"%s C;", TmpMthd);
 						avgDit = thisdur;
+						if(DbgAvgDit) printf("L avgDit:%d\n", (int)avgDit);
 						//          if(avgDit <63){
 						//          	avgDit +=0;//
 						//          }
@@ -2601,6 +2677,7 @@ int CalcAvgPrd(unsigned long thisdur)
 					//          sprintf(TmpMthd,"%s",DahMthd);
 					//          sprintf(DahMthd,"%s D;", TmpMthd);
 					avgDit = thisdur / 3;
+					if(DbgAvgDit) printf("M avgDit:%d\n", (int)avgDit);
 					//          if(avgDit <63){
 					//          	avgDit +=0;//
 					//          }
@@ -2664,7 +2741,10 @@ int CalcAvgPrd(unsigned long thisdur)
 	{						 // Houston, we have a "DIT"
 		int olddit = avgDit; // just for debugging
 		if (!Bug2)
+		{
 			avgDit = (5 * avgDit + thisdur) / 6; // avgDit = (3 * avgDit + thisdur) / 4;
+			if(DbgAvgDit) printf("O avgDit:%d\n", (int)avgDit);
+		}
 		//    if(avgDit <63){
 		//    	avgDit +=0;
 		//    }
@@ -2693,6 +2773,7 @@ int CalcAvgPrd(unsigned long thisdur)
 		else if (thisdur < avgDit)
 		{
 			avgDit = ((2 * avgDit) + thisdur) / 3;
+			if(DbgAvgDit) printf("P avgDit:%d\n", (int)avgDit);
 			//      sprintf(TmpMthd,"%s",DahMthd);
 			//      sprintf(DahMthd,"%s H:%d;", TmpMthd, 3*avgDit);
 			//      if(avgDit <63){
@@ -2712,6 +2793,7 @@ int CalcAvgPrd(unsigned long thisdur)
 			else
 			{
 				avgDit = ((9 * avgDit) + thisdur) / 10;
+				if(DbgAvgDit) printf("Q avgDit:%d\n", (int)avgDit);
 				//        sprintf(TmpMthd,"%s",DahMthd);
 				//        sprintf(DahMthd,"%s I:%d;", TmpMthd, 3*avgDit);
 				//        if(avgDit <63){
@@ -2746,6 +2828,7 @@ int CalcAvgPrd(unsigned long thisdur)
 	{
 		curRatio = 2.5;
 		avgDit = avgDah / curRatio;
+		if(DbgAvgDit) printf("R avgDit:%d\n", (int)avgDit);
 		//    if(avgDit <63){
 		//    	avgDit +=0;
 		//    }
@@ -2759,9 +2842,15 @@ int CalcAvgPrd(unsigned long thisdur)
 	// Serial.println(fix);
 	// set limits on the 'avgDit' values; 80 to 3.1 WPM
 	if (avgDit > 384)
+	{
 		avgDit = 384;
+		if(DbgAvgDit) printf("S avgDit:%d\n", (int)avgDit);
+	}	
 	if ((avgDit < 15) && (wpm > 35))
+	{
 		avgDit = 15;
+		if(DbgAvgDit) printf("T avgDit:%d\n", (int)avgDit);
+	}
 	if (DeCodeVal == 1)
 	{
 		DeCodeVal = 0;
@@ -2787,7 +2876,7 @@ int CalcWPM(int dotT, int dahT, int spaceT)
 	char PrntBuf[30];
 	float avgt = float(dotT + dahT + (2 * spaceT)) / 6.0; // 20221105
 	int codeSpeed = (int)(1200.0 / avgt);
-	sprintf(PrntBuf, "WPM: %d;\t Dit:%d; Dah%d; Space%d\n", codeSpeed, dotT, dahT, spaceT); // test/check timing only
+	//sprintf(PrntBuf, "WPM: %d;\t Dit:%d; Dah%d; Space%d\n", codeSpeed, dotT, dahT, spaceT); // test/check timing only
 	// printf("%s", PrntBuf);
 
 	return codeSpeed;
@@ -3082,6 +3171,7 @@ void DisplayChar(unsigned int decodeval)
 		if (TEcnt > 7 && curRatio > 4.5)
 		{ // if true, we probably not waiting long enough to start the decode process, so reset the dot dash ratio based o current dash times
 			avgDit = avgDah / 3;
+			if(DbgAvgDit) printf("U avgDit:%d\n", (int)avgDit);
 		}
 	}
 	// slide all values in the CodeValBuf to the left by one position & make sure that the array is terminated with a zero in the last position
@@ -3242,12 +3332,15 @@ void dispMsg(char Msgbuf[50])
 					WrdChrCnt++;
 				/*Auto-word break adjustment test*/
 				// if (LtrPtr > 11 && curChar != 'T')
-				if (WrdChrCnt > 8)
+				if (WrdChrCnt > 11 && OK2Reduc)
 				{						/*this word is getting long. Shorten the wordBrk interval a bit*/
-					wrdbrkFtcr -= 0.05; //-= 0.025
+					//wrdbrkFtcr = OLDwrdbrkFtcr -0.05;
+					float curwrdbrkFtcr = wrdbrkFtcr;
+					wrdbrkFtcr -= 0.05;
+					OK2Reduc = false; 
 					ApplyWrdFctr(wrdbrkFtcr);
 					if (DbgWrdBrkFtcr)
-						printf("wordBrk-: %d; wrdbrkFtcr: %5.3f; MsgBuf: %s\n", (uint16_t)wordBrk, wrdbrkFtcr, Msgbuf);
+						printf("Long Word-> wordBrk-: %d; adjstdwrdbrkFtcr: %5.3f; curwrdbrkFtcr: %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr, curwrdbrkFtcr);
 				}
 				if (LtrPtr > 28)
 					LtrPtr = 28; // limit adding more than 30 characters to the "LtrHoldr" buffer
@@ -3588,8 +3681,10 @@ void SyncAdvPrsrWPM(void)
 	space = (unsigned long)advparser.Get_space();
 	avgDeadSpace = space;
 	avgDit = (unsigned long)advparser.Get_DitVal();
+	if(DbgAvgDit) printf("V avgDit:%d\n", (int)avgDit);
 	ltrBrk = (unsigned long)advparser.Get_LtrBrkVal();
 	avgDah = (unsigned long)(3 * avgDit);
+	wpm = CalcWPM(avgDit, avgDah, avgDeadSpace);
 #ifdef DBugLtrBrkTiming
 	printf("SyncAdvPrsrWPM - Resetting WPM; OldspaceVal %d; new space %d; OldDahVal %d; new DahVal %d; ltrBrk:%d; Wpm %d; AdvPrsrTxt:%s \n", OldSpace, (uint16_t)space, OldDahVal, DahVal, (uint16_t)ltrBrk, wpm, advparser.Msgbuf);
 #endif
@@ -3597,7 +3692,7 @@ void SyncAdvPrsrWPM(void)
 void ApplyWrdFctr(float _wrdbrkFtcr)
 {
 	float tmpwordBrk = (float)wordBrk / OLDwrdbrkFtcr;
-	// printf("tmpwordBrk = %7.1f, OLDwrdbrkFtcr: %5.2f\n", tmpwordBrk, OLDwrdbrkFtcr);
+	// printf("tmpwordBrk = %7.1f, OLDwrdbrkFtcr: %5.3f\n", tmpwordBrk, OLDwrdbrkFtcr);
 	wordBrk = (unsigned long)(_wrdbrkFtcr * tmpwordBrk);
 	OLDwrdbrkFtcr = _wrdbrkFtcr;
 };

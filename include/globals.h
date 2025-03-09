@@ -14,6 +14,7 @@
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
 //#define SpclTst  //uncomment to debug how, & when, the AdvParser code is engaged.
+//#define DBugLtrBrkTiming
 //#define DeBgCrash //uncomment to debug displayupdate lockup/crash
 //#define DeBgQueue //uncomment to debug Key up & down event time queues
 //#define AutoCorrect //uncomment to debug Post parser delete & replace process 

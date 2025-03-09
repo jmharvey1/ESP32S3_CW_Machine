@@ -24,7 +24,7 @@
 #include "stdint.h"// need this to use char type
 #include <stdio.h>
 #define IntrvlBufSize 100
-#define MsgbufSize 50
+#define MsgbufSize 64 
 #define SrchDictSize 790
 // #define DBugSrchEsRplace // uncomment to enable posting classic error fixes to serial port for debugging
 
@@ -878,7 +878,7 @@ private:
     uint8_t TopPtr = 0;
     uint8_t BtmPtr = 0;
     //uint16_t DitIntrvlVal; //used as sanity test/check in 'bug' letterbrk rule set; 20240129 running average of the last 6 dits
-    uint16_t WrdBrkVal; // serves in post parser as the value to insert a space in the reconstructed character string
+    uint16_t WrdBrkVal = 320; // serves in post parser as the value to insert a space in the reconstructed character string
     bool  WrdBrkValid;
     bool calc;
     unsigned int SymbSet; //bit-bucket that holds a collection of 0's & 1's where 1 = a dah & a 0 = a dit; so "C" = 1010

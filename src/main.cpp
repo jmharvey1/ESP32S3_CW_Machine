@@ -106,6 +106,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250303 Clean up work to Goertzel.cpp, DcodeCW.cpp, & AdvParser.cpp files*/
 /*20250304 Goertzelcpp - Changed Avgnoise logic to ignore 'keydown' state change, improving noisy tone dection while still maintaining high noise immunity*/
 /*20250306 reorganized task to core assignments to solve skipped adc data conversions*/
+/*20250307 DcodeCW.cpp - Reworked wordbreak management */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -1201,7 +1202,7 @@ void AdvParserTask(void *param)
 #endif
         // advparser.Msgbuf[NuMsgLen] = 0x20; // 0x5f;//0x20;
         // advparser.Msgbuf[NuMsgLen + 1] = 0x0;
-        char tmpbuf[30];
+        char tmpbuf[34];
         // int OlddeletCnt = deletCnt;
         // if (deletCnt > 0)
         // {
@@ -1271,7 +1272,12 @@ void AdvParserTask(void *param)
       } else printf("xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx FAILED; cur Owner:%d\n", curOwner);
       /*assuming the Adv parser did a better job of decoding sync the real time decoder to the Adv parser timing values/WPM*/
       SyncAdvPrsrWPM();
-      if(advparser.WrdBrkAdjFlg) wrdbrkFtcr = advparser.Get_wrdbrkFtcr();
+      if(advparser.WrdBrkAdjFlg)
+      {
+        //wrdbrkFtcr = advparser.Get_wrdbrkFtcr();
+        ApplyWrdFctr(advparser.Get_wrdbrkFtcr());
+        if (DbgWrdBrkFtcr) printf("main.cpp AdvParserTask update wordBrk+: %d; wrdbrkFtcr: %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr);
+      } 
       // printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
     } // else printf("old txt: %s\n", advparser.LtrHoldr);
 #ifdef AutoCorrect

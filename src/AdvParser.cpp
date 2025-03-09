@@ -163,6 +163,12 @@ void AdvParser::FindBtmPtr(void)
         }
         BtmPtr++;
         ratio = (float)KeyDwnBuckts[BtmPtr + 1].Intrvl / (float)KeyDwnBuckts[BtmPtr].Intrvl;
+        /*test and make sure we're not looking at an unusually small interval value in the 1st bucket*/
+        if(ratio >= 1.4 && BtmPtr == 0 && KeyDwnBuckts[BtmPtr+1].Intrvl < (KeyDwnBuckts[KeyDwnBucktPtr-1].Intrvl)/3)
+        {
+            BtmPtr++;
+            ratio = (float)KeyDwnBuckts[BtmPtr + 1].Intrvl / (float)KeyDwnBuckts[BtmPtr].Intrvl;
+        }
     }
     if(BtmPtr > 0) BtmPtr--;
 };
@@ -579,10 +585,12 @@ void AdvParser::EvalTimeData(void)
             this->NuSpltVal = KeyDwnBuckts[BtmPtr].Intrvl + (KeyDwnBuckts[TopPtr].Intrvl - KeyDwnBuckts[BtmPtr].Intrvl) / 2;
             this->NuSpltVal *= 0.95; // 20241210 added based on k9vp bug mp3 test recording
             this->DitDahSplitVal = this->NuSpltVal;
-            this->WrdBrkVal = (uint16_t)(4 * (float)KeyDwnBuckts[BtmPtr].Intrvl); //most commom path used to set WrdBrkWal
-            // printf("A WrdBrkVal: %d\n", this->WrdBrkVal);
-            if (Dbug)
-                printf("WrdBrkVal Method 3; 4 * KeyDwnBuckts[BtmPtr:%d].Intrvl:%d = %d\n", BtmPtr, KeyDwnBuckts[BtmPtr].Intrvl, this->WrdBrkVal);
+            this->WrdBrkVal = (uint16_t)(7 * (float)KeyDwnBuckts[BtmPtr].Intrvl); //most commom path used to set WrdBrkWal
+            if(this->WrdBrkVal < 137) this->WrdBrkVal = 137;//dont set it to something lesss than the equivalent of a 35WPM wordbreak
+            this->AllDah = this->AllDit = false;
+            if (DbgWrdBrkFtcr) printf("\t\tA WrdBrkVal: %d\n", this->WrdBrkVal);
+            if (Dbug || DbgWrdBrkFtcr)
+                printf("\t\tWrdBrkVal Method 3; 7 * KeyDwnBuckts[BtmPtr:%d].Intrvl:%d = %d\n", BtmPtr, KeyDwnBuckts[BtmPtr].Intrvl, this->WrdBrkVal);
             if (this->Bg1SplitPt < 1.5 * KeyDwnBuckts[BtmPtr].Intrvl)
                 this->Bg1SplitPt = 1.5 * KeyDwnBuckts[BtmPtr].Intrvl;
             if (DeBug)
@@ -594,7 +602,7 @@ void AdvParser::EvalTimeData(void)
             if(calc) sprintf(ChrString, "clac: T");
             else sprintf(ChrString, "clac: F");
 
-            if (Dbug)
+            if (Dbug || DbgWrdBrkFtcr)
                 printf("Skipped QUICK NuSpltVa CALC - %s KeyDwnBuckts[TopPtr: %d].Intrvl:%d < 2*KeyDwnBuckts[BtmPtr: %d].Intrvl:%d\n", ChrString, TopPtr, KeyDwnBuckts[TopPtr].Intrvl, BtmPtr, KeyDwnBuckts[BtmPtr].Intrvl);
             this->AllDah = this->AllDit = true;
         }
@@ -700,15 +708,15 @@ void AdvParser::EvalTimeData(void)
                 if (Dbug)
                     printf("ReSetB DitDahSplitVal = 0.6* (RunngTotl/%d) = %d\n", dahcnt, this->DitDahSplitVal);
             }
-            this->WrdBrkVal = (uint16_t)(1.4 * (float)this->LtrBrkVal);
+            this->WrdBrkVal = (uint16_t)(1.9 * (float)this->LtrBrkVal);
             // printf("B WrdBrkVal: %d\n", this->WrdBrkVal);
-            if (Dbug)
-                printf("WrdBrkVal Method 2; 1.4*this->LtrBrkVal:%d = %d\n", this->LtrBrkVal, this->WrdBrkVal);
+            if (Dbug || DbgWrdBrkFtcr)
+                printf("\t\tWrdBrkVal Method 2; (ALL Dit/Dah) 1.9*this->LtrBrkVal:%d = %d\n", this->LtrBrkVal, this->WrdBrkVal);
         }
         bool skip = false;
         if (KeyDwnBucktPtr >= 1 && KeyUpBucktPtr >= 1)
         {
-            if (Dbug)
+            if (Dbug || DbgWrdBrkFtcr)
             {
                 for (int i = 0; i <= KeyDwnBucktPtr; i++)
                 {
@@ -988,7 +996,7 @@ void AdvParser::EvalTimeData(void)
             return;
         }
     }
-    if (Dbug)
+    if (Dbug || DbgWrdBrkFtcr)
     {
         printf("\nSplitPoint:%3d\tBg1SplitPt:%d\tDitIntrvlVal:%d\t  AvgDahVal:%d\t", DitDahSplitVal, Bg1SplitPt, DitIntrvlVal, AvgDahVal);
         printf("AvgDedSpc:%0.1f\tAvgDahKeyUpVal:%d \tUnitIntvrlx2r5:%d\tLtrBrkVal:%d;\tWrdBrkVal:%d\n", AvgSmblDedSpc, this->AvgDahKeyUpVal, UnitIntvrlx2r5, this->LtrBrkVal, WrdBrkVal);
@@ -1443,10 +1451,11 @@ void AdvParser::EvalTimeData(void)
             if ((TmpUpIntrvls[n] > (this->wrdbrkFtcr * this->WrdBrkVal)) && (n < this->TmpUpIntrvlsPtr - 1))
             { // yes, it looks like a word break
                 // add " " (space) to reparsed string
+                if (DbgWrdBrkFtcr) printf("AdvParser Found embedded WORD TmpUpIntrvls[n%d] %d > this->wrdbrkFtcr: %5.3f, this->WrdBrkVal: %d\n", n, TmpUpIntrvls[n], this->wrdbrkFtcr, this->WrdBrkVal);
                 this->AdvSrch4Match(n, 255, false);
                 /*now test if this word is a single letter*/
                 int EndPtr = GetMsgLen();
-                // printf("NEW wordBrk: EndPtr %d; CurParseWord: %s\n", EndPtr, this->Msgbuf);
+                if (DbgWrdBrkFtcr) printf("NEW wordBrk: EndPtr %d; CurParseWord: %s\n\n", EndPtr, this->Msgbuf);
                 /*20250219 removed to verify that this was the only entry that was affecting the AdcParser 'wrdbrkFtcr' value.
                 Note: at this time, there is no code that deccrements this value; i.e., it only increases*/
                 // if (((EndPtr >= 3 && this->Msgbuf[EndPtr - 3] == ' ') || EndPtr == 2) && this->Msgbuf[EndPtr - 2] != 'A' && this->Msgbuf[EndPtr - 2] != 'I')
