@@ -1456,9 +1456,8 @@ void AdvParser::EvalTimeData(void)
                 /*now test if this word is a single letter*/
                 int EndPtr = GetMsgLen();
                 if (DbgWrdBrkFtcr) printf("NEW wordBrk: EndPtr %d; CurParseWord: %s\n\n", EndPtr, this->Msgbuf);
-                /*20250219 removed to verify that this was the only entry that was affecting the AdcParser 'wrdbrkFtcr' value.
+                /*20250219 removed to verify that this was the only entry that was affecting the AdvParser 'wrdbrkFtcr' value.
                 Note: at this time, there is no code that deccrements this value; i.e., it only increases*/
-                // if (((EndPtr >= 3 && this->Msgbuf[EndPtr - 3] == ' ') || EndPtr == 2) && this->Msgbuf[EndPtr - 2] != 'A' && this->Msgbuf[EndPtr - 2] != 'I')
                 if(LstEndPtr == EndPtr-2 || EndPtr == 2)
                 {// if true we had a one letter word, not very likely so should be safe to increase the 'wrdbrkFtcr'
                     this->wrdbrkFtcr += 0.15;
@@ -1467,6 +1466,7 @@ void AdvParser::EvalTimeData(void)
                 }
                 LstEndPtr = EndPtr;
             }
+            else if(WrdBrkAdjFlg) WrdBrkAdjFlg = false; // we had found a one letter word, but also in this group (letter set) are multiple letter words. So cancel single letter word notification back to the 'RT' decoder
             this->LstLtrBrkCnt = 0;
         }
         else if (ExitPath[n] == 4 && BrkFlg == '%')
@@ -1586,9 +1586,11 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         if(start >= 2) start--;
         if(start > 3) start = 3;
         int stop = SortdPtr - 1;
+        if (this->Dbug)
+            printf("Method A - \n");
         /*20250118 added while loop, in case initial pass didn't find a dit/dah split point*/
         bool keepLookng = true;
-        while (MaxSpltPtSlope < 1.2 && start > 0 && keepLookng)
+        while (MaxSpltPtSlope < 1.2 && start >= 0 && keepLookng)
         {
             for (int i = start; i < stop; i++) // set/limit the test to ignore the last/longest keydwn in the series, because it could/likely be a stretched dah;
             {
@@ -1675,8 +1677,9 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
     } // end if (SortdPtr >= 10)
     /*Ok, there's not enough keydown events to use the simple "split point" method, so do/try the following: */
     if (arr[n].Intrvl > 1.5 * arr[0].Intrvl)
-    {
-
+    {   
+        if (this->Dbug)
+            printf("Method B - \n");
         /*Do a quick sweep/scan of the 'sorted keydwn data set, to find initial dit/dah splitpoint*/
         int bstSpltPtptr = 0;
         float MaxSpltPtSlope = 0;

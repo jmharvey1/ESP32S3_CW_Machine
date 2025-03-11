@@ -907,7 +907,7 @@ void Chk4KeyDwn(float NowLvl)
 						IndxPtr++;
 					}
 				}
-				if(xQueueSend(KeyState_que, &Sentstate, (TickType_t)10) == pdFALSE)
+				if(xQueueSend(KeyState_que, &Sentstate, pdMS_TO_TICKS(3)) == pdFALSE)
 				{ 
 					/*TODO need to work out better way to recognixe & rest/clear this buffer*/
 					printf("!!! KeyState_que !!!\n");

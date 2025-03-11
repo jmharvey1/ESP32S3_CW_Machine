@@ -40,7 +40,8 @@
  * 20250307 increased PrdStack[20] from 10 to 20; added DbgWrdBrkFtcr; 
  * 			Added/reworked updating 'wordBrk' @ actual 'sender' wordbreak interval; 
  * 			changed where calling 'SetLtrBrk(EvntTime)' occurs to reduce CPU loading; 
- * 			added 'DbgAvgDit'; added 'DBugLtrBrkTiming'; plus other minor changes to setting/updating 'WrdBrkFtcr' 
+ * 			added 'DbgAvgDit'; added 'DBugLtrBrkTiming'; plus other minor changes to setting/updating 'WrdBrkFtcr'
+ * 20250310 reworked ResetLstWrdDataSets(), & KeyEvntTask() to improve >35WPM decoding and wordbreak management
  *   */
 
 // #include <SetUpCwDecoder.h>
@@ -53,7 +54,7 @@
 #define MaxIntrvlCnt 24
 #define LOW false // JMH ADD for Waveshare Version
 #define HIGH true // JMH ADD for Waveshare Version
-//#define DBugLtrBrkTiming // uncomment to see how letter break timing is developed & syncronized w/ advParser
+//#define DBugLtrBrkTiming // (now managed in globals.h)uncomment to see how letter break timing is developed & synchronized w/ advParser
 bool DbgWrdBrkFtcr = false;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
 bool DbgAvgDit = false;
 bool DbgPeriod = false;
@@ -252,7 +253,7 @@ bool blocked = false;
 bool AbrtFlg = false;
 bool KEISRwaiting = false;
 bool LckHiSpd = false; // 20241209 added to support ensuring decoder is configure for paddle/keyboard for speeds in excees of 36WPM
-unsigned long OldEvntTime = 0;
+//unsigned long OldEvntTime = 0;
 uint8_t chkcnt = 0;
 uint8_t ShrtLtrBrkCnt = 0;
 //  End of CW Decoder Global Variables
@@ -275,7 +276,8 @@ void StartDecoder(LVGLMsgBox *pttftmsgbx)
 
 	STart = 0;
 	WrdStrt = pdTICKS_TO_MS(xTaskGetTickCount()); //(GetTimr5Cnt()/10);
-	OldEvntTime = WrdStrt;
+	//OldEvntTime = WrdStrt;
+	//printf("StartDecoder\n");
 	wordBrk = avgDah;
 	wrdbrkFtcr = 1.0;
 	OLDwrdbrkFtcr = wrdbrkFtcr;
@@ -302,15 +304,15 @@ void KeyEvntTask(void *param)
 	uint8_t Kstate;
 	uint16_t interval = 0;
 	uint8_t Sentstate = 0;
-	// unsigned long OldOldTime;
+	unsigned long OldEvntTime = pdTICKS_TO_MS(xTaskGetTickCount());
 	while (1)
 	{
-		PostFlg = false; //true; //set to 'true' for testing only
+		PostFlg = false; //true;//false; //true; //set to 'true' for testing only
 		// thread_notification = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 		// if (thread_notification)
 		// {
 		// printf("\nKeyEvntTask Runnning:\n");
-		while (xQueueReceive(KeyEvnt_que, (void *)&EvntTime, portMAX_DELAY) == pdTRUE)
+		if (xQueueReceive(KeyEvnt_que, (void *)&EvntTime, pdMS_TO_TICKS(4)) == pdTRUE)
 		{
 			if (xQueueReceive(KeyState_que, (void *)&Kstate, portMAX_DELAY) == pdTRUE)
 			{
@@ -319,6 +321,8 @@ void KeyEvntTask(void *param)
 					Sentstate = Kstate;
 					//printf("\nKstate: %d\tEvntTime: %d\n", Kstate, (int)EvntTime);
 					interval = (uint16_t)(EvntTime - OldEvntTime);
+					if (interval > 750 && Kstate == 1) printf("\n!!ERROR!! Kstate: %d\tEvntTime: %d\tOldEvntTime: %d\tinterval: %d\n", Kstate, (int)EvntTime, (int)OldEvntTime, interval);
+
 					// OldOldTime = OldEvntTime;
 					OldEvntTime = EvntTime;
 
@@ -327,7 +331,7 @@ void KeyEvntTask(void *param)
 					if (wordBrk > ResetInterval)
 						ResetInterval = (uint16_t)wordBrk;
 					if (interval < ResetInterval)
-					{
+					{ // this is a 'usable' interval
 						if (Kstate == 1) // key is actually up, but now have the time value(s) to calculate Key Down interval
 						{
 							KeyDwnIntrvls[DeCd_KeyDwnPtr] = interval;
@@ -340,15 +344,31 @@ void KeyEvntTask(void *param)
 								DeCd_KeyDwnPtr++;
 						}
 
-						else if (DeCd_KeyDwnPtr > 0) // skip very 1st keyup event, because the interval time is likely useless
-						{
+						else if (DeCd_KeyDwnPtr > 0) // skip very 1st keyup event, because that interval time is likely useless
+						{//this is a 'keyup' interval and we have at least one keydwn event in this data set
 							KeyUpIntrvls[DeCd_KeyUpPtr] = interval;
 #ifdef DeBgQueue
-							printf("%2d. +%d\n", DeCd_KeyUpPtr, interval);
-// printf("+%d\ttimestampDwn:%d\ttimestampUp:%d\n", interval, (uint16_t)OldOldTime, (uint16_t)OldEvntTime);
+							printf("%2d. +%3d\t%3d\t%3d\n", DeCd_KeyUpPtr, interval, (uint16_t)ltrBrk, (uint16_t)wordBrk);
+							// printf("+%d\ttimestampDwn:%d\ttimestampUp:%d\n", interval, (uint16_t)OldOldTime, (uint16_t)OldEvntTime);
 #endif
 							if (DeCd_KeyUpPtr < (IntrvlBufSize - 1))
 								DeCd_KeyUpPtr++;
+							/*Now if do a DeCd_KeyUpPtr ==40 do wordbreak sanity check & correction*/
+							if(DeCd_KeyUpPtr == 41)
+							{
+								/*find the longest keyup interval in this dataset*/
+								uint16_t MaxKyUpIntrvl = 0;
+								for(int i = 0; i<40; i++)
+								{
+									if(KeyUpIntrvls[i]> MaxKyUpIntrvl) MaxKyUpIntrvl = KeyUpIntrvls[i];
+								}
+								if(MaxKyUpIntrvl> (uint16_t)(1.25*(float)ltrBrk) && (MaxKyUpIntrvl < (uint16_t)wordBrk))
+								{ /*Current wordBrk interval appears to be too long. Reset it based on out current keyup data set*/
+									wordBrk = (unsigned long)(0.75*(float)MaxKyUpIntrvl);
+									OLDwrdbrkFtcr = wrdbrkFtcr = 1.0;
+								}
+
+							}	
 						}
 						else if (DeCd_KeyDwnPtr == 0)
 						{ // This is the actual 'sender' wordbreak interval
@@ -373,7 +393,7 @@ void KeyEvntTask(void *param)
 
 								}
 							}
-							else if((float)wordBrk < 0.75*(float)interval)
+							else if((float)wordBrk < 0.75*(float)interval && (4*avgDit > 1.25*ltrBrk))
 							{
 								wrdbrkFtcr = 1.0;
 								OLDwrdbrkFtcr = wrdbrkFtcr;
@@ -466,7 +486,7 @@ void KeyEvntTask(void *param)
 // 									KeyUpIntrvls[DeCd_KeyUpPtr - 1] = (uint16_t)ResetInterval;
 // 								}
 							}
-							else
+							else if (DeCd_KeyDwnPtr != 0)
 							{
 								ResetLstWrdDataSets();
 #ifdef DeBgQueue								
@@ -479,19 +499,26 @@ void KeyEvntTask(void *param)
 				}
 				else // keystate is '3'. So use it as a heart beat signal, to pace the support decsion making part, of the realtime decoder
 				{
+					//printf("State 3\n");
 					if (Sentstate)
 					{ // 1 = Keyup, or "no tone"; Sentstate 0 = Keydown
 						chkChrCmplt(EvntTime);
 					}
-					// else
-					// 	SetLtrBrk(EvntTime);
 				}
 			}
 			// vTaskSuspend(KeyEvntTaskTaskHandle);
 			//  }
 		}
-		vTaskDelete(KeyEvntTaskTaskHandle);
+		else
+		{
+			EvntTime +=4;
+			if (Sentstate)
+			{ // 1 = Keyup, or "no tone"; Sentstate 0 = Keydown
+				chkChrCmplt(EvntTime);
+			}	
+		}
 	}
+	vTaskDelete(KeyEvntTaskTaskHandle);
 }
 	//////////////////////////////////////////////////////////////////////////////////////////
 	/*Normally converts queue data into into array data just prior, in preparation, to launching the Adv parser task/process
@@ -679,7 +706,8 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 			Oldstart = STart;
 			STart = EvntTime;					 // HAL_GetTick();
 			MySTart = EvntTime;					 // for testing purposes only
-			deadSpace = (STart - noSigStrt) + 4; //+4;//jmh 20230706 added this corection value for ESP32
+			//deadSpace = (STart - noSigStrt) + 4; //+4;//jmh 20230706 added this correction value for ESP32
+			deadSpace = (STart - noSigStrt);
 			SpaceStk[Bitpos] = deadSpace;
 			/* usable event; store KeyUp time to AutoMode detector Up time buffer*/
 			if (DeCd_KeyUpPtr < IntrvlBufSize && DeCd_KeyDwnPtr >= 1)
@@ -889,19 +917,22 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 				// Prtflg = true; //enable or uncomment for diagnostic testing
 				if (STart != 0)
 				{
-					period = (noSigStrt - STart) + 4; //+4;//jmh 20230706 added this corection value for ESP32;
+					//period = (noSigStrt - STart) + 4; //+4;//jmh 20230706 added this corection value for ESP32;
+					period = (noSigStrt - STart);
 					if(DbgPeriod) printf("A period:%d\n", (int)period);
 				}
 				else
 				{
-					period = (noSigStrt - AltSTart) + 4; //+4;//jmh 20230706 added this corection value for ESP32; // Something weird happened so use backup start value
+					//period = (noSigStrt - AltSTart) + 4; //+4;//jmh 20230706 added this corection value for ESP32; // Something weird happened so use backup start value
+					period = (noSigStrt - AltSTart);
 					if(DbgPeriod) printf("B period:%d\n", (int)period);
 				}
 				if (prob)
 				{
 					prob = 0;
 					STart = start1;
-					period = (noSigStrt - STart) + 4; //+4;//jmh 20230706 added this corection value for ESP32
+					//period = (noSigStrt - STart) + 4; //+4;//jmh 20230706 added this corection value for ESP32
+					period = (noSigStrt - STart);
 					if(DbgPeriod) printf("C period:%d\n", (int)period);
 				}
 				lastDit1 = period;
@@ -1871,7 +1902,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 	{
 		ltrCmplt = -2800; // doing this for 'plot' state trace
 #ifdef DeBgQueue		
-		printf("\n%d. Ltr Cmplt XcdByInter: %d; DeCodeVal:%d\n", LtrPtr, (int)(Now - letterBrk), DeCodeVal);
+		printf("\n%d. Ltr Cmplt XcdByInter: %d; DeCodeVal:%d\n\t\t\t", LtrPtr, (int)(Now - letterBrk), DeCodeVal);
 #endif		
 		if (Dbg)
 			printf("stepA\n");
@@ -2431,9 +2462,9 @@ bool chkChrCmplt(unsigned long TimeStmp)
 					p++;
 				}
 			}
-#ifdef DeBgQueue
-			printf("A Ltr Cmplt - DeCodeVall:%d\n", DeCodeVal);
-#endif
+// #ifdef DeBgQueue
+// 			printf("A Ltr Cmplt - DeCodeVall:%d\n", DeCodeVal);
+// #endif
 			if (Pstate == 2)
 			{
 				if (!RunAdvPrsr)
@@ -2473,19 +2504,28 @@ void ResetLstWrdDataSets(void)
 {
 	DeCd_KeyDwnPtr = DeCd_KeyUpPtr = chkcnt = 0; // resetbuffer pntrs
 	float dummy;
+	int ToneSN_queCnt = 0;
+	int KeyEvnt_queCnt = 0;
+	int KeyState_queCnt = 0; 	
 	while (xQueueReceive(ToneSN_que2, (void *)&dummy, pdMS_TO_TICKS(3)) == pdTRUE)
 	{
+		ToneSN_queCnt++;	
 		if (DeBug)
 			printf("Lst_Wrd_DataSet_Reset - ToneSN_que2 flush %5.2f\n", dummy);
 	}
-	unsigned long EvntTime;
-	while (xQueueReceive(KeyEvnt_que, (void *)&EvntTime, pdMS_TO_TICKS(1)) == pdTRUE)
-	{
-	}
-	uint8_t Kstate;
-	while (xQueueReceive(KeyState_que, (void *)&Kstate, pdMS_TO_TICKS(10)) == pdTRUE)
-	{
-	}
+	// unsigned long EvntTime;
+	// while (xQueueReceive(KeyEvnt_que, (void *)&EvntTime, pdMS_TO_TICKS(1)) == pdTRUE)
+	// {
+	// 	KeyEvnt_queCnt++;
+	// }
+	// uint8_t Kstate;
+	// while (xQueueReceive(KeyState_que, (void *)&Kstate, pdMS_TO_TICKS(10)) == pdTRUE)
+	// {
+	// 	KeyState_queCnt++;
+	// }
+#ifdef DeBgQueue		
+	printf("ResetLstWrdDataSets(void); ToneSN_que2: %d; KeyEvnt_que: %d; KeyState_que: %d\n", ToneSN_queCnt, KeyEvnt_queCnt, KeyState_queCnt);
+#endif	
 	SnglLtrWrdCnt = 0;
 	/*If we're here, it should also be safe to reset the following parameters*/
 	for (int i = 0; i < LtrPtr; i++)
@@ -2505,6 +2545,11 @@ void ResetLstWrdDataSets(void)
 //     }
 // }
 //////////////////////////////////////////////////////////////////////
+/*
+* DblChkDitDah(void) executes, when chkchrcmplt() determines a letterbreak interval has occurred
+* If there were enough bits set in the 'DeCodeVal' then it will calculate the 'spltpt', and armed with this updated value
+* will rebuild the 'DeCodeVal'
+*/
 void DblChkDitDah(void)
 {
 	if (dletechar && ConcatSymbl)
@@ -2516,10 +2561,10 @@ void DblChkDitDah(void)
 	Mintime = 1000;
 	Maxtime = 1;
 	unsigned int OldVal = DeCodeVal;
-	// if(Test){
-	// 	sprintf(PrntBuf, "DblChkDitDah(%d)", Bitpos);
-	// 	printf(PrntBuf);
-	// }
+	if(Test){
+		sprintf(PrntBuf, "DblChkDitDah(%d)", Bitpos);
+		printf(PrntBuf);
+	}
 	for (int i = 0; i < Bitpos; i++)
 	{
 		int KyDwnTime = (int)TimeDat[i];
@@ -2535,7 +2580,7 @@ void DblChkDitDah(void)
 		sprintf(PrntBuf, "Mintime: %d; Maxtime: %d; spltpt: %d;  avgDit: %d; ", Mintime, Maxtime, spltpt, (int)avgDit);
 		printf(PrntBuf);
 	}
-	if (spltpt >= 2 * Mintime)
+	if (spltpt >= (int)(1.6 * (float)Mintime))
 	{ // rebuild DeCodeVal
 		DeCodeVal = 1;
 		for (int i = 0; i < Bitpos; i++)
@@ -2557,6 +2602,17 @@ void DblChkDitDah(void)
 					if ((TimeDat[i] - avgDit) > (avgDah - TimeDat[i]))
 						DeCodeVal += 1;
 				}
+			}
+		}
+	}
+	else
+	{
+		if (Test)
+		{
+			for (int i = 0; i < Bitpos; i++)
+			{
+				sprintf(PrntBuf, ">TimeDat[%d]:%d; ", i, (int)TimeDat[i]);
+				printf(PrntBuf);
 			}
 		}
 	}
@@ -3340,7 +3396,7 @@ void dispMsg(char Msgbuf[50])
 					OK2Reduc = false; 
 					ApplyWrdFctr(wrdbrkFtcr);
 					if (DbgWrdBrkFtcr)
-						printf("Long Word-> wordBrk-: %d; adjstdwrdbrkFtcr: %5.3f; curwrdbrkFtcr: %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr, curwrdbrkFtcr);
+						printf("Long Word-> wordBrk-: %d; adjstdwrdbrkFtcr: %5.3f; OldwrdbrkFtcr: %5.3f\n", (uint16_t)wordBrk, wrdbrkFtcr, curwrdbrkFtcr);
 				}
 				if (LtrPtr > 28)
 					LtrPtr = 28; // limit adding more than 30 characters to the "LtrHoldr" buffer
