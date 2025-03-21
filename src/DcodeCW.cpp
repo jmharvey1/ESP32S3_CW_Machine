@@ -55,9 +55,10 @@
 #define LOW false // JMH ADD for Waveshare Version
 #define HIGH true // JMH ADD for Waveshare Version
 //#define DBugLtrBrkTiming // (now managed in globals.h)uncomment to see how letter break timing is developed & synchronized w/ advParser
-bool DbgWrdBrkFtcr = false;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
+bool DbgWrdBrkFtcr = false; //true;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
 bool DbgAvgDit = false;
 bool DbgPeriod = false;
+bool OneChrWrd = false;//added 20250318
 int ShrtBrk[10];
 int charCnt = 0;
 int shwltrBrk = 0;
@@ -377,7 +378,7 @@ void KeyEvntTask(void *param)
 							printf("actual 'sender' wordbreak interval:%d\n", interval);
 #endif
 							if (DbgWrdBrkFtcr)	printf("actual 'sender' wordbreak interval:%d\n", interval);
-							if((float)wordBrk > 0.75*(float)interval &&  (float)wordBrk < (float)interval)
+							if((float)wordBrk > 0.75*(float)interval &&  (float)wordBrk < (float)interval && !OneChrWrd)
 							{
 								float curwrdbrkFtcr = wrdbrkFtcr;
 								unsigned long OldwordBrk = wordBrk;
@@ -393,16 +394,17 @@ void KeyEvntTask(void *param)
 
 								}
 							}
-							else if((float)wordBrk < 0.75*(float)interval && (4*avgDit > 1.25*ltrBrk))
+							else if((float)wordBrk < 0.75*(float)interval && (5*avgDit > 1.25*ltrBrk))
 							{
-								wrdbrkFtcr = 1.0;
+								//wrdbrkFtcr = 1.0; //20250318 commented out
+								OneChrWrd = false; // ADDED 20250318
 								OLDwrdbrkFtcr = wrdbrkFtcr;
 								unsigned long OldwordBrk = wordBrk;
-								wordBrk = 4*avgDit;
+								wordBrk = (unsigned long)(((float)(5*avgDit))*wrdbrkFtcr);
 								if (DbgWrdBrkFtcr)
 								{
 									//printf("\t New wordBrk-: %d; NuWrdBrkFctr: %5.3f; OLDwrdbrkFtcr: %5.3f; OldwordBrk: %d\n", (uint16_t)wordBrk, NuWrdBrkFctr, curwrdbrkFtcr, (uint16_t)OldwordBrk);
-									printf("\t New wordBrk Reset using 4*avgDit; %d; wrdbrkFtcr: %5.3f; avgDit: %d; OldwordBrk: %d\n", (uint16_t)wordBrk, wrdbrkFtcr, (uint16_t)avgDit, (uint16_t)OldwordBrk);
+									printf("\t New wordBrk Reset using 5*avgDit; %d; wrdbrkFtcr: %5.3f; avgDit: %d; OldwordBrk: %d\n", (uint16_t)wordBrk, wrdbrkFtcr, (uint16_t)avgDit, (uint16_t)OldwordBrk);
 
 								}
 
@@ -1926,6 +1928,20 @@ bool chkChrCmplt(unsigned long TimeStmp)
 	{
 		OK2Reduc = true;
 		ValidWrdBrk = true;
+		/*20250318 Test for a 1 character word
+		if found, inc wrdbrkFtcr*/
+		if(LtrPtr ==1)
+		{
+			OneChrWrd = true; // ADDED 20250318
+			wrdbrkFtcr +=0.1;
+			ApplyWrdFctr(wrdbrkFtcr);
+			if (DbgWrdBrkFtcr)
+			{
+				printf("\n\nRTDcdr - wordBrk+:%d; wrdbrkFtcr:%5.3f\n", (int)wordBrk, wrdbrkFtcr);
+
+			}
+
+		} else OneChrWrd = false;
 	}
 		
 	// this is here mainly as a diagnostic error report
@@ -1968,12 +1984,12 @@ bool chkChrCmplt(unsigned long TimeStmp)
 		// }
 		// chkcnt = 0;
 
-		if (ValidWrdBrk && DbgWrdBrkFtcr)
+		if (ValidWrdBrk && DbgWrdBrkFtcr && !OneChrWrd)
 		{
-			printf("RTDcdr - wordBrk:%d; wrdbrkFtcr:%5.3f\n", (int)wordBrk, wrdbrkFtcr);
+			printf("\n\nRTDcdr - wordBrk:%d; wrdbrkFtcr:%5.3f\n", (int)wordBrk, wrdbrkFtcr);
 
 		}
-		else if (DbgWrdBrkFtcr)
+		else if (DbgWrdBrkFtcr && !OneChrWrd)
 			printf("Word Break EXCEPTION\n");
 		if (DeCd_KeyDwnPtr >= (IntrvlBufSize - 5))
 		{
@@ -2018,8 +2034,8 @@ bool chkChrCmplt(unsigned long TimeStmp)
 		{
 			if (DbgWrdBrkFtcr)
 			{
-				printf("\t1##  %s; DataSetRdy:%d; chkcnt:%d == DeCd_KeyDwnPtr:%d\n", LtrHoldr, (uint8_t)DataSetRdy, chkcnt, DeCd_KeyDwnPtr);
-				printf("\tWORD BREAK - DeCd_KeyDwnPtr: %d; DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
+				printf("\t1##  '%s'; DataSetRdy:%d; chkcnt:%d == DeCd_KeyDwnPtr:%d\n", LtrHoldr, (uint8_t)DataSetRdy, chkcnt, DeCd_KeyDwnPtr);
+				//printf("\tWORD BREAK - DeCd_KeyDwnPtr: %d; DeCd_KeyUpPtr:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr);
 			}
 			/*final check to make sure we have something the AdvParser can work with*/
 			if (DataSetRdy && DeCd_KeyDwnPtr>=2   //(LtrPtr >= 1 || DeCd_KeyDwnPtr >= 9) 
@@ -2263,7 +2279,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 		else
 		{
 #ifdef SpclTst
-			printf("txt '%s'\n", LtrHoldr);
+			printf("txt '%s'; AdvParser Skipped(DataSet<2)\n", LtrHoldr);
 #endif			
 #ifdef DeBgQueue
 			printf("advparser SKIPPED - no usable KeyUpIntrvls[0],KeyDwnIntrvls[0] data; DeCd_KeyDwnPtr:%d != DeCd_KeyUpPtr:%d; DeCodeVal:%d\n", DeCd_KeyDwnPtr, DeCd_KeyUpPtr, DeCodeVal);

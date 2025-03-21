@@ -108,6 +108,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250306 reorganized task to core assignments to solve skipped adc data conversions*/
 /*20250307 DcodeCW.cpp - Reworked wordbreak management */
 /*20250310 DcodeCW.cpp - reworked ResetLstWrdDataSets(), & KeyEvntTask() to improve >35WPM decoding, and wordbreak management*/
+/*20250321 UpDate Just to ensure Github & working project are Synced */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -932,14 +933,16 @@ void ToneFreqTask(void *param)
           else
           {
             OutofBndCnt = 0;
-            // printf("_DemodFreq: %d;\tOutOfBndFrq: %d;\tCurSendrFreq: %d\tOutofBndCnt: %d\n", _DemodFreq, OutOfBndFrq, (uint16_t)CurSendrFreq, OutofBndCnt);
+            CurSendrFreq = (19*CurSendrFreq + _DemodFreq)/20;
+            // printf("_DemodFreq: %d;\tOutOfBndFrq: %d;\tCurSendrFreq: %6.1f\tOutofBndCnt: %d\n", _DemodFreq, OutOfBndFrq, CurSendrFreq, OutofBndCnt);
           }
-          float tempval = ((float)AvgToneFreq - CurSendrFreq) / 100;
-          if (tempval > 0.1)
-            tempval = 0.1;
-          if (tempval < -0.1)
-            tempval = -0.1;
-          CurSendrFreq = CurSendrFreq + tempval;
+          
+          // float tempval = ((float)AvgToneFreq - CurSendrFreq) / 50;
+          // if (tempval > 0.1)
+          //   tempval = 0.1;
+          // if (tempval < -0.2)
+          //   tempval = -0.2;
+          // CurSendrFreq = CurSendrFreq + tempval;
         } // end if (_DemodFreq > 450)
       }
     }

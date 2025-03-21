@@ -13,7 +13,8 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
-//#define SpclTst  //uncomment to debug how, & when, the AdvParser code is engaged.
+//#define SpclTst  //uncomment to debug/see how, & when, the AdvParser code is engaged. 
+                    //Note: 'SpclTst' also enables/reports DAC/DMA timimg skipps.
 //#define DBugLtrBrkTiming
 //#define DeBgCrash //uncomment to debug displayupdate lockup/crash
 //#define DeBgQueue //uncomment to debug Key up & down event time queues
