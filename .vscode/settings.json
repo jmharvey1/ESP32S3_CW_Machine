@@ -7,6 +7,8 @@
         "esp_hidh.h": "c",
         "map": "cpp",
         "compare": "cpp",
-        "cstdint": "cpp"
+        "cstdint": "cpp",
+        "lvgl.h": "c",
+        "lv_img.h": "c"
     }
 }

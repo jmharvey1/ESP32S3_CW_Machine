@@ -101,6 +101,7 @@ int freq_int = 0;// used in the scope view as current tone frequency
 bool SmplSetRdy = false;
 static lv_obj_t *ui_Scope;
 static lv_obj_t *ui_Help;
+static lv_obj_t *ui_Splash;
 static lv_obj_t *ui_Chart1;
 static lv_obj_t *ui_Label1;
 static lv_obj_t *ui_Label2;
@@ -856,6 +857,33 @@ void lvgl_HiLite_Seltcd_Param(int paramptr)
 	}
 }
 
+void Bld_Splash_scrn(void)
+{
+	if (ui_Splash == NULL)
+	{
+		ui_Splash = lv_obj_create(NULL);
+		// lv_style_reset(&style_btn);
+		// lv_style_set_border_width(&style_btn, 1);
+		// lv_style_set_border_opa(&style_btn, LV_OPA_100);
+		// lv_style_set_border_color(&style_btn, lv_color_black());
+		// lv_style_reset(&style_label);
+		// lv_style_set_text_font(&style_label, &lv_font_montserrat_14);
+		// lv_style_set_text_opa(&style_label, LV_OPA_100);
+		// lv_style_set_text_color(&style_label, lv_color_black());
+		LV_IMG_DECLARE(SlpashScreen01);
+    	lv_obj_t * img1 = lv_img_create(ui_Splash);//lv_img_create(lv_scr_act());
+    	lv_img_set_src(img1, &SlpashScreen01);
+    	lv_obj_align(img1, LV_ALIGN_CENTER, 0, 0);
+    	lv_obj_set_size(img1, 800, 480);
+	}
+	
+	lv_scr_load(ui_Splash);
+}
+
+
+
+
+
 void Bld_Help_scrn(void)
 {
 	if (ui_Help == NULL)
@@ -886,7 +914,6 @@ void Bld_Help_scrn(void)
 	Hexit_btn = lv_btn_create(cont3);
 	lv_obj_add_style(Hexit_btn, &style_btn, 0);
 	lv_obj_set_size(Hexit_btn, 100, 30);
-	// lv_obj_align(exit_btn, LV_ALIGN_CENTER, 0, 401);
 	lv_obj_set_pos(Hexit_btn, 340, 401);
 	lv_obj_add_event_cb(Hexit_btn, HelpBtn_event_handler, LV_EVENT_CLICKED, NULL);
 
@@ -1721,6 +1748,14 @@ void LVGLMsgBox::InitDsplay(void)
 	ESP_LOGI(TAG, "indev_drv.read_timer %p  read_cb: %p", indev_drv.read_timer, indev_drv.read_cb);
 	ESP_LOGI(TAG, "Bld LVGL GUI");
 	Bld_LVGL_GUI();
+	// LV_IMG_DECLARE(SlpashScreen01);
+    // lv_obj_t * img1 = lv_img_create(lv_scr_act());
+    // lv_img_set_src(img1, &SlpashScreen01);
+    // lv_obj_align(img1, LV_ALIGN_CENTER, 0, 0);
+    // lv_obj_set_size(img1, 800, 480);
+	// const TickType_t xDelay = 8000 / portTICK_PERIOD_MS;
+	// vTaskDelay(xDelay);
+	
 };
 
 /*Originally written to be called after returning from setup/settings screen*/
@@ -2866,6 +2901,36 @@ void LVGLMsgBox::BldHelpScreen(void)
 		}
 	}
 	Bld_Help_scrn();
+	xSemaphoreGive(lvgl_semaphore);
+	MutexLckId = 0;
+};
+void LVGLMsgBox::BldSplashScreen(void)
+{
+	bool tryagn = true;
+	int trycnt = 0;
+	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  xSemaphoreTake;  Start\n");
+	while (tryagn)
+	{
+		if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
+		{
+			MutexLckId = 22;
+			tryagn = false;
+			report = false;
+			bypassMutex = true;
+			Msg2Actv = true;
+		}
+		else
+		{
+			trycnt++;
+			if (trycnt > 5)
+			{
+				trycnt = 5;
+				report = true;
+				printf("LVGLMsgBox::BldSplashScreen timed out; MutexLckId = %d; timerID = %d\n", MutexLckId, timerID);
+			}
+		}
+	}
+	Bld_Splash_scrn();
 	xSemaphoreGive(lvgl_semaphore);
 	MutexLckId = 0;
 };

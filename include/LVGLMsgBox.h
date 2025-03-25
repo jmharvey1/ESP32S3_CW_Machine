@@ -265,6 +265,7 @@ public:
 	void BldSettingScreen(void);
 	void BldScopeScreen(void);
 	void BldHelpScreen(void);
+	void BldSplashScreen(void);
 	void FlipDayNiteMode(void);
 	void ReStrtMainScrn(void);
 	void ClrDcdTA(void);

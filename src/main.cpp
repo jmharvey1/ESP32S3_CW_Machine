@@ -109,6 +109,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250307 DcodeCW.cpp - Reworked wordbreak management */
 /*20250310 DcodeCW.cpp - reworked ResetLstWrdDataSets(), & KeyEvntTask() to improve >35WPM decoding, and wordbreak management*/
 /*20250321 UpDate Just to ensure Github & working project are Synced */
+/*20250325 Added 'splash screen', which was kindly provided by Bill/WA4FAT. THANK YOU Bill*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -1571,6 +1572,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     Grtzl_Gain = DFault.Grtzl_Gain;
   }
   lvglmsgbx.FlipDayNiteMode(); //set display to light or dark mode based on stored Dfault setting
+  lvglmsgbx.BldSplashScreen();
   /* Start the Display timer */
   xTimerStart(DisplayTmr, portMAX_DELAY);
   vTaskResume( DsplUpDtTaskHandle);
@@ -1627,7 +1629,11 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
   CWsndengn.ShwWPM(DFault.WPM); // calling this method does NOT recalc/set the dotclock & show the WPM
   CWsndengn.SetWPM(DFault.WPM); // 20230507 Added this seperate method call after changing how the dot clocktiming gets updated
   CWsndengn.UpDtWPM = true;
-  
+  //lvglmsgbx.BldSplashScreen();
+  const TickType_t xDelay = 3000 / portTICK_PERIOD_MS;
+	vTaskDelay(xDelay);
+  lvglmsgbx.ReStrtMainScrn();
+  lv_img_cache_invalidate_src(NULL);//Supposedly this removes the splash screen image from memory 
   /* main CW keyboard loop*/
   while (true)
   {

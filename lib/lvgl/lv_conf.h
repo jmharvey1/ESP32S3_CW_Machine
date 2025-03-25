@@ -24,7 +24,7 @@
 extern int timerID;
 
 /*Color depth: 1 (1 byte per pixel), 8 (RGB332), 16 (RGB565), 32 (ARGB8888)*/
-#define LV_COLOR_DEPTH 16
+#define LV_COLOR_DEPTH 16 //Was 16 20250324 JMH changed to '8'
 
 /*Swap the 2 bytes of RGB565 color. Useful if the display has an 8-bit interface (e.g. SPI)*/
 #define ESP_PANEL_USE_ST7789_BOARD 0
