@@ -110,6 +110,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250310 DcodeCW.cpp - reworked ResetLstWrdDataSets(), & KeyEvntTask() to improve >35WPM decoding, and wordbreak management*/
 /*20250321 UpDate Just to ensure Github & working project are Synced */
 /*20250325 Added 'splash screen', which was kindly provided by Bill/WA4FAT. THANK YOU Bill*/
+/*20250325 Added touch event kill to 'splash screen' */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -1629,19 +1630,36 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
   CWsndengn.ShwWPM(DFault.WPM); // calling this method does NOT recalc/set the dotclock & show the WPM
   CWsndengn.SetWPM(DFault.WPM); // 20230507 Added this seperate method call after changing how the dot clocktiming gets updated
   CWsndengn.UpDtWPM = true;
-  //lvglmsgbx.BldSplashScreen();
-  const TickType_t xDelay = 3000 / portTICK_PERIOD_MS;
-	vTaskDelay(xDelay);
-  lvglmsgbx.ReStrtMainScrn();
-  lv_img_cache_invalidate_src(NULL);//Supposedly this removes the splash screen image from memory 
+  // const TickType_t xDelay = 3000 / portTICK_PERIOD_MS;
+	// vTaskDelay(xDelay);
+  // lvglmsgbx.ReStrtMainScrn();
+  // lv_img_cache_invalidate_src(NULL);//Supposedly this removes the splash screen image from memory 
   /* main CW keyboard loop*/
+  bool SplashScrnActv = true;
+  uint16_t SplashScrnLpCntr = 0;
   while (true)
   {
 #if 1 // 0 = scan codes retrieval, 1 = augmented ASCII retrieval
-    /* note: this loop only completes when there is a key entery from a paired/connected Bluetooth Keyboard */
+    /* note: this now loops continuously */
 
     vTaskDelay(pdMS_TO_TICKS(10)); // give the watchdogtimer a chance to reset
-    // printf("main loop\n");
+    //printf("main loop\n");
+    if(SplashScrnActv)
+    {
+      SplashScrnLpCntr++;
+      if(SplashScrnLpCntr>1700)// kill flashScreen after ~17 seconds
+      {
+        SplashScrnActv = false;
+        KillSplashScrn = true;
+      }
+    }
+    if(KillSplashScrn)
+    {
+      KillSplashScrn = false;
+      SplashScrnActv = false;
+      lvglmsgbx.ReStrtMainScrn();
+      lv_img_cache_invalidate_src(NULL);//Supposedly this removes the splash screen image from memory
+    } //else printf("KillSplashScrn = false\n");
     if (setupFlg)
     {
       // printf("setupFlg: 'true'\n");

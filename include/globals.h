@@ -53,5 +53,6 @@ extern bool mutexFLG;//JMH Added
 extern bool Touch_mutex;
 extern bool ForcedWrdBrk;
 extern bool noiseflg;
+extern bool KillSplashScrn;
 
 #endif /* INC_GLOBALS_H_ */

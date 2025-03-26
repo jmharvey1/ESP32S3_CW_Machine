@@ -21,6 +21,7 @@
 /*20250203 Revised S/N process to show minimum value for displayed character*/
 /*20250203 changed i2c clock to 100Khz had been 400Khz, but found some display touch chips would not work w/ the faster data clock*/
 /*20250225 now initializing 'lastWrdBrk' = 98, instead of =0 to stop display lockup in noisy environment*/
+/*20250325 Added touch event 'call back' to support to kill 'splash screen' */
 #include <stdio.h>
 #include <math.h>
 #include "sdkconfig.h"
@@ -151,6 +152,7 @@ bool report = false;
 bool Msg2Actv = false;
 bool NiteMode = false;
 bool NMchkbxVal_evnt = false;
+bool KillSplashScrn = false;
 int timerID = 0;
 uint8_t OldBat_Lvl = 0;
 void Bld_Help_scrn(void);
@@ -213,7 +215,24 @@ static void ClrBtn_event_handler(lv_event_t *e)
 		break;
 	}
 }
+/*touch the splash screen anywhere to Kill it & return to main screen*/
+static void SplashScrn_evnt_CB(lv_event_t *e)
+{
+	const char *TAG1 = "SplashScrn_evnt_CB";
+	lv_event_code_t code = lv_event_get_code(e);
+	//printf("SplashScrn_evnt_CB; event code:%d\n", code);
+	switch (code)
+	{
+	case LV_EVENT_PRESSING:
+	{
+		KillSplashScrn = true;
+	}
+	break;
 
+	default:
+		break;
+	}
+}
 /*Actually the setting screen home/exit button call-back event handler*/
 static void Settings_Scrn_evnt_cb(lv_event_t *e)
 {
@@ -862,19 +881,12 @@ void Bld_Splash_scrn(void)
 	if (ui_Splash == NULL)
 	{
 		ui_Splash = lv_obj_create(NULL);
-		// lv_style_reset(&style_btn);
-		// lv_style_set_border_width(&style_btn, 1);
-		// lv_style_set_border_opa(&style_btn, LV_OPA_100);
-		// lv_style_set_border_color(&style_btn, lv_color_black());
-		// lv_style_reset(&style_label);
-		// lv_style_set_text_font(&style_label, &lv_font_montserrat_14);
-		// lv_style_set_text_opa(&style_label, LV_OPA_100);
-		// lv_style_set_text_color(&style_label, lv_color_black());
 		LV_IMG_DECLARE(SlpashScreen01);
     	lv_obj_t * img1 = lv_img_create(ui_Splash);//lv_img_create(lv_scr_act());
     	lv_img_set_src(img1, &SlpashScreen01);
     	lv_obj_align(img1, LV_ALIGN_CENTER, 0, 0);
     	lv_obj_set_size(img1, 800, 480);
+		lv_obj_add_event_cb(ui_Splash, SplashScrn_evnt_CB, LV_EVENT_ALL, NULL);
 	}
 	
 	lv_scr_load(ui_Splash);
