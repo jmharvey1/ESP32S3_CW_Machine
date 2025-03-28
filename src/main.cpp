@@ -111,6 +111,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250321 UpDate Just to ensure Github & working project are Synced */
 /*20250325 Added 'splash screen', which was kindly provided by Bill/WA4FAT. THANK YOU Bill*/
 /*20250325 Added touch event kill to 'splash screen' */
+/*20250326 Set splash screen 'hang time' to 8 seconds(see line 182) */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -178,6 +179,7 @@ char MemF5[80] = "RST 5NN";
 char LogBuf[100];
 esp_err_t ret;
 char Title[120];
+uint8_t SplashHangTime = 8; //the inteval, in seconds, that the splash screen persists
 bool setupFlg = false;
 bool ScopeFlg = false;
 bool HelpFlg = false;
@@ -1637,6 +1639,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
   /* main CW keyboard loop*/
   bool SplashScrnActv = true;
   uint16_t SplashScrnLpCntr = 0;
+  uint16_t MaxSplashSrnCnt = (uint16_t)(100*SplashHangTime);
   while (true)
   {
 #if 1 // 0 = scan codes retrieval, 1 = augmented ASCII retrieval
@@ -1647,7 +1650,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     if(SplashScrnActv)
     {
       SplashScrnLpCntr++;
-      if(SplashScrnLpCntr>1700)// kill flashScreen after ~17 seconds
+      if(SplashScrnLpCntr>MaxSplashSrnCnt)// reconfigure to kill flashScreen on reaching MaxSplashSrnCnt
       {
         SplashScrnActv = false;
         KillSplashScrn = true;
