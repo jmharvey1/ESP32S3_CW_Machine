@@ -264,7 +264,9 @@ static void Save_evnt_cb(lv_event_t *e)
 		lv_color_t Save_bgclr = lv_palette_main(LV_PALETTE_GREEN);
 		lv_style_set_bg_color(&style_SaveEvnt_bg, Save_bgclr);
 		lv_obj_add_style(save_btn, &style_SaveEvnt_bg, 0);
+		//lvgl_port_lock(-1);
 		_lv_disp_refr_timer(NULL);
+		//lvgl_port_unlock();
 		// do save code
 		Sync_Dflt_Settings();
 		SaveUsrVals();
@@ -272,7 +274,9 @@ static void Save_evnt_cb(lv_event_t *e)
 		lv_style_reset(&style_SaveEvnt_bg);
 		lv_style_set_bg_color(&style_SaveEvnt_bg, curbgclr);
 		lv_obj_add_style(save_btn, &style_SaveEvnt_bg, 0);
+		//lvgl_port_lock(-1);
 		_lv_disp_refr_timer(NULL);
+		//lvgl_port_unlock();
 	}
 	break;
 
@@ -577,7 +581,9 @@ void lvgl_update_RxStats(const char *buf2)
 	{
 		MutexLckId = 2;
 		lv_label_set_text(label, buf2);
+		//lvgl_port_lock(-1);
 		_lv_disp_refr_timer(NULL);
+		//lvgl_port_unlock();
 		xSemaphoreGive(lvgl_semaphore);
 		MutexLckId = 0;
 	}
@@ -596,7 +602,9 @@ void lvgl_update_KyBrdWPM(const char *buf2)
 	{
 		MutexLckId = 2;
 		lv_label_set_text(wpm_lbl, buf2);
+		//lvgl_port_lock(-1);
 		_lv_disp_refr_timer(NULL);
+		//lvgl_port_unlock();
 		xSemaphoreGive(lvgl_semaphore);
 		MutexLckId = 0;
 	}
@@ -617,7 +625,9 @@ void lvgl_update_SN(float sn)
 	{
 		MutexLckId = 2;
 		lv_label_set_text(SN_lbl, buf2);
+		//lvgl_port_lock(-1);
 		_lv_disp_refr_timer(NULL);
+		//lvgl_port_unlock();
 		xSemaphoreGive(lvgl_semaphore);
 		MutexLckId = 0;
 	}
@@ -638,7 +648,9 @@ void lvgl_update_Bat_Lvl(uint8_t lvl)
 	{
 		MutexLckId = 2;
 		lv_label_set_text(Bat_Lvl_lbl, buf2);
+		//lvgl_port_lock(-1);
 		_lv_disp_refr_timer(NULL);
+		//lvgl_port_unlock();
 		xSemaphoreGive(lvgl_semaphore);
 		MutexLckId = 0;
 	}
@@ -1380,6 +1392,28 @@ static void lvgl_tick(void *arg)
 	(void)arg;
 
 	lv_tick_inc(LV_TICK_PERIOD_MS);
+}
+
+bool lvgl_port_lock(int timeout_ms)
+{
+    //ESP_PANEL_CHECK_NULL_RET(lvgl_mux, false, "LVGL mutex is not initialized");
+    assert(lvgl_mux);
+    const TickType_t timeout_ticks = (timeout_ms < 0) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
+    return (xSemaphoreTakeRecursive(lvgl_mux, timeout_ticks) == pdTRUE);
+}
+
+bool lvgl_port_unlock(void)
+{
+    //ESP_PANEL_CHECK_NULL_RET(lvgl_mux, false, "LVGL mutex is not initialized");
+    if(lvgl_mux == NULL){
+        printf("lvgl_port_unlock_WShr: lvgl_mux is NULL\n");
+        return false;
+    }
+    assert(lvgl_mux);
+    //xSemaphoreGiveRecursive(lvgl_mux);
+    xQueueGiveMutexRecursive(lvgl_mux);
+
+    return true;
 }
 
 static bool lvgl_vsync_event(esp_lcd_panel_handle_t panel, const esp_lcd_rgb_panel_event_data_t *event_data, void *user_data)
@@ -2297,7 +2331,9 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 	if (xSemaphoreTake(ADCread_disp_refr_timer_mutx, pdMS_TO_TICKS(15)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
 	{
 		// if(setupFlg) printf("_lv_disp_refr_timer(NULL)\n");
+		//lvgl_port_lock(-1);
 		_lv_disp_refr_timer(NULL);
+		//lvgl_port_unlock();
 		/* We have finished accessing the shared resource.  Release the
 			 semaphore. */
 		xSemaphoreGive(ADCread_disp_refr_timer_mutx);
@@ -2317,7 +2353,9 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 	int lpcnt = 0;
 	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lv_timer_handler(); Start\n");
 	/*This replaces the need for the MsgBx_lvgl_port_task */
+	//lvgl_port_lock(-1);
 	uint32_t task_delay_ms = lv_timer_handler();
+	//lvgl_port_unlock();
 	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lv_timer_handler(); Complete\n");
 	xSemaphoreGive(lvgl_semaphore);
 	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  xSemaphoreGive(); Complete\n");
@@ -2425,7 +2463,9 @@ bool LVGLMsgBox::Delete(bool DeCdTxtFlg, int ChrCnt)
 	{
 		if (MutexLckId == 7) // Make sure this method really 'owns' the change (delete) before attempting to updat the display
 		{
+			//lvgl_port_lock(-1);
 			_lv_disp_refr_timer(NULL); // start the lvgl display update process
+			//lvgl_port_unlock();
 			xSemaphoreGive(lvgl_semaphore);
 		}
 		MutexLckId = 0;

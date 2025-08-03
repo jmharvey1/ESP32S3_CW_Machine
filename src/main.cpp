@@ -277,7 +277,7 @@ bool CalGtxlParamFlg = false;
 ////////////////////
 /*iir BP Filter delay buckets*/
 float in_z2, in_z1, out_z2, out_z1;
-float in_z3, in_z4, out_z3, out_z4;
+float in_z3, in_z4, out_z3, out_z4, out_z5;
 /*iir BP Filter coefficients*/
 float a0 = 0.08599609327133607;
 float a1 = 0.0;
@@ -404,6 +404,8 @@ void addSmpl(int k, int i, int *pCntrA)
   /*Calculate Tone frequency*/
   /*the following is part of the auto tune process */
   float IIRBPOut = 0.0;
+  float IIRBPOut2 = 0.0;
+  int k2 = 0;
   if (!SmplSetDone)
   {
     BiasError += k;
@@ -421,6 +423,7 @@ void addSmpl(int k, int i, int *pCntrA)
   if (xSemaphoreTake(IIR_Coef_mutx, pdMS_TO_TICKS(3)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
   {
     IIRBPOut = a0 * decimated + a1 * in_z1 + a2 * in_z2 - b1 * out_z1 - b2 * out_z2;
+    // IIRBPOut2 = a0 * decimated + a1 * in_z3 + a2 * in_z4 - b1 * out_z3 - b2 * out_z4;
     xSemaphoreGive(IIR_Coef_mutx);
   }
   // float IIRBPOut = a0 * decimated + a1 * in_z1 + a2 * in_z2 - b1 * out_z1 - b2 * out_z2;
@@ -428,23 +431,17 @@ void addSmpl(int k, int i, int *pCntrA)
   in_z1 = decimated;
   out_z2 = out_z1;
   out_z1 = IIRBPOut;
-  decimated = IIRBPOut;
-  k = (int)decimated;
-
-
+  k = (int)IIRBPOut;
+  
   /*2nd stage */
-  // IIRBPOut =
-  // 	a0 * decimated
-  // 	+ a1 * in_z3
-  // 	+ a2 * in_z4
-  // 	- b1 * out_z3
-  // 	- b2 * out_z4;
-  // 	in_z4 = in_z3;
-  // in_z3 = decimated;
+  // float Fval = IIRBPOut;
+  // IIRBPOut = a0 * Fval + a1 * in_z3 + a2 * in_z4 - b1 * out_z3 - b2 * out_z4;
+  // in_z4 = in_z3;
+  // in_z3 = Fval;
   // out_z4 = out_z3;
   // out_z3 = IIRBPOut;
-  // decimated = IIRBPOut;
-  //k = (int)decimated;
+  // k = (int)IIRBPOut;
+
   const int ToneThrsHld = 100; // 100; // minimum usable peak tone value; Anything less is noise
   if (AutoTune)
   {
@@ -521,7 +518,7 @@ void addSmpl(int k, int i, int *pCntrA)
   //  out_z1 = IIRBPOut;
   //  decimated = IIRBPOut;
   //  k = (int)decimated;
- 
+  //  k = (int)IIRBPOut2;
 #ifndef POSTADC 
   if (ScopeFlg)
   {
@@ -679,19 +676,20 @@ void GoertzelHandler(void *param)
           rdy = true;
         if (rdy)
         {
-          for (int i = 0; i < Goertzel_SAMPLE_CNT / 2; i++) // for (int i = 0; i < ret_num; i += SOC_ADC_DIGI_RESULT_BYTES)
+          for (int i = 0; i < ret_num /(SOC_ADC_DIGI_RESULT_BYTES); i++) // for (int i = 0; i < ret_num; i += SOC_ADC_DIGI_RESULT_BYTES)
           {
             /*Used this approach because I found the ADC data were being returned in alternating order.
             So by taking them a pair at a time,I could restore (& process them) in their true chronological order
             BUT for the Sharewave ESP32S3, it appears that the data sample pairs don't need to be reversed*/
-            int pos0 = 2 * i;
-            int pos1 = pos0 + 1;
+            int pos0 = i;
+            // int pos0 = 2 * i;
+            // int pos1 = pos0 + 1;
             adc_digi_output_data_t *p0 = (adc_digi_output_data_t *)&result[pos0 * SOC_ADC_DIGI_RESULT_BYTES];
-            adc_digi_output_data_t *p1 = (adc_digi_output_data_t *)&result[pos1 * SOC_ADC_DIGI_RESULT_BYTES];
+            //adc_digi_output_data_t *p1 = (adc_digi_output_data_t *)&result[pos1 * SOC_ADC_DIGI_RESULT_BYTES];
             k = ((int)(p0->type2.data) - BIAS);     // for esp32s3 changed from type1 to type2 & samples are added in 'normal' order
             addSmpl(k, pos0 + offset, &Smpl_CntrA); // addSmpl(k, pos1, &Smpl_CntrA);
-            k = ((int)(p1->type2.data) - BIAS);     // for esp32s3 changed from type1 to type2 & samples are added in 'normal' order
-            addSmpl(k, pos1 + offset, &Smpl_CntrA); // addSmpl(k, pos0, &Smpl_CntrA);
+            // k = ((int)(p1->type2.data) - BIAS);     // for esp32s3 changed from type1 to type2 & samples are added in 'normal' order
+            // addSmpl(k, pos1 + offset, &Smpl_CntrA); // addSmpl(k, pos0, &Smpl_CntrA);
           }
         }
         /* We have finished accessing the shared resource.  Release the
@@ -895,7 +893,7 @@ void ToneFreqTask(void *param)
             CalGtxlParamFlg = true;
             if (xSemaphoreTake(IIR_Coef_mutx, pdMS_TO_TICKS(3)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
             {
-              Calc_IIR_BPFltrCoef((float)AvgToneFreq, SAMPLING_RATE, 3.7071);
+              Calc_IIR_BPFltrCoef((float)AvgToneFreq, SAMPLING_RATE, 8.0); //3.7071
               xSemaphoreGive(IIR_Coef_mutx);
             }
           }
@@ -2555,6 +2553,7 @@ void Calc_IIR_BPFltrCoef(float Fc, float Fs, float Q) {
 	a2 = -a0;
 	b1 = 2 * (K * K - 1) * norm;
 	b2 = (1 - K / Q + K * K) * norm;
+//  printf("a0 %.4f; a1 %.4f;a2 %.4f; b1 %.4f; b2 %.4f\n",a0, a1, a2, b1, b2);
 //	Coeffs[0] = Coeffs[5] = +a0;
 //	Coeffs[1] = Coeffs[6] = +a1;
 //	Coeffs[2] = Coeffs[7] = +a2;

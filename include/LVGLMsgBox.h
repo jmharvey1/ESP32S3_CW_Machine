@@ -143,6 +143,9 @@ Note, if \"F12\" is in the \"SOT ON\" mode, the key presses will also be sent to
 Remember, F1 is different from the other memories, as its intended just for storing \"call signs\" and to be changed \"on the fly\" Also note too, you can clear the F1 memory, just by cycling the F1 key (and not typing anything, while it reads \"F1 Active\")\n\
 "};
 
+bool lvgl_port_lock(int timeout_ms);
+bool lvgl_port_unlock(void);
+
 class LVGLMsgBox
 {
 private:
