@@ -852,11 +852,11 @@ void DisplayUpDt(void *param)
       } else printf("xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx FAILED; cur Owner:%d\n", curOwner); 
       
       //printf("Cur ADC Sample Rate: %d\n", cur_smpl_rate);// just for diagnostic testing
-      bool HeapOK = heap_caps_check_integrity_all(true);
-      if(!HeapOK)
-      {
-        printf("Heap ISSUE\n");
-      }
+      // bool HeapOK = heap_caps_check_integrity_all(true);
+      // if(!HeapOK)
+      // {
+      //   printf("Heap ISSUE\n");
+      // }
     } // END if (thread_notification)
   } // end while(1) loop
   /** JMH Added this to ESP32 version to handle random crashing with error,"Task Goertzel Task should not return, Aborting now" */
@@ -1460,7 +1460,9 @@ void app_main()
   if (CWDecodeTaskHandle == NULL)
     ESP_LOGI(TAG, "CW Decoder Task handle FAILED");
 
-  xTaskCreatePinnedToCore(GoertzelHandler, "Goertzel Task", 8192, NULL, 10, &GoertzelTaskHandle, 1); // priority used to be 3
+  //xTaskCreatePinnedToCore(GoertzelHandler, "Goertzel Task", 8192, NULL, 10, &GoertzelTaskHandle, 1); // priority used to be 3
+  /*20250814 trying a smaller stack size to stop mysterious memory allocation chashes during ble pairing process*/
+  xTaskCreatePinnedToCore(GoertzelHandler, "Goertzel Task", 4096, NULL, 10, &GoertzelTaskHandle, 1);
   if (GoertzelTaskHandle == NULL)
     ESP_LOGI(TAG, "Goertzel Task Task handle FAILED");
 

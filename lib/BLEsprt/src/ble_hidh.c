@@ -363,6 +363,7 @@ void esp_hidh_gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gatt
             dev->ble.conn_id = p_data->open.conn_id;
             ESP_LOGI(TAG, "gattc HIDH CB launched search for ALL services");
             esp_ble_gattc_search_service(gattc_if, dev->ble.conn_id, NULL);
+            //esp_ble_gattc_search_service(gattc_if, dev->ble.conn_id, 0x180F);
         }
         break;
 
@@ -416,7 +417,7 @@ void esp_hidh_gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gatt
         s_read_data_val = NULL;
         if (s_read_status == 0 && p_data->read.value_len > 0) {
             s_read_data_len = p_data->read.value_len;
-            //printf("event %d; s_read_data_len %d;\t", event, s_read_data_len);
+            // printf("event %d; s_read_data_len %d;\t", event, s_read_data_len);
             s_read_data_val = (uint8_t *)malloc(s_read_data_len + 1);
             if (s_read_data_val) {
                 memcpy(s_read_data_val, p_data->read.value, s_read_data_len);
@@ -829,7 +830,7 @@ esp_hidh_dev_t *esp_ble_hidh_dev_open(esp_bd_addr_t bda, esp_ble_addr_type_t add
         esp_hidh_event_data_t p = {0};
         p.open.status = ESP_OK;
         p.open.dev = dev;
-        printf("SEND - ESP_HIDH_OPEN_EVENT\n");
+        ESP_LOGI(TAG,"SEND - ESP_HIDH_OPEN_EVENT\n");
         esp_event_post_to(event_loop_handle, ESP_HIDH_EVENTS, ESP_HIDH_OPEN_EVENT, &p, sizeof(esp_hidh_event_data_t), portMAX_DELAY);
     }
     ESP_LOGI(TAG, "START - attach_report_listener\n");
