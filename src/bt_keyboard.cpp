@@ -2465,6 +2465,8 @@ void BTKeyboard::devices_scan(int seconds_wait_time)
       printf("START - esp_hidh_dev_open()\n");
       memcpy(&curHexAddr, &cr->bda, sizeof(bt_bdaddr_t));      
       //dev_Opnd = esp_hidh_dev_open(cr->bda, cr->transport, cr->ble.addr_type); // Returns immediately w/ BT classic device; But waits for pairing code w/ BLE device
+      /*As part of the dev_open process, this is where the keyboard is asked what/which 'services' it supports.
+      See 'read_device_services' found in ble_hidh.c  */
       dev_Opnd = esp_hidh_dev_open(curHexAddr, cr->transport, cr->ble.addr_type);
       uint16_t dev_open_intrvl = (uint16_t)(pdTICKS_TO_MS(xTaskGetTickCount()) - EvntStart);
       //xSemaphoreGive(Touch_mutex); //re-start/enable I2C calls to touch sensing
