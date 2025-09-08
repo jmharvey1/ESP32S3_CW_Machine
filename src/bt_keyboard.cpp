@@ -99,6 +99,8 @@ static bool connect_ble = false;
 static bool get_server = false;
 static esp_gattc_char_elem_t *char_elem_result = NULL;
 static esp_gattc_descr_elem_t *descr_elem_result = NULL;
+//esp_ble_conn_update_params_t new_conn_params = {0}; //JMH added 20250908 to support connection parameter update
+
 
 struct gattc_profile_inst
 {
@@ -2085,6 +2087,38 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap
     // Send the positive(true) security response to the peer device to accept the security request.
     // If not accept the security request, should send the security response with negative(false) accept value.
     esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
+    break;
+  case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
+    // ESP_LOGD(TAG, "BLE GAP UPDATE_CONN_PARAMS status = %d, min_int = %d, max_int = %d, conn_int = %d, latency = %d, timeout = %d",
+    //          param->update_conn_params.status,
+    //          param->update_conn_params.min_int,
+    //          param->update_conn_params.max_int,
+    //          param->update_conn_params.conn_int,
+    //          param->update_conn_params.latency,
+    //          param->update_conn_params.timeout);
+    if (BLE_KyBrd->pDFault->DeBug)
+    {
+      sprintf(msgbuf, "%s: BLE GAP UPDATE_CONN_PARAMS\n \tstatus = %d, min_int = %d, max_int = %d, conn_int = %d, latency = %d, timeout = %d\n",
+              TAG,
+              param->update_conn_params.status,
+              param->update_conn_params.min_int,
+              param->update_conn_params.max_int,
+              param->update_conn_params.conn_int,
+              param->update_conn_params.latency,
+              param->update_conn_params.timeout);
+      BLE_KyBrd->pmsgbx->dispKeyBrdTxt(msgbuf, TFT_WHITE);
+    }
+    if (param->update_conn_params.status == ESP_GATT_OK)
+    {
+      ESP_LOGI(TAG, "Updated connection parameters:");
+      ESP_LOGI(TAG, "  Connection Interval: %d (x 1.25ms)", param->update_conn_params.conn_int);
+      ESP_LOGI(TAG, "  Latency: %d", param->update_conn_params.latency);
+      ESP_LOGI(TAG, "  Timeout: %d (x 10ms)", param->update_conn_params.timeout);
+    }
+    else
+    {
+      ESP_LOGE(TAG, "Failed to update connection parameters, status: %d", param->update_conn_params.status);
+    }
     break;
 
   default:
