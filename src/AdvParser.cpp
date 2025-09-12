@@ -495,6 +495,31 @@ void AdvParser::CalAvgDeadIntvrl(void)
     }
 };
 /*Main entry point to post process the key time intervals used to create the current word*/
+/**
+ * @brief Evaluates and parses timing data for Morse code key events.
+ *
+ * This method analyzes the collected key down and key up timing intervals to determine the type of Morse key used
+ * (paddle, bug, cootie, straight key, etc.), and parses the intervals into dits and dahs. It builds bucket tables
+ * for key down and key up intervals, sorts and filters the timing data, and applies various statistical and heuristic
+ * checks to adapt to noisy or glitchy input. The method also detects letter and word breaks, updates internal state
+ * variables, and reconstructs the decoded text string from the parsed intervals.
+ *
+ * Key steps include:
+ * - Resetting and initializing internal state and buffers.
+ * - Copying and filtering timing intervals based on signal-to-noise ratio.
+ * - Sorting intervals and building bucket tables for statistical analysis.
+ * - Detecting and handling glitches in the timing data.
+ * - Calculating split points between dits and dahs, and determining letter/word breaks.
+ * - Selecting the appropriate parsing rule set based on key type and timing characteristics.
+ * - Parsing the intervals into Morse symbols and reconstructing the output text.
+ * - Performing final error correction and updating mode flags for downstream processing.
+ *
+ * Debug output is provided throughout for diagnostic purposes, and the method is robust to noisy or incomplete data.
+ *
+ * @note This method relies on several helper functions and class properties, such as BldKyDwnBktTbl(), InitDah_SplitPt(),
+ *       FindBtmPtr(), FindTopPtr(), BldKyUpBktTbl(), SetSpltPt(), CalAvgDeadIntvrl(), GlitchChk(), Dcode4Dahs(), AdvSrch4Match(),
+ *       Tst4LtrBrk(), PrintThisChr(), FixClassicErrors(), SetModFlgs(), and CurMdStng().
+ */
 void AdvParser::EvalTimeData(void)
 {
     //Dbug = false;
@@ -4470,6 +4495,24 @@ void AdvParser::Dcode4Dahs(int n)
 };
 //////////////////////////////////////////////
 /* A final check to look for, & correct classic parsing errors*/
+/**
+ * @brief Applies a series of classic error corrections to the decoded message buffer.
+ *
+ * This function iterates through the message buffer (`Msgbuf`) and attempts to fix common
+ * errors or sloppy character combinations often found in received messages. It uses a
+ * dictionary (`SrchRplcDict`) of search-and-replace rules, each with specific conditions
+ * (rules) for when a replacement should be applied. The function checks each character
+ * in the buffer against the dictionary, and if a rule matches and its conditions are met,
+ * it replaces the erroneous sequence with the corrected term.
+ *
+ * The correction rules cover a wide range of cases, including word boundaries, context-sensitive
+ * replacements, and exceptions for certain patterns. The function is designed to be robust
+ * against partial matches and to avoid incorrect replacements by checking surrounding characters.
+ *
+ * @note The function assumes that `Msgbuf` contains enough decoded characters for evaluation,
+ * and that `StrLength`, `SrchDictSize`, `SrchRplcDict`, and `BugKey` are properly initialized.
+ * The function modifies `Msgbuf` in place.
+ */
 void AdvParser::FixClassicErrors(void)
 {                                           // No longer need to worry about if we have enough decoded characters evaluate the following sloppy strings this->Msgbuf now has enough data, to test for special character combos often found with sloppy sending
     int lstCharPos = (this->StrLength) - 1; // sizeof(this->Msgbuf) - 2;

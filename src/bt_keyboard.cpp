@@ -19,7 +19,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+/*20250912 - HID INPUT_EVENT; added code to support Microsoft style key data */
 #define __BT_KEYBOARD__ 1
 #include "bt_keyboard.h"
 
@@ -2415,7 +2415,7 @@ BTKeyboard::esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_res
 /*
 start a scan. which creates a table of advertizing devices
 from the table determine if there is an HID device among them,
-or a device the been previously 'paired'
+or a device that was previously 'paired'
 Note: if a connection is made (with a paired device), this
 function/method normally takes a little over 4 seconds to complete.
 If it fails to 'open' the paired device. the process completes in <2 seconds
@@ -2886,6 +2886,17 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
             tmpdat[0] = param->input.data[0];
             tmpdat[1] = 0;
             for (int i = 1; i < param->input.length; i++)
+            {
+              tmpdat[i + 1] = param->input.data[i];
+            }
+            BLE_KyBrd->push_key(tmpdat, 8);
+          }
+          else if (param->input.length == 11)
+          { // looks like Microsoft data. So use K380s conversion method 
+            uint8_t tmpdat[8];
+            tmpdat[0] = param->input.data[0];
+            tmpdat[1] = 0;// insert a dummy '0' data element
+            for (int i = 1; i < 7; i++)
             {
               tmpdat[i + 1] = param->input.data[i];
             }

@@ -112,6 +112,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250325 Added 'splash screen', which was kindly provided by Bill/WA4FAT. THANK YOU Bill*/
 /*20250325 Added touch event kill to 'splash screen' */
 /*20250326 Set splash screen 'hang time' to 8 seconds(see line 182) */
+/*20250912 bt_keyboard.cpp - HID INPUT_EVENT; added code to support Microsoft style key data */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -381,10 +382,28 @@ static void Cw_Machine_ADC_init(adc_channel_t *channel, uint8_t channel_num, adc
 //   return true;
 // }
 ////////////////////////////////////////////
-/*Actually handles a number things
-* like calculate current frequency of incoming signal
-* but originally created to simply pass the current ADC sampler to the goertzel tone detector algorythem 
-*/
+
+/**
+ * @brief Processes an input sample for tone detection, auto-tuning, and diagnostic testing.
+ *
+ * This function performs several key operations:
+ * - Applies an IIR bandpass filter to the input sample.
+ * - Handles bias error calculation for auto-tuning.
+ * - Detects tone frequency by counting zero-crossings and periods.
+ * - Sends frequency data to a queue for further processing when enough periods are detected.
+ * - Manages diagnostic scope and sample buffer for visualization and testing.
+ * - Triggers tasks for further processing depending on compilation flags.
+ *
+ * @param k        The input sample value (typically from ADC or synthesized).
+ * @param i        The sample index or identifier.
+ * @param pCntrA   Pointer to a counter used for sample buffer management and scope plotting.
+ *
+ * @note
+ * - Uses FreeRTOS synchronization primitives (semaphores, queues, tasks).
+ * - Behavior is controlled by several global flags and compile-time options (e.g., POSTADC).
+ * - Diagnostic and scope plotting code is included for testing and visualization.
+ * - Assumes existence of global variables and objects for filter coefficients, sample buffers, and task handles.
+ */
 void addSmpl(int k, int i, int *pCntrA)
 {
   /*The following is for diagnostic testing; it generates a psuesdo tone input of known freq & magnitude */
@@ -1383,6 +1402,33 @@ void pairing_handler(uint32_t pid)
 }
 #endif /* USE_KYBrd*/
 
+/**
+ * @brief Main application entry point for ESP32S3 CW Machine.
+ *
+ * This function initializes hardware and software components, sets up tasks, timers, and queues,
+ * and manages the main event loop for the CW Machine application. It handles display initialization,
+ * BLE keyboard pairing, ADC configuration, and task management for CW decoding, tone frequency analysis,
+ * and display updates. User settings are loaded from NVS (non-volatile storage) or factory defaults if not found.
+ * The main loop manages splash screen display, transitions to settings, scope, and help screens, and processes
+ * keyboard events including Bluetooth pairing and ADC control.
+ *
+ * Major steps:
+ * - Set log level and configure GPIO for CW key output.
+ * - Create FreeRTOS queues and mutexes for inter-task communication and synchronization.
+ * - Initialize IIR filter coefficients and create tasks for display, parser, key event, CW decode, Goertzel, and tone frequency.
+ * - Initialize display, load splash screen, and check/load user settings from NVS.
+ * - Start display refresh timer and resume display update task.
+ * - Initialize Goertzel algorithm and ADC for continuous DMA conversion.
+ * - Register ADC event callbacks and start ADC conversion.
+ * - Configure and start DotClk hardware timer for CW timing.
+ * - Enter main loop:
+ *   - Manage splash screen timing and transitions.
+ *   - Handle transitions to settings, scope, and help screens.
+ *   - Process Bluetooth keyboard events and manage ADC/task suspension/resumption during pairing.
+ *   - Process keyboard input and CW key events.
+ *
+ * @note This function runs indefinitely as the main application loop.
+ */
 void app_main()
 {
   ModeCnt = 0;
@@ -1393,7 +1439,7 @@ void app_main()
 											                   // ESP_LOG_INFO,       /*!< Information messages which describe normal flow of events */
 											                   // ESP_LOG_DEBUG,      /*!< Extra information which is not necessary for normal use (values, pointers, sizes, etc). */
 											                   // ESP_LOG_VERBOSE     /*!< Bigger chunks of debugging information, or frequent messages which can potentially flood the output. */
-                                         // Configure CW send IO pin aka 'KEY'
+  // Configure CW send IO pin aka 'KEY'
   gpio_config_t io_conf;
   io_conf.intr_type = GPIO_INTR_DISABLE;
   io_conf.mode = GPIO_MODE_OUTPUT;
