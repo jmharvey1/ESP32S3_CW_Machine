@@ -4,9 +4,9 @@
  *  Created on: Oct 7, 2021
  *      Author: jim
  * Note: Update this file to get the REV DAtE to update on the Main Screen's title line
- * 20250913 Added new method/function NuLineDcdTA(void)
- */
-
+ * 20250913 Added new method/function NuLineDcdTA(void); Updated 'help' text to reflect new F6 & F7 functions
+ * 20250203 changed i2c clock to 100Khz had been 400Khz, but found some display touch chips would not work w/ the faster data clock
+ * */
 #ifndef INC_LVGLMSGBOX_H_
 #define INC_LVGLMSGBOX_H_
 
@@ -130,7 +130,8 @@ Special Keys & their functions:\n\
         AF  (Auto-Tune 500 to 900Hz)\n\
 2. Left Ctrl+G: Enable/Disable Debug\n\
 3. Left Ctrl+P:  Plot On/off\n\
-4. F7: Clear Decoded Text Space\n\
+4. F6: Clear Decoded Text Space\n\
+4. F7: New Line (in Decoded Text Space)\n\
 5. F8: Light/Dark Display theme\n\
 6. F9: Enable/Disable Scope View\n\    
 \n\

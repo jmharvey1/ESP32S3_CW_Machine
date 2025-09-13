@@ -35,7 +35,10 @@ Special Keys & their functions:
         AF  (Auto-Tune 500 to 900Hz)
 2. Left Ctrl+G: Enable/Disable Debug
 3. Left Ctrl+P:  Plot On/off
-4. F9: Enable/Disable Scope View        
+4. F9 Enable/Disable Scope View
+5. F8 Day/Night color scheme
+6. F7 New line (in decoded text space)
+7. F6 Clear Text (in decoded text space)        
 
 
 
