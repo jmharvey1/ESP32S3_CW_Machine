@@ -20,6 +20,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /*20250912 - HID INPUT_EVENT; added code to support Microsoft style key data */
+/*20250913 - Added limited support for #Keypad; 0-9; +; ENTER */
 #define __BT_KEYBOARD__ 1
 #include "bt_keyboard.h"
 
@@ -2877,7 +2878,8 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
         ESP_LOG_BUFFER_HEX_LEVEL(TAG, param->input.data, param->input.length, ESP_LOG_DEBUG);
         if ((cntr != 6) && !BLE_KyBrd->trapFlg)
         {
-          /*Classic BT Keybrds send key press date w/ data len = 8; K380s keybrd has a deta lenght of 7*/
+          //if(param->input.data[1] != 0x00) param->input.data[1] = 0x57; //used testing/simulating & configuring support for #'s keypad entries 
+          /*Classic BT Keybrds send key press data w/ data len = 8; K380s keybrd has a deta lenght of 7*/
           if (param->input.length == 8)
             BLE_KyBrd->push_key(param->input.data, param->input.length); // normal path when keystroke data is good/usuable
           else if (param->input.length == 7)
@@ -3058,6 +3060,17 @@ char BTKeyboard::wait_for_ascii_char(bool forever)
     //    printf(buf);//print to computer
     //    pmsgbx->dispKeyBrdTxt(buf, TFT_GOLD); //print to LCD Display
     // }
+    /* special test for Nubers Keypad 'ENTER' key */
+    if (ch == 0x58)
+    { /*remap #Keypad 'ENTER' to standard keyboard 'ENTER'*/
+      ch = inf.keys[1] = 0x28;   
+    }
+    /* special test for Nubers Keypad '+' key */
+    else if (ch == 0x57)
+    { /*remap #Keypad '+' to standard keyboard '+'*/
+      ch = inf.keys[1] = 0x2E;
+      inf.modifier = (KeyModifier)0x02;   
+    }
     /* special test for TAB */
     if (inf.keys[0] == 43 && ((uint8_t)inf.modifier == 0))
     {
@@ -3161,6 +3174,12 @@ char BTKeyboard::wait_for_ascii_char(bool forever)
             return last_ch = shift_trans_dict[(ch - 4) << 1];
           }
         }
+      }
+      /* Added to support numbers Keypad */
+      else if (ch >= 0x59 && ch <= 0x62)
+      {
+        repeat_period = pdMS_TO_TICKS(500);
+        return last_ch = shift_trans_dict[52+(2*(ch -0x59))];
       }
     }
 

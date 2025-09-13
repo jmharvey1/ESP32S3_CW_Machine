@@ -113,6 +113,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250325 Added touch event kill to 'splash screen' */
 /*20250326 Set splash screen 'hang time' to 8 seconds(see line 182) */
 /*20250912 bt_keyboard.cpp - HID INPUT_EVENT; added code to support Microsoft style key data */
+/*20250913  bt_keyboard.cpp - Added limited support for #Keypad; 0-9; +; ENTER; based on input from ZL1DRS */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
