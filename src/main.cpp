@@ -114,6 +114,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250326 Set splash screen 'hang time' to 8 seconds(see line 182) */
 /*20250912 bt_keyboard.cpp - HID INPUT_EVENT; added code to support Microsoft style key data */
 /*20250913  bt_keyboard.cpp - Added limited support for #Keypad; 0-9; +; ENTER; based on input from ZL1DRS */
+/*20250913  LVGLMsgBox.cpp - Added new method/function NuLineDcdTA(void) and restored ClrDcdTA to origanal Clear Text function using 'F6'*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -2091,6 +2092,28 @@ void ProcsKeyEntry(uint8_t keyVal)
     CWsndengn.LdMsg(DFault.MemF5, sizeof(DFault.MemF5));
     return;
   }
+  else if (keyVal == 0x86)
+  { // F6 key (Clear Text
+    lvglmsgbx.ClrDcdTA();
+    return;
+  }
+  else if ((keyVal == 0x87))
+  { // "F7" - insert New Line in Text Area Space
+    lvglmsgbx.NuLineDcdTA();
+    return;
+  }
+  else if ((keyVal == 0x88))
+  { // "F8"
+    NiteMode = !NiteMode;
+    DFault.NiteMode = NiteMode;
+    lvglmsgbx.FlipDayNiteMode();
+    return;
+  }
+  else if ((keyVal == 0x89))
+  { // "F9"
+    ScopeFlg = !ScopeFlg;
+    return;
+  }
   else if (keyVal == 0x95)
   { // Right Arrow Key (Alternate action SOT [Send On type])
   if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE)
@@ -2132,23 +2155,6 @@ void ProcsKeyEntry(uint8_t keyVal)
   else if ((keyVal == 0x9C))
   { // Cntrl+"S"
     setupFlg = !setupFlg;
-    return;
-  }
-  else if ((keyVal == 0x87))
-  { // "F7" - Clear Decode Text Area Space
-    lvglmsgbx.ClrDcdTA();
-    return;
-  }
-  else if ((keyVal == 0x88))
-  { // "F8"
-    NiteMode = !NiteMode;
-    DFault.NiteMode = NiteMode;
-    lvglmsgbx.FlipDayNiteMode();
-    return;
-  }
-  else if ((keyVal == 0x89))
-  { // "F9"
-    ScopeFlg = !ScopeFlg;
     return;
   }
   else if ((keyVal == 0x9D))

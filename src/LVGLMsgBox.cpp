@@ -22,6 +22,7 @@
 /*20250203 changed i2c clock to 100Khz had been 400Khz, but found some display touch chips would not work w/ the faster data clock*/
 /*20250225 now initializing 'lastWrdBrk' = 98, instead of =0 to stop display lockup in noisy environment*/
 /*20250325 Added touch event 'call back' to support to kill 'splash screen' */
+/*20250913 Added new method/function NuLineDcdTA(void) and restored ClrDcdTA to origanal Clear Text function*/
 #include <stdio.h>
 #include <math.h>
 #include "sdkconfig.h"
@@ -208,6 +209,10 @@ static void ClrBtn_event_handler(lv_event_t *e)
 	{
 		// printf("Main Screen (sc_1) 'Clear Text' button click event\n");
 		lv_textarea_set_text(DecdTxtArea, "");
+		ta_charCnt = 0;
+		char buf2[30];
+		sprintf(buf2, "CharCnt: %d", ta_charCnt);
+		lv_label_set_text(label2, buf2);
 	}
 	break;
 
@@ -3048,7 +3053,7 @@ void LVGLMsgBox::ReStrtMainScrn(void)
 	MutexLckId = 0;
 };
 /*Remote entry call to clear/reset decode text area space*/
-void LVGLMsgBox::ClrDcdTA(void)
+void LVGLMsgBox::NuLineDcdTA(void)
 {
 	bool tryagn = true;
 	int trycnt = 0;
@@ -3077,6 +3082,42 @@ void LVGLMsgBox::ClrDcdTA(void)
 	/*insert line space in decoded text area*/
 	Update_textarea(DecdTxtArea, '\n'); // lv_textarea_set_text(DecdTxtArea, "");
 	Update_textarea(DecdTxtArea, '\n'); // lv_textarea_set_text(DecdTxtArea, "");
+	MutexLckId = 0;
+	xSemaphoreGive(lvgl_semaphore);
+};
+
+void LVGLMsgBox::ClrDcdTA(void)
+{
+	bool tryagn = true;
+	int trycnt = 0;
+	MutexLckId = 20;
+	while (tryagn)
+	{
+		if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 100 / portTICK_PERIOD_MS))
+		{
+			MutexLckId = 14;
+			tryagn = false;
+			report = false;
+			bypassMutex = true;
+			Msg2Actv = true;
+		}
+		else
+		{
+			trycnt++;
+			if (trycnt > 5)
+			{
+				trycnt = 5;
+				report = true;
+				printf("LVGLMsgBox::Exit_Settings timed out; MutexLckId = %d; timerID = %d\n", MutexLckId, timerID);
+			}
+		}
+	}
+	/*clear/reset decoded text area*/
+	lv_textarea_set_text(DecdTxtArea, "");
+	ta_charCnt = 0;
+	char buf2[30];
+	sprintf(buf2, "CharCnt: %d", ta_charCnt);
+			lv_label_set_text(label2, buf2);
 	MutexLckId = 0;
 	xSemaphoreGive(lvgl_semaphore);
 };

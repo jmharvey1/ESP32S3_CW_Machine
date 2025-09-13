@@ -4,6 +4,7 @@
  *  Created on: Oct 7, 2021
  *      Author: jim
  * Note: Update this file to get the REV DAtE to update on the Main Screen's title line
+ * 20250913 Added new method/function NuLineDcdTA(void)
  */
 
 #ifndef INC_LVGLMSGBOX_H_
@@ -272,6 +273,7 @@ public:
 	void BldSplashScreen(void);
 	void FlipDayNiteMode(void);
 	void ReStrtMainScrn(void);
+	void NuLineDcdTA(void);
 	void ClrDcdTA(void);
 	void HiLite_Seltcd_Setting(int paramptr, int oldparamptr);
 	void Exit_Settings(int paramptr);
