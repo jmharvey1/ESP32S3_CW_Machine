@@ -3116,6 +3116,11 @@ char BTKeyboard::wait_for_ascii_char(bool forever)
     {
       return last_ch = 0xA2;
     }
+    /* special test for left ctr+'h' (HELP) */
+    if (((uint8_t)inf.modifier == 1) && (inf.keys[0] == 0x0B))
+    {
+      return last_ch = 0xA6;
+    }
     /* special test for ctr+'p' */
     if (((uint8_t)inf.modifier == 1 || (uint8_t)inf.modifier == 16) && ((inf.keys[0] == 0x13) || (inf.keys[1] == 0x13)))
     {
@@ -3131,6 +3136,27 @@ char BTKeyboard::wait_for_ascii_char(bool forever)
     {
       return last_ch = 0x2A;
     }
+    /* special test for PgUp + shift */
+    if (inf.keys[0] == 0x52 && ((uint8_t)inf.modifier == 2))
+    {
+      return last_ch = 0xA2; 
+    }
+    /* special test for PgUp + ctrl */
+    if (inf.keys[0] == 0x52 && ((uint8_t)inf.modifier == 1))
+    {
+      return last_ch = 0xA3; 
+    }
+    /* special test for PgDwn + shift */
+    if (inf.keys[0] == 0x51 && ((uint8_t)inf.modifier == 2))
+    {
+      return last_ch = 0xA4; 
+    }
+    /* special test for PgDwn + ctrl */
+    if (inf.keys[0] == 0x51 && ((uint8_t)inf.modifier == 1))
+    {
+      return last_ch = 0xA5; 
+    }
+    /* special test for 'end' */
     if (ch >= 4)
     {
       if ((uint8_t)inf.modifier & CTRL_MASK)

@@ -701,6 +701,23 @@ static inline lv_color_t lv_color_black(void)
 {
     return lv_color_make(0x00, 0x0, 0x00);
 }
+//JMH added
+static inline lv_color_t lv_color_red(void)
+{
+    return lv_color_make(0xff, 0x0, 0x0);
+}
+static inline lv_color_t lv_color_green(void)
+{
+    return lv_color_make(0x00, 0xff, 0x00);
+}
+static inline lv_color_t lv_color_blue(void)
+{
+    return lv_color_make(0x00, 0x0, 0xff);
+}
+static inline lv_color_t lv_color_yellow(void)
+{
+    return lv_color_make(0xff, 0xff, 0x00);
+}
 lv_color_t lv_palette_lighten(lv_palette_t p, uint8_t lvl);
 lv_color_t lv_palette_darken(lv_palette_t p, uint8_t lvl);
 

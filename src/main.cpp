@@ -115,6 +115,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250912 bt_keyboard.cpp - HID INPUT_EVENT; added code to support Microsoft style key data */
 /*20250913  bt_keyboard.cpp - Added limited support for #Keypad; 0-9; +; ENTER; based on input from ZL1DRS */
 /*20250913  LVGLMsgBox.cpp - Added new method/function NuLineDcdTA(void) and restored ClrDcdTA to origanal Clear Text function using 'F6'*/
+/*20250916 Added keyboard controlled 'scroll' support for displays W/o 'touch' support*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -1981,7 +1982,7 @@ void ProcsKeyEntry(uint8_t keyVal)
   char SpcChr = char(0x20);
   //printf("bufChar '%c'; Val_dec %d; Hex: %02x\n", (char)keyVal, (int)keyVal, keyVal);
   if (keyVal == 0x8)
-  {                                  //"BACKSpace" key pressed
+  {  //"BACKSpace" key pressed
     int ChrCnt = CWsndengn.Delete(); // test to see if there's an "unsent" character that can be deleted
     if (ChrCnt > 0)
     {
@@ -2024,30 +2025,16 @@ void ProcsKeyEntry(uint8_t keyVal)
     }
     return;
   }
-  else if (keyVal == 0x98)
-  { // PG/arrow UP
-    CWsndengn.IncWPM();
-    DFault.WPM = CWsndengn.GetWPM();
+  else if ((keyVal == 0x0D))
+  { // "ENTER" Key send myCallSign
+    if (CWsndengn.IsActv() && !CWsndengn.LstNtrySpc())
+      CWsndengn.AddNewChar(&SpcChr);
+    CWsndengn.LdMsg(DFault.MyCall, sizeof(DFault.MyCall));
     return;
   }
-  else if (keyVal == 0x97)
-  { // PG/arrow DOWN
-    CWsndengn.DecWPM();
-    DFault.WPM = CWsndengn.GetWPM();
-    return;
-  }
-  else if (keyVal == 0x8C)
-  { // F12 key (Alternate action SOT [Send On type])
-    if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE)
-    {
-      /* We were able to obtain the semaphore and can now access the
-      shared resource. */
-      mutexFLG = true;
-      CWsndengn.SOTmode();
-      /* We have finished accessing the shared resource.  Release the semaphore. */
-      xSemaphoreGive(mutex);
-      mutexFLG = false;
-    }
+  else if (keyVal == 0x1B)
+  { // ESC key (Kill Send)
+    CWsndengn.AbortSnd();
     return;
   }
   else if (keyVal == 0x81)
@@ -2114,8 +2101,22 @@ void ProcsKeyEntry(uint8_t keyVal)
     ScopeFlg = !ScopeFlg;
     return;
   }
+  else if (keyVal == 0x8C)
+  { // F12 key (Alternate action SOT [Send On type])
+    if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE)
+    {
+      /* We were able to obtain the semaphore and can now access the
+      shared resource. */
+      mutexFLG = true;
+      CWsndengn.SOTmode();
+      /* We have finished accessing the shared resource.  Release the semaphore. */
+      xSemaphoreGive(mutex);
+      mutexFLG = false;
+    }
+    return;
+  }
   else if (keyVal == 0x95)
-  { // Right Arrow Key (Alternate action SOT [Send On type])
+  { // Right Arrow Key (Alternate 'F12' SOT [Send On type])
   if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE)
     {
       /* We were able to obtain the semaphore and can now access the
@@ -2129,7 +2130,7 @@ void ProcsKeyEntry(uint8_t keyVal)
     return;
   }
   else if (keyVal == 0x96)
-  { // Left Arrow Key (store TEXT)
+  { // Left Arrow Key (Alternate 'F1' store TEXT)
   if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE)
     {
       /* We were able to obtain the semaphore and can now access the
@@ -2142,12 +2143,35 @@ void ProcsKeyEntry(uint8_t keyVal)
     }
     return;
   }
-  else if (keyVal == 0x1B)
-  { // ESC key (Kill Send)
-    CWsndengn.AbortSnd();
+  else if (keyVal == 0x97)
+  { // PG/arrow DOWN; Decrease WPM
+    CWsndengn.DecWPM();
+    DFault.WPM = CWsndengn.GetWPM();
     return;
   }
-  else if ((keyVal == 0x9B))
+  else if (keyVal == 0x98)
+  { // PG/arrow UP; Increase WPM
+    CWsndengn.IncWPM();
+    DFault.WPM = CWsndengn.GetWPM();
+    return;
+  }
+  else if ((keyVal == 0x99))
+  { // "shift+ENTER" send both calls (StrdTxt & MyCall)
+    if (CWsndengn.IsActv() && !CWsndengn.LstNtrySpc())
+      CWsndengn.AddNewChar(&SpcChr);
+    // char buf[20]="";
+    sprintf(Title, "%s DE %s", StrdTxt, DFault.MyCall);
+    CWsndengn.LdMsg(Title, 20);
+    return;
+  }
+  else if ((keyVal == 0x9A))
+  { // "Cntrl+ENTER" send StrdTxt call
+    if (CWsndengn.IsActv() && !CWsndengn.LstNtrySpc())
+      CWsndengn.AddNewChar(&SpcChr);
+    CWsndengn.LdMsg(StrdTxt, 20);
+    return;
+  }
+   else if ((keyVal == 0x9B))
   { // Cntrl+"T"
     CWsndengn.Tune();
     return;
@@ -2166,39 +2190,6 @@ void ProcsKeyEntry(uint8_t keyVal)
     vTaskDelay(250);
     return;
   }
-  else if ((keyVal == 0xA1))
-  { // Cntrl+"G"; Sample interval 4ms / 8ms
-    // int GainCnt =0;
-    // if(NoisFlg) GainCnt = 2;
-    // if(SlwFlg && !NoisFlg) GainCnt = 1;
-    //   GainCnt++;
-    // if (GainCnt > 1)  GainCnt = 0;//20231029 decided that the 3rd gain mode was no longer needed, so locked it out
-    //   switch(GainCnt){
-    // case 0:
-    //   SlwFlg = false;
-    //   NoisFlg = false;
-    //   break;
-    // case 1:
-    //   SlwFlg = true;
-    //   NoisFlg = false;
-    //   break;
-    // case 2:
-    //   SlwFlg = true;
-    //   NoisFlg = true;
-    //   break;
-    /*20240123 Changed So that Ctrl+G now Enables/Disables Debug */
-    if (DeBug)
-    {
-      DeBug = false;
-      DFault.DeBug = false;
-    }
-    else
-    {
-      DeBug = true;
-      DFault.DeBug = true;
-    }
-    return;
-  }
   /*20240123 Disabled Ctrl+D function; replaced by AdvParser Class & methods*/
   // else if ((keyVal == 0x9E))
   // { // LEFT Cntrl+"D"; Decode Modef()
@@ -2215,8 +2206,16 @@ void ProcsKeyEntry(uint8_t keyVal)
   //     vTaskDelay(250);
   //     return;
   // }
+  else if ((keyVal == 0x9F))
+  { // Cntrl+"P"; CW decode ADC plot Enable/Disable
+    PlotFlg = !PlotFlg;
+    if(PlotFlg) printf("ToneThresHold\tCurLvl\tNoiseFlr\tAvgNoise\tcurNois\tKeyState\tNFkeystate\tltrCmplt\n"); //ltrCmplt
+    // DFault.AutoTune = AutoTune;
+    vTaskDelay(250);
+    return;
+  }
   else if ((keyVal == 0xA0))
-  { // RIGHT Cntrl+"D"; Decode Modef()
+  { // RIGHT Cntrl+"D"; Realtime Decode Mode()
 
     /*Normal setup */
     // if (ModeCnt == 4)
@@ -2240,35 +2239,19 @@ void ProcsKeyEntry(uint8_t keyVal)
     vTaskDelay(250);
     return;
   }
-  else if ((keyVal == 0x9F))
-  { // Cntrl+"P"; CW decode ADC plot Enable/Disable
-    PlotFlg = !PlotFlg;
-    if(PlotFlg) printf("ToneThresHold\tCurLvl\tNoiseFlr\tAvgNoise\tcurNois\tKeyState\tNFkeystate\tltrCmplt\n"); //ltrCmplt
-    // DFault.AutoTune = AutoTune;
-    vTaskDelay(250);
-    return;
-  }
-  else if ((keyVal == 0xD))
-  { // "ENTER" Key send myCallSign
-    if (CWsndengn.IsActv() && !CWsndengn.LstNtrySpc())
-      CWsndengn.AddNewChar(&SpcChr);
-    CWsndengn.LdMsg(DFault.MyCall, sizeof(DFault.MyCall));
-    return;
-  }
-  else if ((keyVal == 0x9A))
-  { // "Cntrl+ENTER" send StrdTxt call
-    if (CWsndengn.IsActv() && !CWsndengn.LstNtrySpc())
-      CWsndengn.AddNewChar(&SpcChr);
-    CWsndengn.LdMsg(StrdTxt, 20);
-    return;
-  }
-  else if ((keyVal == 0x99))
-  { // "shift+ENTER" send both calls (StrdTxt & MyCall)
-    if (CWsndengn.IsActv() && !CWsndengn.LstNtrySpc())
-      CWsndengn.AddNewChar(&SpcChr);
-    // char buf[20]="";
-    sprintf(Title, "%s DE %s", StrdTxt, DFault.MyCall);
-    CWsndengn.LdMsg(Title, 20);
+  else if ((keyVal == 0xA1))
+  { // Cntrl+"G"; 
+    /*20240123 Changed So that Ctrl+G now Enables/Disables Debug */
+    if (DeBug)
+    {
+      DeBug = false;
+      DFault.DeBug = false;
+    }
+    else
+    {
+      DeBug = true;
+      DFault.DeBug = true;
+    }
     return;
   }
   // else if ((keyVal ==  0xA1))
@@ -2287,8 +2270,41 @@ void ProcsKeyEntry(uint8_t keyVal)
   //   DFault.Grtzl_Gain = Grtzl_Gain;
   //   return;
   // }
-  if ((keyVal >= 97) & (keyVal <= 122))
-  {
+  else if ((keyVal == 0xA2))
+  { // "PgUp +Shift" key pressed (DecdTxtArea Scroll up)
+    bool up = true;
+    int TAid = 0; // Text Area ID = 0 -> DecdTxtArea
+    lvglmsgbx.ScrollTA(up, TAid);
+    return;
+  }
+  else if ((keyVal == 0xA3))
+  { // "PgUp +Ctrl" key pressed (SendTxtArea Scroll up)
+    bool up = true;
+    int TAid = 1; // Text Area ID = 1 -> SendTxtArea
+    lvglmsgbx.ScrollTA(up, TAid);
+    return;
+  }
+   else if ((keyVal == 0xA4))
+  { // "PgDwn +Shift" key pressed (DecdTxtArea Scroll down)
+    bool up = false;
+    int TAid = 0; // Text Area ID = 1 -> DecdTxtArea
+    lvglmsgbx.ScrollTA(up, TAid);
+    return;
+  }
+  else if ((keyVal == 0xA5))
+  { // "PgDwn +Ctrl" key pressed (SendTxtArea Scroll down)
+    bool up = false;
+    int TAid = 1; // Text Area ID = 1 ->SendTxtArea
+    lvglmsgbx.ScrollTA(up, TAid);
+    return;
+  }
+  else if ((keyVal == 0xA6))
+  { // "H +Ctrl" key pressed (Help screen)
+    HelpFlg = !HelpFlg;
+    return;
+  }
+  if ((keyVal >= 97) & (keyVal <= 122)) // decimal ASCII values for lower case letters
+  { /*its a lower case letter; convert to upper case ASCII */
     keyVal = keyVal - 32;
   }
   char Ltr2Bsent = (char)keyVal;
@@ -2412,12 +2428,25 @@ void HelpLoop(void)
     vTaskDelay(pdMS_TO_TICKS(100));
     //printf("while(ScopeLoop)\n");
     uint8_t key = bt_keyboard.wait_for_ascii_char(false);
-    if (key == 0x89) //= "F9"
+    if (key == 0x89 || key == 0xA6) //= "F9"
     {
       /*user wants to exit Help screen*/
       CWsndengn.SetWPM(DFault.WPM);//syncDfltwSettings could have updated/changed the WPM setting so we need to make sure the send engine has the latest
       //ScopeActive = false;
       HelpFlg = false;
+    }
+    else if (key == 0x98)
+    { // Arrow UP
+      bool up = true;
+      int TAid = 2; // Text Area ID = 2 -> Helpta
+      lvglmsgbx.ScrollTA(up, TAid);
+    
+    }
+    else if (key == 0x97)
+    { // Arrow DOWN
+      bool up = false;
+      int TAid = 2; // Text Area ID = 2 -> Helpta
+      lvglmsgbx.ScrollTA(up, TAid);
     }
   }
   lvglmsgbx.ReStrtMainScrn();

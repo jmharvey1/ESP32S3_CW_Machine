@@ -6,6 +6,7 @@
  * Note: Update this file to get the REV DAtE to update on the Main Screen's title line
  * 20250913 Added new method/function NuLineDcdTA(void); Updated 'help' text to reflect new F6 & F7 functions
  * 20250203 changed i2c clock to 100Khz had been 400Khz, but found some display touch chips would not work w/ the faster data clock
+ * 20250916 Updated 'help' text to reflect new Up & Down arrow functions
  * */
 #ifndef INC_LVGLMSGBOX_H_
 #define INC_LVGLMSGBOX_H_
@@ -121,6 +122,7 @@ Special Functions:\n\
 13. F3 Send stored F3 message\n\
 14. F4 Send stored F4 message\n\
 15. F12 suspend outgoing text; Press F12 again to resume sending outgoing text (Note: \"F12 SOT OFF\" while in \"suspend\" mode)\n\
+16. Up, & Down Arrows, Increment/Decrement Send WPM respectively\n\
 \n\
 ***********************************************************************************\n\
 CW Decoder & other Keys:\n\
@@ -141,10 +143,15 @@ The \"Enter\" key has 3 \"send\" modes;\n\
 1. \"Enter\"       (send your call sign only);\n\ 
 2. \"Shift+Enter\" (Send F1 call sign + your call sign);\n\
 3. \"Ctrl+Enter\"  (Send F1 Call sign only). \n\
+4. \"Shift+Up Arrow\" Scroll Up Decoded text\n\
+5. \"Shift+Down Arrow\" Scroll Down Decoded text\n\
+6. \"Ctrl+Up Arrow\" Scroll Up Send text\n\
+7. \"Ctrl+Down Arrow\" Scroll Send text\n\
 \n\
 Note, if \"F12\" is in the \"SOT ON\" mode, the key presses will also be sent to your Tx (via the uart), allowing you to both return the \"far end\" call, & \"save\" the call, at the same time (for future returns/ \"overs\"). On the other hand, if you dont want to be sending (CW), while loading the F1 memory, press the F12 key, to read \"F12 SOT OFF\". Now this part gets a bit tricky. When you finished loading the F1 memory, press F1 (so it now reads F1 Mem), and while F12 reads \"F12 SOT OFF\", press the \"escape\" key (this will flush the F12 SOT buffer). Then press F12 (to get it back to \"F12 SOT ON\"), and youll have F1 loaded, and ready to go, without actually having sent the \"Far end\" call over the air.\n\
 \n\
 Remember, F1 is different from the other memories, as its intended just for storing \"call signs\" and to be changed \"on the fly\" Also note too, you can clear the F1 memory, just by cycling the F1 key (and not typing anything, while it reads \"F1 Active\")\n\
+keyboard 'UP' & 'DOWN' Arrows will scroll this text\n\
 "};
 
 bool lvgl_port_lock(int timeout_ms);
@@ -280,6 +287,7 @@ public:
 	void Exit_Settings(int paramptr);
 	bool TestRingBufPtrs(int LastKnownPtr);
 	int XferRingbuf(char Bfr[50], int oldPtr);
+	void ScrollTA(bool up, int TAid);
 	inline uint8_t Get_KyBrdBat_level(void) { return KyBrdBatLvl; }
 	inline void Str_KyBrdBat_level(uint8_t Lvl) { KyBrdBatLvl = Lvl; }
 	inline int Get_RingbufPntr1(void) { return RingbufPntr1; }

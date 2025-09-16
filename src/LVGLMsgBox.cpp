@@ -23,6 +23,7 @@
 /*20250225 now initializing 'lastWrdBrk' = 98, instead of =0 to stop display lockup in noisy environment*/
 /*20250325 Added touch event 'call back' to support to kill 'splash screen' */
 /*20250913 Added new method/function NuLineDcdTA(void) and restored ClrDcdTA to origanal Clear Text function*/
+/*20250916 Added ScrollTA() method for Scroll Up/Down functionality via keyboard 'UP' & 'DOWN' Arrows*/
 #include <stdio.h>
 #include <math.h>
 #include "sdkconfig.h"
@@ -130,6 +131,7 @@ static lv_style_t TAstyle;
 static lv_style_t TASettingsStyle;
 static lv_style_t Cursorstyle;
 static lv_style_t style_win1;
+//static lv_style_t style_red;
 static lv_color_t Dflt_bg_clr;
 static bool first_run = false;
 // static float Nu_SN = 0.0;
@@ -379,6 +381,17 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 	if (SendTxtArea == TxtArea)
 		updateCharCnt = true;
 	// if(traceFlg) printf("update_text2(char bufChar) %c\n", bufChar);
+	// if (TxtArea == SendTxtArea)
+	// {
+	// 	lv_point_t size;
+	// 	const char *TaBuf1 = lv_textarea_get_text(TxtArea);
+	// 	lv_txt_get_size(&size, TaBuf1, &lv_font_montserrat_16, // Replace with your desired font
+	// 					SendTxtArea->w_layout,				   // letter_space
+	// 					SendTxtArea->h_layout,
+	// 					760,				 // The maximum width the text can occupy (e.g., textarea content width)
+	// 					SendTxtArea->flags); // line_space
+	// 	printf("Text size: width=%d, height=%d, h_layout=%d, w_layout=%d\n", size.x, size.y, SendTxtArea->h_layout, SendTxtArea->w_layout);
+	// }
 	if (bypassMutex)
 	{
 		int CurPos = 0;
@@ -429,7 +442,7 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 			ta_charCnt = strlen(p);
 			if (updateCharCnt && (TxtArea == SendTxtArea))
 				CurKyBrdCharCnt = ta_charCnt;
-			//int del = 1 - (max - ta_charCnt);
+			
 			int del = 1 + (ta_charCnt - max);
 			if (del > 0)
 			{
@@ -1223,6 +1236,7 @@ void Bld_LVGL_GUI(void)
 		lv_style_init(&style_Slctd_bg);
 		lv_style_init(&style_Deslctd_bg);
 		lv_style_init(&style_BtnDeslctd_bg);
+		// lv_style_init(&style_red);
 		first_run = true;
 	}
 	/*Part of 2 screen support*/
@@ -1231,6 +1245,7 @@ void Bld_LVGL_GUI(void)
 	if (!NiteMode){
 		lv_style_reset(&style_bar);
 	}
+	// lv_style_set_bg_color(&style_red, lv_color_red());
 	lv_style_set_bg_color(&style_win1, lv_palette_main(LV_PALETTE_DEEP_ORANGE));	
 	lv_style_set_text_font(&style_label, &lv_font_montserrat_18);
 	lv_style_set_text_opa(&style_label, LV_OPA_100);
@@ -1241,6 +1256,8 @@ void Bld_LVGL_GUI(void)
 	lv_style_set_border_color(&style_btn, lv_color_black());
 
 	lv_style_set_text_font(&TAstyle, &lv_font_montserrat_16);
+	// int LineHeight = lv_font_get_line_height(&lv_font_montserrat_16);
+	// printf("LineHeight %d\n", LineHeight);
 	/*style settings for night view */
 	// lv_style_set_bg_color(&style_win, lv_palette_main(LV_PALETTE_NONE));
 	//  lv_style_set_text_color(&TAstyle, lv_palette_main(LV_PALETTE_RED));
@@ -1270,14 +1287,15 @@ void Bld_LVGL_GUI(void)
 		lv_obj_add_style(bar1, &style_bar, LV_PART_INDICATOR);
 		DecdTxtArea = lv_textarea_create(cont1);
 		SendTxtArea = lv_textarea_create(cont1);
-		lv_obj_set_size(DecdTxtArea, 760, 179); // width & Height
-		lv_obj_set_size(SendTxtArea, 760, 179); // width & Height
+		lv_obj_set_size(DecdTxtArea, 760, 175); // width & Height
+		lv_obj_set_size(SendTxtArea, 760, 175); // width & Height
 		lv_obj_set_pos(DecdTxtArea, 0, 0);
 		lv_obj_set_pos(SendTxtArea, 0, 220);
 		lv_textarea_set_max_length(DecdTxtArea, 804);									// 1000-(2*98) = 804
 		lv_textarea_set_max_length(SendTxtArea, 804);									// 1000-(2*98) = 804
 		lv_obj_add_style(DecdTxtArea, &TAstyle, 0);										// sets the fonte used
-		lv_obj_add_style(SendTxtArea, &TAstyle, 0);										// sets the fonte used
+		lv_obj_add_style(SendTxtArea, &TAstyle, 0);
+		// lv_obj_add_style(DecdTxtArea, &style_red, LV_PART_SCROLLBAR);										// sets the fonte used
 		lv_obj_add_style(SendTxtArea, &Cursorstyle, LV_PART_CURSOR | LV_STATE_FOCUSED); // set cursor color
 		lv_obj_set_style_bg_opa(SendTxtArea, LV_OPA_40, LV_PART_CURSOR | LV_STATE_FOCUSED);
 		lv_obj_set_style_border_side(SendTxtArea, LV_BORDER_SIDE_NONE, LV_PART_CURSOR | LV_STATE_FOCUSED); // kill the default left side cusor line
@@ -1363,7 +1381,7 @@ void Bld_LVGL_GUI(void)
 	// lv_obj_align_to(ClrTxt_btn_label, ClrTxt_btn, LV_ALIGN_CENTER, 10, 2);
 	lv_obj_align_to(ClrTxt_btn_label, ClrTxt_btn, LV_ALIGN_CENTER, 0, 0);
 	lv_scr_load(scr_1);
-
+	
 	if (scr_2 != NULL)
 	{
 		printf("[APP] Free memory: %d bytes\n", (int)esp_get_free_heap_size());
@@ -3223,6 +3241,42 @@ int LVGLMsgBox::XferRingbuf(char Bfr[50], int oldPtr)
 	} else printf("xSemaphoreTake(RingBuf_semaphore FAILED A\n");
 	// printf("%c\n",'"');
 	return i;
+};
+void LVGLMsgBox::ScrollTA(bool up, int TAid)
+{
+	int dx = 0;
+	int dy = 0;
+	//bool anim_enable = true;
+	if (!up)
+		dy = -20;
+	else
+		dy = 20;
+
+	lv_obj_t *widget;
+	switch (TAid)
+	{
+	case 0:
+		widget = DecdTxtArea;
+		break;
+	case 1:
+		widget = SendTxtArea;
+		break;
+	case 2:
+		widget = Helpta;
+		dy *= 6;
+		break;	
+	default:
+		// should never get here
+		widget = SendTxtArea;
+		ESP_LOGE("ERROR", "ScrollTA: Invalid TAid %d", TAid);
+		break;
+	}
+	// printf("ScrollTA: dy=%d\n", dy);
+	if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 200 / portTICK_PERIOD_MS))
+	{
+	lv_obj_scroll_by(widget, dx, dy, LV_ANIM_ON);
+	xSemaphoreGive(lvgl_semaphore);
+	} else ESP_LOGE("ERROR", "ScrollTA: xSemaphoreTake(lvgl_semaphore) FAILED");
 };
 /*This executes when the 'Home' button event fires*/
 void Sync_Dflt_Settings(void)
