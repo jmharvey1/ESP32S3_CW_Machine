@@ -143,14 +143,18 @@ The \"Enter\" key has 3 \"send\" modes;\n\
 1. \"Enter\"       (send your call sign only);\n\ 
 2. \"Shift+Enter\" (Send F1 call sign + your call sign);\n\
 3. \"Ctrl+Enter\"  (Send F1 Call sign only). \n\
-4. \"Shift+Up Arrow\" Scroll Up Decoded text\n\
-5. \"Shift+Down Arrow\" Scroll Down Decoded text\n\
-6. \"Ctrl+Up Arrow\" Scroll Up Send text\n\
-7. \"Ctrl+Down Arrow\" Scroll Send text\n\
 \n\
-Note, if \"F12\" is in the \"SOT ON\" mode, the key presses will also be sent to your Tx (via the uart), allowing you to both return the \"far end\" call, & \"save\" the call, at the same time (for future returns/ \"overs\"). On the other hand, if you dont want to be sending (CW), while loading the F1 memory, press the F12 key, to read \"F12 SOT OFF\". Now this part gets a bit tricky. When you finished loading the F1 memory, press F1 (so it now reads F1 Mem), and while F12 reads \"F12 SOT OFF\", press the \"escape\" key (this will flush the F12 SOT buffer). Then press F12 (to get it back to \"F12 SOT ON\"), and youll have F1 loaded, and ready to go, without actually having sent the \"Far end\" call over the air.\n\
+Keyboard Scrolling functions (main screen):\n\
+1. \"Shift+Up Arrow\" Scroll Up Decoded text\n\
+2. \"Shift+Down Arrow\" Scroll Down Decoded text\n\
+3. \"Ctrl+Up Arrow\" Scroll Up Send text\n\
+4. \"Ctrl+Down Arrow\" Scroll Send text\n\
+\n\
+Notes:\n\
+If \"F12\" is in the \"SOT ON\" mode, the key presses will also be sent to your Tx (via the uart), allowing you to both return the \"far end\" call, & \"save\" the call, at the same time (for future returns/ \"overs\"). On the other hand, if you dont want to be sending (CW), while loading the F1 memory, press the F12 key, to read \"F12 SOT OFF\". Now this part gets a bit tricky. When you finished loading the F1 memory, press F1 (so it now reads F1 Mem), and while F12 reads \"F12 SOT OFF\", press the \"escape\" key (this will flush the F12 SOT buffer). Then press F12 (to get it back to \"F12 SOT ON\"), and youll have F1 loaded, and ready to go, without actually having sent the \"Far end\" call over the air.\n\
 \n\
 Remember, F1 is different from the other memories, as its intended just for storing \"call signs\" and to be changed \"on the fly\" Also note too, you can clear the F1 memory, just by cycling the F1 key (and not typing anything, while it reads \"F1 Active\")\n\
+\n\
 keyboard 'UP' & 'DOWN' Arrows will scroll this text\n\
 "};
 
