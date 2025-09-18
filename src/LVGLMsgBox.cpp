@@ -948,6 +948,7 @@ void Bld_Help_scrn(void)
 		lv_obj_set_style_bg_color(cont3,lv_palette_main(LV_PALETTE_TEAL),LV_PART_MAIN);
     	lv_obj_set_style_bg_opa(cont3, 100, LV_PART_MAIN| LV_STATE_DEFAULT);
 		Helpta = lv_textarea_create(cont3);
+		//lv_obj_add_style(Helpta, &style_label, 0);
 		lv_obj_set_size(Helpta, 760, 400); // width & Height
 		lv_obj_set_pos(Helpta, 0, 0);
 		lv_textarea_set_text(Helpta, HelpText);
@@ -964,7 +965,7 @@ void Bld_Help_scrn(void)
 	lv_label_set_text(Hexit_label, "Home");
 	lv_obj_align_to(Hexit_label, Hexit_btn, LV_ALIGN_CENTER, 0, 0);
 	lv_scr_load(ui_Help);
-	lv_textarea_set_cursor_pos(Helpta, 1 - strlen(HelpText)); //
+	//lv_textarea_set_cursor_pos(Helpta, 1 - strlen(HelpText)); //
 }
 
 void Bld_Scope_scrn(void)
@@ -3245,12 +3246,10 @@ int LVGLMsgBox::XferRingbuf(char Bfr[50], int oldPtr)
 void LVGLMsgBox::ScrollTA(bool up, int TAid)
 {
 	int dx = 0;
-	int dy = 0;
+	int dy = 20;
 	//bool anim_enable = true;
 	if (!up)
 		dy = -20;
-	else
-		dy = 20;
 
 	lv_obj_t *widget;
 	switch (TAid)
@@ -3271,7 +3270,7 @@ void LVGLMsgBox::ScrollTA(bool up, int TAid)
 		ESP_LOGE("ERROR", "ScrollTA: Invalid TAid %d", TAid);
 		break;
 	}
-	// printf("ScrollTA: dy=%d\n", dy);
+	printf("ScrollTA: TAid=%d; dy=%d\n", TAid, dy);
 	if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 200 / portTICK_PERIOD_MS))
 	{
 	lv_obj_scroll_by(widget, dx, dy, LV_ANIM_ON);

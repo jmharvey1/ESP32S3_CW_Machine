@@ -116,6 +116,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250913  bt_keyboard.cpp - Added limited support for #Keypad; 0-9; +; ENTER; based on input from ZL1DRS */
 /*20250913  LVGLMsgBox.cpp - Added new method/function NuLineDcdTA(void) and restored ClrDcdTA to origanal Clear Text function using 'F6'*/
 /*20250916 Added keyboard controlled 'scroll' support for displays W/o 'touch' support*/
+/*20250918 LVGLMsgBox.h - revised 'help' text*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

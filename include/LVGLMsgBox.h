@@ -7,6 +7,7 @@
  * 20250913 Added new method/function NuLineDcdTA(void); Updated 'help' text to reflect new F6 & F7 functions
  * 20250203 changed i2c clock to 100Khz had been 400Khz, but found some display touch chips would not work w/ the faster data clock
  * 20250916 Updated 'help' text to reflect new Up & Down arrow functions
+ * 20250918 revised 'help' text to simplify using Copilot AI
  * */
 #ifndef INC_LVGLMSGBOX_H_
 #define INC_LVGLMSGBOX_H_
@@ -98,65 +99,69 @@ extern bool ScopeFlg;
 extern bool HelpFlg;
 extern bool ScopeActive;
 extern bool NiteMode;
-const char HelpText[] = {"KeyBoard Encoder Notes:\n\
-Special Keys & their functions:\n\
-Keys that send special Morse Characters\n\
-1. \"=\"	<BT>\n\
-2. \"+\"	<KN>\n\
-3. \">\"	<AR>\n\
-4. \"<\"	<AS>\n\
-5. \"%\"	<SK>\n\
-6. All other unassigned keys (i.e. \"{\", \"]\",...) send 6 dits, CW error code\n\n\
-Special Functions:\n\
-1. cntrl+T	Generates continuous key down state. Press \"cntrl+T\" again (or another key) to stop.\n\
-2. Enter [pressed by itself] sends the \"My Call\" memory entry. (see settings screen)\n\
-3. \"delete\" Back space, to delete unsent buffered code.\n\
-4. Right Arrow	Same as F12.\n\
-5. Left Arrow Same as F1.\n\
-6. \"Lshift+Enter\" Send \"F1\" stored text plus Your call sign.\n\
-7. \"Cntrl+Enter\" Send \"F1\" stored text.\n\
-8. \"Esc\"   Abort/dump outgoing text\n\ 	
-10. Cntrl+S Go to settings Screen; Press Cntrl+S again to return to normal CW mode.(Note: No CW sent while in the \"settings\"mode); i.e., Default WPM. Call Sign, F2 memory, F3..., \n\
-11. F1 Save up to ten characters (usually the DX call sign) to be sent when L. Shift (or Cntrl)+enter is pressed, Press F1 again to stop the \"save\"  mode (Note: F1 Active while in \"save\" mode)\n\
-12. F2 Send stored F2 message\n\
-13. F3 Send stored F3 message\n\
-14. F4 Send stored F4 message\n\
-15. F12 suspend outgoing text; Press F12 again to resume sending outgoing text (Note: \"F12 SOT OFF\" while in \"suspend\" mode)\n\
-16. Up, & Down Arrows, Increment/Decrement Send WPM respectively\n\
-\n\
-***********************************************************************************\n\
-CW Decoder & other Keys:\n\
-Special Keys & their functions:\n\
-1. Left Ctrl+f: index through select tone tune modes\n\
-        FF  (Fixed Frequency)\n\
-        AF  (Auto-Tune 500 to 900Hz)\n\
-2. Left Ctrl+G: Enable/Disable Debug\n\
-3. Left Ctrl+P:  Plot On/off\n\
-4. F6: Clear Decoded Text Space\n\
-4. F7: New Line (in Decoded Text Space)\n\
-5. F8: Light/Dark Display theme\n\
-6. F9: Enable/Disable Scope View\n\    
-\n\
-\"F1 Mem\" and \"F1 Active\" enables typed characters to be saved into F1 memory\n\
-\n\
-The \"Enter\" key has 3 \"send\" modes;\n\ 
-1. \"Enter\"       (send your call sign only);\n\ 
-2. \"Shift+Enter\" (Send F1 call sign + your call sign);\n\
-3. \"Ctrl+Enter\"  (Send F1 Call sign only). \n\
-\n\
-Keyboard Scrolling functions (main screen):\n\
-1. \"Shift+Up Arrow\" Scroll Up Decoded text\n\
-2. \"Shift+Down Arrow\" Scroll Down Decoded text\n\
-3. \"Ctrl+Up Arrow\" Scroll Up Send text\n\
-4. \"Ctrl+Down Arrow\" Scroll Send text\n\
-\n\
-Notes:\n\
-If \"F12\" is in the \"SOT ON\" mode, the key presses will also be sent to your Tx (via the uart), allowing you to both return the \"far end\" call, & \"save\" the call, at the same time (for future returns/ \"overs\"). On the other hand, if you dont want to be sending (CW), while loading the F1 memory, press the F12 key, to read \"F12 SOT OFF\". Now this part gets a bit tricky. When you finished loading the F1 memory, press F1 (so it now reads F1 Mem), and while F12 reads \"F12 SOT OFF\", press the \"escape\" key (this will flush the F12 SOT buffer). Then press F12 (to get it back to \"F12 SOT ON\"), and youll have F1 loaded, and ready to go, without actually having sent the \"Far end\" call over the air.\n\
-\n\
-Remember, F1 is different from the other memories, as its intended just for storing \"call signs\" and to be changed \"on the fly\" Also note too, you can clear the F1 memory, just by cycling the F1 key (and not typing anything, while it reads \"F1 Active\")\n\
-\n\
-keyboard 'UP' & 'DOWN' Arrows will scroll this text\n\
-"};
+const char HelpText[] =
+	"Keyboard Encoder Notes\n"
+	"\n"
+	"Special Keys (send special Morse):\n"
+	"  '='   <BT>\n"
+	"  '+'   <KN>\n"
+	"  '>'   <AR>\n"
+	"  '<'   <AS>\n"
+	"  '%'   <SK>\n"
+	"  Unassigned Keys (e.g. '{', ']') send 6 dits (error)\n"
+	"\n"
+	"Special Functions:\n"
+	"  Ctrl+T             Continuous key down (toggle)\n"
+	"  Enter              Send \"My Call\" memory\n"
+	"                           (see 'Enter key send modes' below)\n"
+	"  Delete            Backspace (delete unsent)\n"
+	"  Esc                   Abort/dump outgoing text\n"
+	"  Ctrl+S              Settings screen (toggle)\n"
+	"  Ctrl+H              Help screen (toggle)\n"
+	"  F1                     Save up to 10 chars (DX call)\n"
+	"                           Press F1 again to stop save\n"
+	"  F2-F4               Send stored F2/F3/F4 message\n"
+	"  F12                   Suspend outgoing text (toggle)\n"
+	"                           \"F12 SOT OFF\" while suspended\n"
+	"  \xef\x81\x94 (Arrow)        Same as F12\n"
+	"  \xef\x81\x93 (Arrow)        Same as F1\n"
+	"  \xef\x81\xb7/\xef\x81\xb8 Arrows     Inc/Dec Send WPM\n"
+	"\n"
+	"CW Decoder & Other Keys:\n"
+	"  Ctrl+F        Cycle tone tune mode 'AF'/'FF'\n"
+	"  Ctrl+G        Debug On/Off\n"
+	"  Ctrl+P        Plot On/Off\n"
+	"  F6              Clear Decoded Text\n"
+	"  F7              New Line (Decoded Text)\n"
+	"  F8              Light/Dark Theme\n"
+	"  F9              Scope View On/Off\n"
+	"\n"
+	"Enter key send modes:\n"
+	"  Enter               Send your call only\n"
+	"  Shift+Enter     Send F1 + your call\n"
+	"  Ctrl+Enter       Send F1 only\n"
+	"\n"
+	"Scrolling (Main Screen):\n"
+	"  Shift+\xef\x81\xb7         Scroll Up Decoded Text\n"
+	"  Shift+\xef\x81\xb8         Scroll Down Decoded Text\n"
+	"  Ctrl+\xef\x81\xb7           Scroll Up Send Text\n"
+	"  Ctrl+\xef\x81\xb8           Scroll Down Send Text\n"
+	"\n"
+	"Status:\n"
+	"  'F1 Mem/Active'   Saving typed chars to F1 memory\n"
+	"  'F12 SOT ON'         Send on type Enabled\n"
+	"  'Kbrd Bat nn%'     Keyboard Battery Charge %\n"
+	"  'nn WPM'              CW Send Speed %\n"
+	"\n"
+	"Notes:\n"
+	"  F1 is for storing call signs, can be cleared by cycling F1.\n"
+	"  To avoid sending CW while loading F1, set F12 to \"SOT OFF\".\n"
+	"  After loading F1, press F1 (\"F1 Mem\"), press Esc to flush buffer.\n"
+	"  Then press F12 to return to \"SOT ON\".\n"
+	"\n"
+	"Use \xef\x81\xb7/\xef\x81\xb8 arrows to scroll this help text.\n"
+	"\n"
+	"Edited with assistance from GitHub Copilot AI.\n";
 
 bool lvgl_port_lock(int timeout_ms);
 bool lvgl_port_unlock(void);
