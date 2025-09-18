@@ -112,7 +112,7 @@ const char HelpText[] =
 	"\n"
 	"Special Functions:\n"
 	"  Ctrl+T             Continuous key down (toggle)\n"
-	"  Enter              Send \"My Call\" memory\n"
+	"  Enter              Send 'My Call' and/or 'F1' memory\n"
 	"                           (see 'Enter key send modes' below)\n"
 	"  Delete            Backspace (delete unsent)\n"
 	"  Esc                   Abort/dump outgoing text\n"
