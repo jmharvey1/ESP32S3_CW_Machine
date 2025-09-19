@@ -24,6 +24,7 @@
 /*20250325 Added touch event 'call back' to support to kill 'splash screen' */
 /*20250913 Added new method/function NuLineDcdTA(void) and restored ClrDcdTA to origanal Clear Text function*/
 /*20250916 Added ScrollTA() method for Scroll Up/Down functionality via keyboard 'UP' & 'DOWN' Arrows*/
+/*20250918 Changes related to calling '_lv_disp_refr_timer(NULL)' in an attempt to fix scrolling problems*/
 #include <stdio.h>
 #include <math.h>
 #include "sdkconfig.h"
@@ -2139,6 +2140,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 	bool NuTxt = false;
 	bool NuToneVal = false;
 	bool JstDoIt = true;
+	bool refresh = false;
 	char bias[24];
 	char freq[24];
 	if (ScopeActive)
@@ -2150,6 +2152,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 			sprintf(freq, "Frequency: %d Hz", freq_int);
 			lv_label_set_text(ui_Label2, freq);
 			lv_chart_refresh(ui_Chart1);
+			refresh = true;
 			SmplSetRdy = false;
 		}
 	}
@@ -2208,22 +2211,26 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 
 		// printf("RxSig %d\n", RxSig);
 		lvgl_UpdateToneSig(RxSig);
+		refresh = true;
 	}
 	if (SpdFlg & !setupFlg)
 	{
 		SpdFlg = false;
 		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lvgl_update_RxStats; Start\n");
 		lvgl_update_RxStats(SpdBuf);
+		refresh = true;
 		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lvgl_update_RxStats; Complete\n");
 	}
 	if (OldBat_Lvl != Get_KyBrdBat_level())
 	{
 		OldBat_Lvl = Get_KyBrdBat_level();
 		lvgl_update_Bat_Lvl(OldBat_Lvl);
+		refresh = true;
 	}
 	if (KBrdWPMFlg & !setupFlg)
 	{
 		lvgl_update_KyBrdWPM(WPMbuf);
+		refresh = true;
 	}
 	if (pdTRUE == xSemaphoreTake(RingBuf_semaphore, 100 / portTICK_PERIOD_MS))
 	{
@@ -2236,8 +2243,10 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 				if (Nu_SN < Min_SN)
 					Min_SN = Nu_SN;
 			}
-			if (Min_SN != 10000)
+			if (Min_SN != 10000){
 				lvgl_update_SN(20 * log10(Min_SN)); // calculate S/N in dBs, & pass the found value to lvgl display
+				refresh = true;
+			}
 		}
 		xSemaphoreGive(RingBuf_semaphore);
 	} else printf("xSemaphoreTake(RingBuf_semaphore FAILED D\n");
@@ -2245,6 +2254,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 	{
 		OldStrTxtFlg = StrTxtFlg;
 		lvgl_UpdateF1Mem(OldStrTxtFlg);
+		refresh = true;
 	}
 	if ((OldSOTFlg != SOTFlg) & !setupFlg)
 	{
@@ -2254,10 +2264,12 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		else
 			SOToffCursorPntr = KBrdCursorPntr; // save keyboard cursor pointer when SOT was turned off. will be used later to set the cursor back
 		lvgl_UpdateSOT(OldSOTFlg);
+		refresh = true;
 	}
 	if ((UpdtKyBrdCrsr) & !setupFlg)
 	{
 		lvgl_update_KyBrdCrsr(BGHilite);
+		refresh = true;
 		UpdtKyBrdCrsr = false;
 	}
 
@@ -2273,6 +2285,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 				// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Start\n");
 				//  post  this character at the end of text shown in the decoded text space on the waveshare display
 				Update_textarea(DecdTxtArea, curChar);
+				refresh = true;
 				// printf("Decoded textarea char %c\n", curChar);
 				//  sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Complete\n");
 				if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
@@ -2323,6 +2336,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		//  sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Start\n");
 		//   post  this character at the end of text shown in the decoded text space on the waveshare display
 		Update_textarea(SendTxtArea, curChar);
+		refresh = true;
 		// printf("%c", curChar);
 		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Complete\n");
 		// if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
@@ -2352,16 +2366,16 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 	// if ((MutexLckId == 6) && (NuTxt || NuToneVal || SpdFlg))
 	// {
 	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  _lv_disp_refr_timer(); Start\n");
-	if (xSemaphoreTake(ADCread_disp_refr_timer_mutx, pdMS_TO_TICKS(15)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
-	{
+	// if (xSemaphoreTake(ADCread_disp_refr_timer_mutx, pdMS_TO_TICKS(15)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
+	// {
 		// if(setupFlg) printf("_lv_disp_refr_timer(NULL)\n");
 		//lvgl_port_lock(-1);
-		_lv_disp_refr_timer(NULL);
+		if(refresh) _lv_disp_refr_timer(NULL);
 		//lvgl_port_unlock();
 		/* We have finished accessing the shared resource.  Release the
 			 semaphore. */
-		xSemaphoreGive(ADCread_disp_refr_timer_mutx);
-	}
+	// 	xSemaphoreGive(ADCread_disp_refr_timer_mutx);
+	// }
 	// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  _lv_disp_refr_timer(); Complete\n");
 	// }
 	// else
@@ -3247,7 +3261,7 @@ void LVGLMsgBox::ScrollTA(bool up, int TAid)
 {
 	int dx = 0;
 	int dy = 20;
-	//bool anim_enable = true;
+	// bool anim_enable = true;
 	if (!up)
 		dy = -20;
 
@@ -3263,7 +3277,7 @@ void LVGLMsgBox::ScrollTA(bool up, int TAid)
 	case 2:
 		widget = Helpta;
 		dy *= 6;
-		break;	
+		break;
 	default:
 		// should never get here
 		widget = SendTxtArea;
@@ -3273,9 +3287,12 @@ void LVGLMsgBox::ScrollTA(bool up, int TAid)
 	printf("ScrollTA: TAid=%d; dy=%d\n", TAid, dy);
 	if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 200 / portTICK_PERIOD_MS))
 	{
-	lv_obj_scroll_by(widget, dx, dy, LV_ANIM_ON);
-	xSemaphoreGive(lvgl_semaphore);
-	} else ESP_LOGE("ERROR", "ScrollTA: xSemaphoreTake(lvgl_semaphore) FAILED");
+		lv_obj_scroll_by(widget, dx, dy, LV_ANIM_ON);
+		_lv_disp_refr_timer(NULL);
+		xSemaphoreGive(lvgl_semaphore);
+	}
+	else
+		ESP_LOGE("ERROR", "ScrollTA: xSemaphoreTake(lvgl_semaphore) FAILED");
 };
 /*This executes when the 'Home' button event fires*/
 void Sync_Dflt_Settings(void)
