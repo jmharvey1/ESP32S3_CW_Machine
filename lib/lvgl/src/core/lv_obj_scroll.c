@@ -11,6 +11,9 @@
 #include "lv_indev.h"
 #include "lv_disp.h"
 #include "lv_indev_scroll.h"
+/*JMH ADDS*/
+#include "esp_log.h"
+#include "esp_err.h"
 
 /*********************
  *      DEFINES
@@ -349,13 +352,24 @@ void lv_obj_scroll_by(lv_obj_t * obj, lv_coord_t dx, lv_coord_t dy, lv_anim_enab
 
         lv_res_t res;
         res = lv_event_send(obj, LV_EVENT_SCROLL_BEGIN, NULL);
-        if(res != LV_RES_OK) return;
+        if(res != LV_RES_OK)
+        {
+            ESP_LOGE("ERROR", "lv_obj_scroll_by > LV_EVENT_SCROLL_BEGIN FAILED");
+            return;
+        } 
 
         res = _lv_obj_scroll_by_raw(obj, dx, dy);
-        if(res != LV_RES_OK) return;
-
+        if(res != LV_RES_OK)
+        {
+            ESP_LOGE("ERROR", "lv_obj_scroll_by > _lv_obj_scroll_by_raw FAILED");
+            return;
+        } 
         res = lv_event_send(obj, LV_EVENT_SCROLL_END, NULL);
-        if(res != LV_RES_OK) return;
+        if(res != LV_RES_OK)
+        {
+            ESP_LOGE("ERROR", "lv_obj_scroll_by > LV_EVENT_SCROLL_END FAILED");
+            return;
+        } 
     }
 }
 

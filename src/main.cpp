@@ -117,6 +117,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250913  LVGLMsgBox.cpp - Added new method/function NuLineDcdTA(void) and restored ClrDcdTA to origanal Clear Text function using 'F6'*/
 /*20250916 Added keyboard controlled 'scroll' support for displays W/o 'touch' support*/
 /*20250918 LVGLMsgBox.h - revised 'help' text*/
+/*20250920 added'_lv_disp_refr_timer(NULL)' to settingsloop() to ensure the display gets 'refreshed' after loading the settings screen */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -2333,6 +2334,21 @@ void ProcsKeyEntry(uint8_t keyVal)
   CWsndengn.AddNewChar(&Ltr2Bsent);
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/**
+ * @brief Handles the settings screen loop for user interaction.
+ *
+ * This function manages the settings UI, allowing the user to navigate between parameters,
+ * modify values, and exit the settings screen. It uses keyboard input to detect navigation
+ * (arrow up/down) and exit commands (Ctrl+S). When exiting, it synchronizes the current
+ * settings with default parameters and updates the CW send engine if necessary.
+ *
+ * The function also ensures thread-safe access to the LVGL display by using a semaphore,
+ * and periodically refreshes the display. Focus changes between parameters are highlighted,
+ * and keyboard entries are processed for the currently selected parameter.
+ *
+ * @note This loop runs while `setupFlg` is true and exits when the user requests to leave
+ *       the settings screen.
+ */
 void SettingsLoop(void)
 {
   int paramPtr = 0;
@@ -2340,9 +2356,13 @@ void SettingsLoop(void)
   bool FocusChngd = false;
   int oldparamPtr = 0;
   lvglmsgbx.HiLite_Seltcd_Setting(paramPtr, oldparamPtr);
-  
   while (setupFlg)
   {
+    if (xSemaphoreTake(lvgl_semaphore, portMAX_DELAY) == pdTRUE) // wait forever
+    {
+      _lv_disp_refr_timer(NULL);
+      xSemaphoreGive(lvgl_semaphore);
+    }
     vTaskDelay(pdMS_TO_TICKS(100));
     // printf("while(setupFlg)\n");
     uint8_t key = bt_keyboard.wait_for_ascii_char(false);
@@ -2351,13 +2371,13 @@ void SettingsLoop(void)
       /*user wants to exit setting screen
       So 1st pass the current sttetings entries back to their respective DFault parameters*/
       lvglmsgbx.syncDfltwSettings();
-      CWsndengn.SetWPM(DFault.WPM);//syncDfltwSettings could have updated/changed the WPM setting so we need to make sure the send engine has the latest
+      CWsndengn.SetWPM(DFault.WPM); // syncDfltwSettings could have updated/changed the WPM setting so we need to make sure the send engine has the latest
       setupFlg = false;
     }
     else if (key == 0x98)
     { // Arrow UP
       key = 0;
-      //NtryBoxGrp[paramPtr].KillCsr();
+      // NtryBoxGrp[paramPtr].KillCsr();
       oldparamPtr = paramPtr;
       paramPtr--;
       FocusChngd = true;
@@ -2365,7 +2385,7 @@ void SettingsLoop(void)
     else if (key == 0x97)
     { // Arrow DOWN
       key = 0;
-      //NtryBoxGrp[paramPtr].KillCsr();
+      // NtryBoxGrp[paramPtr].KillCsr();
       oldparamPtr = paramPtr;
       paramPtr++;
       FocusChngd = true;
@@ -2374,11 +2394,11 @@ void SettingsLoop(void)
       paramPtr = 0;
     if (paramPtr < 0)
       paramPtr = paramCnt - 1;
-    if(FocusChngd)
+    if (FocusChngd)
     {
       lvglmsgbx.HiLite_Seltcd_Setting(paramPtr, oldparamPtr);
       FocusChngd = false;
-    }  
+    }
     else if (key != 0)
     {
       lvglmsgbx.KBentry(key, paramPtr);

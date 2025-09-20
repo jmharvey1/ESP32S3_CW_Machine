@@ -3287,7 +3287,7 @@ void LVGLMsgBox::ScrollTA(bool up, int TAid)
 	printf("ScrollTA: TAid=%d; dy=%d\n", TAid, dy);
 	if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 200 / portTICK_PERIOD_MS))
 	{
-		lv_obj_scroll_by(widget, dx, dy, LV_ANIM_ON);
+		lv_obj_scroll_by(widget, dx, dy, LV_ANIM_OFF); //LV_ANIM_ON
 		_lv_disp_refr_timer(NULL);
 		xSemaphoreGive(lvgl_semaphore);
 	}
