@@ -113,13 +113,13 @@ esp_event_loop_args_t event_task_args = {
 /*20250325 Added touch event kill to 'splash screen' */
 /*20250326 Set splash screen 'hang time' to 8 seconds(see line 182) */
 /*20250912 bt_keyboard.cpp - HID INPUT_EVENT; added code to support Microsoft style key data */
-/*20250913  bt_keyboard.cpp - Added limited support for #Keypad; 0-9; +; ENTER; based on input from ZL1DRS */
-/*20250913  LVGLMsgBox.cpp - Added new method/function NuLineDcdTA(void) and restored ClrDcdTA to origanal Clear Text function using 'F6'*/
+/*20250913 bt_keyboard.cpp - Added limited support for #Keypad; 0-9; +; ENTER; based on input from ZL1DRS */
+/*20250913 LVGLMsgBox.cpp - Added new method/function NuLineDcdTA(void) and restored ClrDcdTA to origanal Clear Text function using 'F6'*/
 /*20250916 Added keyboard controlled 'scroll' support for displays W/o 'touch' support*/
 /*20250918 LVGLMsgBox.h - revised 'help' text*/
 /*20250920 added'_lv_disp_refr_timer(NULL)' to settingsloop() to ensure the display gets 'refreshed' after loading the settings screen */
 /*20250920 DcodeCW.cpp - commented out redundant xSemaphoreGive(DeCodeVal_mutex);*/
-
+/*20250921 LVGLMsgBox.cpp - More tweeks to display refresh process*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

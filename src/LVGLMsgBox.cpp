@@ -25,6 +25,7 @@
 /*20250913 Added new method/function NuLineDcdTA(void) and restored ClrDcdTA to origanal Clear Text function*/
 /*20250916 Added ScrollTA() method for Scroll Up/Down functionality via keyboard 'UP' & 'DOWN' Arrows*/
 /*20250918 Changes related to calling '_lv_disp_refr_timer(NULL)' in an attempt to fix scrolling problems*/
+/*20250921 Added event_cb's to send & decode textareas to support display refresh process*/
 #include <stdio.h>
 #include <math.h>
 #include "sdkconfig.h"
@@ -159,6 +160,7 @@ bool NMchkbxVal_evnt = false;
 bool KillSplashScrn = false;
 int timerID = 0;
 uint8_t OldBat_Lvl = 0;
+volatile unsigned long EvntEnd = 0;
 void Bld_Help_scrn(void);
 void Bld_Settings_scrn(void);
 void Bld_Scope_scrn(void);
@@ -167,6 +169,44 @@ void Sync_Dflt_Settings(void);
 void SaveUsrVals(void);
 void _FlipDayNiteMode(void);
 
+ /* Decoded text area Event handler; 
+ * main purpose is to notify Dispmsg2() that user is touching the decoded text area
+ * presumably for 'scrolling'. The flag set here will be used 
+ * to keep display refreshes going for 2 seconds after the last press event 
+ */
+static void DecdTxtArea_event_handler(lv_event_t *e){
+	//const char *TAG1 = "DecdTxtArea_event_handler";
+	lv_event_code_t code = lv_event_get_code(e);
+	switch (code)
+	{
+	case LV_EVENT_PRESSING:
+	{
+		// printf("Main Screen (sc_1) 'Decoded Text' area pressing event\n");
+		TchEvnt = true;
+	}
+	break;
+
+	default:
+		break;
+	}
+}
+/* Send text area Event handler, functionally does the same as Decoded, but for touches that occur within the Send taxt area */
+static void SendTxtArea_event_handler(lv_event_t *e){
+	//const char *TAG1 = "SendTxtArea_event_handler";
+	lv_event_code_t code = lv_event_get_code(e);
+	switch (code)
+	{
+	case LV_EVENT_PRESSING:
+	{
+		// printf("Main Screen (sc_1) 'Send Text' area pressing event\n");
+		TchEvnt = true;
+	}
+	break;
+
+	default:
+		break;
+	}
+}
 static void screen1_event_handler(lv_event_t *e)
 {
 	const char *TAG1 = "screen1_event_handler";
@@ -1304,6 +1344,9 @@ void Bld_LVGL_GUI(void)
 		lv_obj_add_style(SendTxtArea, &Cursorstyle, LV_PART_CURSOR | LV_STATE_FOCUSED); // set cursor color
 		lv_obj_set_style_bg_opa(SendTxtArea, LV_OPA_40, LV_PART_CURSOR | LV_STATE_FOCUSED);
 		lv_obj_set_style_border_side(SendTxtArea, LV_BORDER_SIDE_NONE, LV_PART_CURSOR | LV_STATE_FOCUSED); // kill the default left side cusor line
+		lv_obj_add_event_cb(DecdTxtArea, DecdTxtArea_event_handler, LV_EVENT_ALL, NULL);
+		lv_obj_add_event_cb(SendTxtArea, SendTxtArea_event_handler, LV_EVENT_ALL, NULL);
+
 		label = lv_label_create(cont1);
 		lv_obj_set_size(label, 350, 20);
 		lv_obj_set_pos(label, 10, 180);
@@ -1487,7 +1530,7 @@ static void lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t 
 	// FlushF_cnt++;
 	// FlushFired = true;
 }
-
+/*Generic display touch callback; currently does nothing useful in the project*/
 static void lvgl_touch_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
 {
 	uint16_t touchpad_x[1] = {0};
@@ -1504,14 +1547,10 @@ static void lvgl_touch_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
 	bool touchpad_pressed = esp_lcd_touch_get_coordinates(tp, touchpad_x, touchpad_y, NULL, &touchpad_cnt, 1);
 	if (touchpad_pressed && touchpad_cnt > 0)
 	{
-		// if (MsgBx_lvgl_lock(-1))
-		// {
 		data->point.x = touchpad_x[0];
 		data->point.y = touchpad_y[0];
 		data->state = LV_INDEV_STATE_PR;
-		//	MsgBx_lvgl_unlock();
-		TchEvnt = true;
-		//}
+		//TchEvnt = true;
 	}
 	else
 	{
@@ -2218,6 +2257,23 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		refresh = true;
 			// printf("2, ");
 	}
+	/*
+	* Check to see if user has touched text area indicating intention to scroll text
+	* If 'true', setup 2 second refresh sustain timer
+	*/
+	if(TchEvnt)
+	{
+		TchEvnt = false;
+		EvntEnd = pdTICKS_TO_MS(xTaskGetTickCount())+ 2000; // hold the event display for 2 seconds
+	} 
+	/*Refersh sustain timer*/
+	if(pdTICKS_TO_MS(xTaskGetTickCount()) < EvntEnd)
+	{
+		refresh = true;
+	}
+	else EvntEnd = 0;
+	
+	/*check to see if WPM has changed*/
 	if (SpdFlg & !setupFlg)
 	{
 		SpdFlg = false;
