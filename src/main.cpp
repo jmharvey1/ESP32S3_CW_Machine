@@ -118,6 +118,8 @@ esp_event_loop_args_t event_task_args = {
 /*20250916 Added keyboard controlled 'scroll' support for displays W/o 'touch' support*/
 /*20250918 LVGLMsgBox.h - revised 'help' text*/
 /*20250920 added'_lv_disp_refr_timer(NULL)' to settingsloop() to ensure the display gets 'refreshed' after loading the settings screen */
+/*20250920 DcodeCW.cpp - commented out redundant xSemaphoreGive(DeCodeVal_mutex);*/
+
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -1102,6 +1104,9 @@ void BLE_scan_tsk(void *param)
         Title[1] = 0x0;
         lvglmsgbx.dispKeyBrdTxt(Title, TFT_ORANGE); // clear send keyboard text area
       }
+      sprintf(Title, "\n");
+      lvglmsgbx.dispKeyBrdTxt(Title, TFT_ORANGE);
+      vTaskDelay(pdMS_TO_TICKS(100));
       sprintf(Title, "KEYBOARD READY\n");
       lvglmsgbx.dispKeyBrdTxt(Title, TFT_ORANGE);
       ESP_LOGI(TAG2, "Pairing Complete; KEYBOARD READY");
@@ -2442,18 +2447,20 @@ void HelpLoop(void)
   int paramPtr = 0;
   int paramCnt = 9;
   bool FocusChngd = false;
+  bool RefreshDspl = false;
   int oldparamPtr = 0;
   ScopeActive = true;
   while (HelpFlg)
   {
     vTaskDelay(pdMS_TO_TICKS(100));
-    //printf("while(ScopeLoop)\n");
+    RefreshDspl = true;
+    // printf("while(ScopeLoop)\n");
     uint8_t key = bt_keyboard.wait_for_ascii_char(false);
     if (key == 0x89 || key == 0xA6) //= "F9"
     {
       /*user wants to exit Help screen*/
-      CWsndengn.SetWPM(DFault.WPM);//syncDfltwSettings could have updated/changed the WPM setting so we need to make sure the send engine has the latest
-      //ScopeActive = false;
+      CWsndengn.SetWPM(DFault.WPM); // syncDfltwSettings could have updated/changed the WPM setting so we need to make sure the send engine has the latest
+      // ScopeActive = false;
       HelpFlg = false;
     }
     else if (key == 0x98)
@@ -2461,13 +2468,24 @@ void HelpLoop(void)
       bool up = true;
       int TAid = 2; // Text Area ID = 2 -> Helpta
       lvglmsgbx.ScrollTA(up, TAid);
-    
+      RefreshDspl = false;
     }
     else if (key == 0x97)
     { // Arrow DOWN
       bool up = false;
       int TAid = 2; // Text Area ID = 2 -> Helpta
       lvglmsgbx.ScrollTA(up, TAid);
+      RefreshDspl = false;
+    }
+    if (RefreshDspl)
+    {
+      if (pdTRUE == xSemaphoreTake(lvgl_semaphore, 200 / portTICK_PERIOD_MS))
+      {
+        _lv_disp_refr_timer(NULL);
+        xSemaphoreGive(lvgl_semaphore);
+      }
+      else
+        ESP_LOGE("ERROR", "ScrollTA: xSemaphoreTake(lvgl_semaphore) FAILED");
     }
   }
   lvglmsgbx.ReStrtMainScrn();

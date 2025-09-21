@@ -1,4 +1,4 @@
-/*Msgbuf
+/*
  * DcodeCW.cpp
  *
  *  Created on: Mar 28, 2021
@@ -42,7 +42,8 @@
  * 			changed where calling 'SetLtrBrk(EvntTime)' occurs to reduce CPU loading; 
  * 			added 'DbgAvgDit'; added 'DBugLtrBrkTiming'; plus other minor changes to setting/updating 'WrdBrkFtcr'
  * 20250310 reworked ResetLstWrdDataSets(), & KeyEvntTask() to improve >35WPM decoding and wordbreak management
- *   */
+ * 20250920 commented out redundant xSemaphoreGive(DeCodeVal_mutex);
+ *    */
 
 // #include <SetUpCwDecoder.h>
 // #include "main.h" // removed this reference for ESP32 version
@@ -1374,8 +1375,8 @@ void KeyEvntSR(uint8_t Kstate, unsigned long EvntTime)
 #ifdef DBugLtrBrkTiming
 	printf("KeyEvntSR->DeCodeVall:%d\n", DeCodeVal);
 #endif
-		xSemaphoreGive(DeCodeVal_mutex);
-		blocked = false;
+		//xSemaphoreGive(DeCodeVal_mutex);
+		//blocked = false;
 		FrstSymbl = false;
 		exitCD += 50;
 		xSemaphoreGive(DeCodeVal_mutex);

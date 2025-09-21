@@ -216,9 +216,9 @@ static void ClrBtn_event_handler(lv_event_t *e)
 		char buf2[30];
 		sprintf(buf2, "CharCnt: %d", ta_charCnt);
 		lv_label_set_text(label2, buf2);
+		_lv_disp_refr_timer(NULL);
+		break;
 	}
-	break;
-
 	default:
 		break;
 	}
@@ -431,7 +431,10 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 		{
 			lv_textarea_set_text(TxtArea, "");
 			if (updateCharCnt && (TxtArea == SendTxtArea))
+			{	
 				CurKyBrdCharCnt = 0;
+				KBrdCursorPntr = 0;
+			}
 			// printf("CLEAR TEXT AREA 2\n");
 		}
 		else
@@ -542,7 +545,7 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 				{
 					lv_textarea_del_char(TxtArea);
 				}
-				else if (bufChar == 0xFF)
+				else if (bufChar == 0xFF) // CW machine 'clear screen' command
 				{
 					lv_textarea_set_text(TxtArea, "");
 					if (updateCharCnt)
@@ -2153,6 +2156,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 			lv_label_set_text(ui_Label2, freq);
 			lv_chart_refresh(ui_Chart1);
 			refresh = true;
+			// printf("1, ");
 			SmplSetRdy = false;
 		}
 	}
@@ -2212,6 +2216,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		// printf("RxSig %d\n", RxSig);
 		lvgl_UpdateToneSig(RxSig);
 		refresh = true;
+			// printf("2, ");
 	}
 	if (SpdFlg & !setupFlg)
 	{
@@ -2219,6 +2224,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lvgl_update_RxStats; Start\n");
 		lvgl_update_RxStats(SpdBuf);
 		refresh = true;
+			// printf("3, ");
 		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  lvgl_update_RxStats; Complete\n");
 	}
 	if (OldBat_Lvl != Get_KyBrdBat_level())
@@ -2226,11 +2232,13 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		OldBat_Lvl = Get_KyBrdBat_level();
 		lvgl_update_Bat_Lvl(OldBat_Lvl);
 		refresh = true;
+			// printf("4, ");
 	}
 	if (KBrdWPMFlg & !setupFlg)
 	{
 		lvgl_update_KyBrdWPM(WPMbuf);
 		refresh = true;
+			// printf("5, ");
 	}
 	if (pdTRUE == xSemaphoreTake(RingBuf_semaphore, 100 / portTICK_PERIOD_MS))
 	{
@@ -2246,6 +2254,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 			if (Min_SN != 10000){
 				lvgl_update_SN(20 * log10(Min_SN)); // calculate S/N in dBs, & pass the found value to lvgl display
 				refresh = true;
+			// printf("6, ");
 			}
 		}
 		xSemaphoreGive(RingBuf_semaphore);
@@ -2255,6 +2264,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		OldStrTxtFlg = StrTxtFlg;
 		lvgl_UpdateF1Mem(OldStrTxtFlg);
 		refresh = true;
+			// printf("7, ");
 	}
 	if ((OldSOTFlg != SOTFlg) & !setupFlg)
 	{
@@ -2265,11 +2275,13 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 			SOToffCursorPntr = KBrdCursorPntr; // save keyboard cursor pointer when SOT was turned off. will be used later to set the cursor back
 		lvgl_UpdateSOT(OldSOTFlg);
 		refresh = true;
+			// printf("8, ");
 	}
 	if ((UpdtKyBrdCrsr) & !setupFlg)
 	{
 		lvgl_update_KyBrdCrsr(BGHilite);
 		refresh = true;
+			// printf("9, ");
 		UpdtKyBrdCrsr = false;
 	}
 
@@ -2286,6 +2298,7 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 				//  post  this character at the end of text shown in the decoded text space on the waveshare display
 				Update_textarea(DecdTxtArea, curChar);
 				refresh = true;
+			// printf("10, ");
 				// printf("Decoded textarea char %c\n", curChar);
 				//  sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Complete\n");
 				if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
@@ -2336,7 +2349,12 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 		//  sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Start\n");
 		//   post  this character at the end of text shown in the decoded text space on the waveshare display
 		Update_textarea(SendTxtArea, curChar);
+		if(curChar == 255)
+		{
+			//printf("255 char detected @ KeyBrdRingbufPntr2: %d\n", KeyBrdRingbufPntr2);
+		}
 		refresh = true;
+		//	printf("11, ");
 		// printf("%c", curChar);
 		// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Complete\n");
 		// if (curChar == 0x8) // test for "Backspace", AKA delete ASCII symbol
@@ -2370,7 +2388,10 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 	// {
 		// if(setupFlg) printf("_lv_disp_refr_timer(NULL)\n");
 		//lvgl_port_lock(-1);
-		if(refresh) _lv_disp_refr_timer(NULL);
+		if(refresh){
+			_lv_disp_refr_timer(NULL);
+			// printf("Refreshed\n");
+		}
 		//lvgl_port_unlock();
 		/* We have finished accessing the shared resource.  Release the
 			 semaphore. */
@@ -3082,6 +3103,7 @@ void LVGLMsgBox::ReStrtMainScrn(void)
 		}
 	}
 	Bld_LVGL_GUI();
+	_lv_disp_refr_timer(NULL);
 	xSemaphoreGive(lvgl_semaphore);
 	MutexLckId = 0;
 };
@@ -3150,7 +3172,8 @@ void LVGLMsgBox::ClrDcdTA(void)
 	ta_charCnt = 0;
 	char buf2[30];
 	sprintf(buf2, "CharCnt: %d", ta_charCnt);
-			lv_label_set_text(label2, buf2);
+	lv_label_set_text(label2, buf2);
+	_lv_disp_refr_timer(NULL);
 	MutexLckId = 0;
 	xSemaphoreGive(lvgl_semaphore);
 };
