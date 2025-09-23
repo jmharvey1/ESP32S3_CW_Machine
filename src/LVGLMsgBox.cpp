@@ -26,6 +26,7 @@
 /*20250916 Added ScrollTA() method for Scroll Up/Down functionality via keyboard 'UP' & 'DOWN' Arrows*/
 /*20250918 Changes related to calling '_lv_disp_refr_timer(NULL)' in an attempt to fix scrolling problems*/
 /*20250921 Added event_cb's to send & decode textareas to support display refresh process*/
+/*20250923 Updated Main Screen Buttons */
 #include <stdio.h>
 #include <math.h>
 #include "sdkconfig.h"
@@ -408,7 +409,7 @@ static void NiteMode_chkBx_cb(lv_event_t *e)
 		// }
 		NMchkbxVal_evnt = false;
 		const char *state = lv_obj_get_state(obj) & LV_STATE_CHECKED ? "Checked" : "Unchecked";
-		LV_LOG_USER("LV_EVENT_CLICKED %s: %s; NiteMode:%d", txt, state, (int)NiteMode);
+		//LV_LOG_USER("LV_EVENT_CLICKED %s: %s; NiteMode:%d", txt, state, (int)NiteMode);
 		if (DFault.NiteMode != NiteMode)
 			_FlipDayNiteMode();
 	}
@@ -1294,10 +1295,13 @@ void Bld_LVGL_GUI(void)
 	lv_style_set_bg_color(&style_win1, lv_palette_main(LV_PALETTE_DEEP_ORANGE));	
 	lv_style_set_text_font(&style_label, &lv_font_montserrat_18);
 	lv_style_set_text_opa(&style_label, LV_OPA_100);
-	lv_style_set_text_color(&style_label, lv_color_black());
-
-	lv_style_set_border_width(&style_btn, 1);
-	lv_style_set_border_opa(&style_btn, LV_OPA_100);
+	if (!NiteMode){
+		lv_style_set_text_color(&style_label, lv_color_white());
+	}else{
+		lv_style_set_text_color(&style_label, lv_color_black());
+	}
+	lv_style_set_border_width(&style_btn, 0);
+	lv_style_set_border_opa(&style_btn, LV_OPA_TRANSP);
 	lv_style_set_border_color(&style_btn, lv_color_black());
 
 	lv_style_set_text_font(&TAstyle, &lv_font_montserrat_16);
@@ -1391,11 +1395,14 @@ void Bld_LVGL_GUI(void)
 	{
 		// printf("SKIP win1 = lv_win_create(scr_1, title_height);\n");
 	}
-
+	
+	LV_IMG_DECLARE(ButtonR3);//'ButtonR3' image from lvgl_img_converted.c
 	/*Setup settings button at bottom of display*/
-	lv_obj_t *exit_btn = lv_btn_create(scr_1);
+	//lv_obj_t *exit_btn = lv_btn_create(scr_1);
+	lv_obj_t * exit_btn = lv_imgbtn_create(scr_1);
+	lv_imgbtn_set_src(exit_btn, LV_IMGBTN_STATE_RELEASED, NULL, &ButtonR3, NULL);
 	lv_obj_add_style(exit_btn, &style_btn, 0);
-	lv_obj_set_size(exit_btn, 80, 30);
+	lv_obj_set_size(exit_btn, 80, 33);
 	lv_obj_set_pos(exit_btn, 320, 440);
 	lv_obj_add_event_cb(exit_btn, screen1_event_handler, LV_EVENT_CLICKED, NULL);
 
@@ -1405,9 +1412,11 @@ void Bld_LVGL_GUI(void)
 	lv_obj_align_to(exit_btn_label, exit_btn, LV_ALIGN_CENTER, 0, 2);
 
 	/*Setup 'help' button at bottom of display*/
-	lv_obj_t *help_btn = lv_btn_create(scr_1);
+	
+	lv_obj_t * help_btn = lv_imgbtn_create(scr_1);
+	lv_imgbtn_set_src(help_btn, LV_IMGBTN_STATE_RELEASED, NULL, &ButtonR3, NULL);
 	lv_obj_add_style(help_btn, &style_btn, 0);
-	lv_obj_set_size(help_btn, 80, 30);
+	lv_obj_set_size(help_btn, 80, 33);
 	lv_obj_set_pos(help_btn, 410, 440);
 	lv_obj_add_event_cb(help_btn, HelpBtn_event_handler, LV_EVENT_CLICKED, NULL);
 
@@ -1417,15 +1426,17 @@ void Bld_LVGL_GUI(void)
 	lv_obj_align_to(help_btn_label, help_btn, LV_ALIGN_CENTER, 0, 2);
 
 	/*Setup 'Clear' button @ base of Decoder Text Area*/
-	lv_obj_t *ClrTxt_btn = lv_btn_create(scr_1);
+	//lv_obj_t *ClrTxt_btn = lv_btn_create(scr_1);
+	lv_obj_t * ClrTxt_btn = lv_imgbtn_create(scr_1);
+	lv_imgbtn_set_src(ClrTxt_btn, LV_IMGBTN_STATE_RELEASED, NULL, &ButtonR3, NULL);
 	lv_obj_add_style(ClrTxt_btn, &style_btn, 0);
-	lv_obj_set_size(ClrTxt_btn, 90, 30);
+	lv_obj_set_size(ClrTxt_btn, 80, 33);
 	lv_obj_set_pos(ClrTxt_btn, 320, 221);
 	lv_obj_add_event_cb(ClrTxt_btn, ClrBtn_event_handler, LV_EVENT_CLICKED, NULL);
 
 	lv_obj_t *ClrTxt_btn_label = lv_label_create(ClrTxt_btn);
 	lv_obj_add_style(ClrTxt_btn_label, &style_label, 0);
-	lv_label_set_text(ClrTxt_btn_label, "Clear Text");
+	lv_label_set_text(ClrTxt_btn_label, "Clear");
 	// lv_obj_align_to(ClrTxt_btn_label, ClrTxt_btn, LV_ALIGN_CENTER, 10, 2);
 	lv_obj_align_to(ClrTxt_btn_label, ClrTxt_btn, LV_ALIGN_CENTER, 0, 0);
 	lv_scr_load(scr_1);
@@ -1570,7 +1581,7 @@ void _FlipDayNiteMode(void)
 	lv_style_reset(&style_chkbx);
 	lv_style_set_text_font(&TAstyle, &lv_font_montserrat_16);
 	lv_style_set_text_opa(&style_label, LV_OPA_100);
-	lv_style_set_text_color(&style_label, lv_color_black());
+	lv_style_set_text_color(&style_label, lv_color_white());
 	if (NiteMode)
 	{ /*style settings for night view */
 		_theme = lv_theme_default_init(_theme->disp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
@@ -1580,7 +1591,7 @@ void _FlipDayNiteMode(void)
 		lv_style_set_bg_color(&style_bar, lv_palette_main(LV_PALETTE_BROWN));
 		lv_style_set_bg_color(&style_Deslctd_bg, Dflt_bg_clr);
 		lv_style_set_text_color(&style_Deslctd_bg, lv_color_white());
-		// lv_style_set_text_color(&TASettingsStyle, lv_color_white());// Dflt_bg_clr);
+		lv_style_set_text_color(&style_label, lv_color_black());
 		lv_style_set_text_color(&style_Slctd_bg, lv_color_black());
 		lv_style_set_text_color(&style_chkbx, lv_color_black());
 		/*end night view setup*/
@@ -3128,7 +3139,7 @@ void LVGLMsgBox::FlipDayNiteMode(void)
 	}
 	DFault.NiteMode = !NiteMode; // forcing the DFault value to be the opsite of its stored value to force lvglmsgbx.FlipDayNiteMode to update
 	_FlipDayNiteMode();
-
+	_lv_disp_refr_timer(NULL);
 	xSemaphoreGive(lvgl_semaphore);
 	MutexLckId = 0;
 };
@@ -3223,6 +3234,9 @@ void LVGLMsgBox::ClrDcdTA(void)
 			}
 		}
 	}
+	/*reset/restore textarea size*/
+	/*20250922 This was added in an attempt fix auto=scrolling issues*/
+	lv_obj_set_size(DecdTxtArea, 760, 175); // width & Height
 	/*clear/reset decoded text area*/
 	lv_textarea_set_text(DecdTxtArea, "");
 	ta_charCnt = 0;

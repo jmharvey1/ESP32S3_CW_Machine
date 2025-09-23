@@ -9,6 +9,8 @@
         "compare": "cpp",
         "cstdint": "cpp",
         "lvgl.h": "c",
-        "lv_img.h": "c"
+        "lv_img.h": "c",
+        "lv_examples.h": "c",
+        "lv_example_widgets.h": "c"
     }
 }

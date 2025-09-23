@@ -120,6 +120,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250920 added'_lv_disp_refr_timer(NULL)' to settingsloop() to ensure the display gets 'refreshed' after loading the settings screen */
 /*20250920 DcodeCW.cpp - commented out redundant xSemaphoreGive(DeCodeVal_mutex);*/
 /*20250921 LVGLMsgBox.cpp - More tweeks to display refresh process*/
+/*20250923 LVGLMsgBox.cpp - Updated Main Screen Buttons */
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
