@@ -57,7 +57,7 @@
  * 20250210 added S/N checks to use only 'valid' time interval
  * 20250217 Tweak to BldKyUpBktTbl()/Letter Break code
  * 20250223 BldKyUpBktTbl(void) changed letterbreak rule tests to include intervals of 0.65 the current dah interval
- * 20250225 reworked 'wrdbrkFtcr' compesation code & reanbled updates from tha Adavance post past paser back to the real time decoder
+ * 20250225 reworked 'wrdbrkFtcr' compesation code & reanbled updates from the Adavance post paser back to the real time decoder
  * */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -67,6 +67,28 @@
 #include "main.h"
 // #define GLITCHDBG // uncomment to enable "post parsing" when running in "glicth" mode {Hi qrn conditions}
 // #define DBugSrchEsRplace // uncomment to enable posting classic error fixes to serial port for debugging
+const char* keytypestr(int keytype)
+{
+    switch (keytype)
+    {
+    case 0:
+        return "Paddle/Keyboard";
+    case 1:
+        return "Bug";
+    case 2:
+        return "Cootie A";
+    case 3:
+        return "Cootie B";
+    case 4:
+        return "Bug 2";
+    case 5:
+        return "Straight Key";
+    case 6:
+        return "Sloppy Bug";    
+    default:
+        return "Unknown Key Type";
+    }
+}
 
 AdvParser::AdvParser(void) // TFT_eSPI *tft_ptr, char *StrdTxt
 {
@@ -610,12 +632,18 @@ void AdvParser::EvalTimeData(void)
             this->NuSpltVal = KeyDwnBuckts[BtmPtr].Intrvl + (KeyDwnBuckts[TopPtr].Intrvl - KeyDwnBuckts[BtmPtr].Intrvl) / 2;
             this->NuSpltVal *= 0.95; // 20241210 added based on k9vp bug mp3 test recording
             this->DitDahSplitVal = this->NuSpltVal;
-            this->WrdBrkVal = (uint16_t)(7 * (float)KeyDwnBuckts[BtmPtr].Intrvl); //most commom path used to set WrdBrkWal
-            if(this->WrdBrkVal < 137) this->WrdBrkVal = 137;//dont set it to something lesss than the equivalent of a 35WPM wordbreak
+            //this->WrdBrkVal = (uint16_t)(7 * (float)KeyDwnBuckts[BtmPtr].Intrvl); //most commom path used to set WrdBrkWal
+            //this->WrdBrkVal = (uint16_t)(4.8 * (float)KeyDwnBuckts[BtmPtr].Intrvl); //20251007 changed from 7 to 4.8 based on VE3UXJ (paddle) testing
+            this->WrdBrkVal = (uint16_t)(4.25 * (float)KeyDwnBuckts[BtmPtr].Intrvl); //20251007 changed from 4.8 to 4.25
+            this->WrdBrkRule = 1; // method 1
+            if(this->WrdBrkVal < 137){
+                this->WrdBrkVal = 137;//dont set it to something less than the equivalent of a 35WPM wordbreak
+                this->WrdBrkRule = 2; // method 2
+            }
             this->AllDah = this->AllDit = false;
             if (DbgWrdBrkFtcr) printf("\t\tA WrdBrkVal: %d\n", this->WrdBrkVal);
             if (Dbug || DbgWrdBrkFtcr)
-                printf("\t\tWrdBrkVal Method 3; 7 * KeyDwnBuckts[BtmPtr:%d].Intrvl:%d = %d\n", BtmPtr, KeyDwnBuckts[BtmPtr].Intrvl, this->WrdBrkVal);
+                printf("\t\tWrdBrkVal Method 3; 4.25 * KeyDwnBuckts[BtmPtr:%d].Intrvl:%d = %d\n", BtmPtr, KeyDwnBuckts[BtmPtr].Intrvl, this->WrdBrkVal);
             if (this->Bg1SplitPt < 1.5 * KeyDwnBuckts[BtmPtr].Intrvl)
                 this->Bg1SplitPt = 1.5 * KeyDwnBuckts[BtmPtr].Intrvl;
             if (DeBug)
@@ -734,6 +762,7 @@ void AdvParser::EvalTimeData(void)
                     printf("ReSetB DitDahSplitVal = 0.6* (RunngTotl/%d) = %d\n", dahcnt, this->DitDahSplitVal);
             }
             this->WrdBrkVal = (uint16_t)(1.9 * (float)this->LtrBrkVal);
+            this->WrdBrkRule = 3; // method 3
             // printf("B WrdBrkVal: %d\n", this->WrdBrkVal);
             if (Dbug || DbgWrdBrkFtcr)
                 printf("\t\tWrdBrkVal Method 2; (ALL Dit/Dah) 1.9*this->LtrBrkVal:%d = %d\n", this->LtrBrkVal, this->WrdBrkVal);
@@ -946,7 +975,6 @@ void AdvParser::EvalTimeData(void)
             this->WrdBrkValid = true;
             if (this->LtrBrkVal == this->AvgSmblDedSpc)
                 this->LtrBrkVal = 1.5 * this->AvgSmblDedSpc; // this would only be the case, when there are just 2 keyupbuckets
-            // this->WrdBrkVal = (uint16_t)(1.8 *(float)(this->AvgSmblDedSpc + this->DitIntrvlVal));
             // printf("C WrdBrkVal: %d\n", this->WrdBrkVal);
         }
     } //end normal/good S/N setup
@@ -1472,7 +1500,7 @@ void AdvParser::EvalTimeData(void)
                                                                // and save/append the results to 'Msgbuf[]'
                                                                // start a new symbolset
             /*We found a letter, but maybe its also a word; test by testing/comparing the keyup interval*/
-            // printf("TmpUpIntrvls[n%d] %d > this->wrdbrkFtcr %3.1f, this->WrdBrkVal: %d\n\n", n, TmpUpIntrvls[n], this->wrdbrkFtcr, this->WrdBrkVal);
+            if (DbgWrdBrkFtcr) printf("TmpUpIntrvls[n%d] %d > this->wrdbrkFtcr %3.1f, this->WrdBrkVal: %d; Rule:%d; Key: %s\n\n", n, TmpUpIntrvls[n], this->wrdbrkFtcr, this->WrdBrkVal, this->WrdBrkRule, keytypestr(KeyType));
             if ((TmpUpIntrvls[n] > (this->wrdbrkFtcr * this->WrdBrkVal)) && (n < this->TmpUpIntrvlsPtr - 1))
             { // yes, it looks like a word break
                 // add " " (space) to reparsed string
@@ -1482,7 +1510,7 @@ void AdvParser::EvalTimeData(void)
                 int EndPtr = GetMsgLen();
                 if (DbgWrdBrkFtcr) printf("NEW wordBrk: EndPtr %d; CurParseWord: %s\n\n", EndPtr, this->Msgbuf);
                 /*20250219 removed to verify that this was the only entry that was affecting the AdvParser 'wrdbrkFtcr' value.
-                Note: at this time, there is no code that deccrements this value; i.e., it only increases*/
+                Note: at this time, there is no code that decrements this value; i.e., it only increases*/
                 if(LstEndPtr == EndPtr-2 || EndPtr == 2)
                 {// if true we had a one letter word, not very likely so should be safe to increase the 'wrdbrkFtcr'
                     this->wrdbrkFtcr += 0.15;
@@ -2098,6 +2126,7 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
         // this->NuSpltVal *= 0.95;//20241210 added based on k9vp bug mp3 test recording
         this->DitDahSplitVal = this->NuSpltVal;
         this->WrdBrkVal = (uint16_t)(3.5 * (float)KeyUpBuckts[MaxCntKyUpBcktPtr].Intrvl); // 4 * KeyUpBuckts[MaxCntKyUpBcktPtr].Intrvl;
+        this->WrdBrkRule = 4; // method 4
         // printf("D WrdBrkVal: %d\n", this->WrdBrkVal);
         if (Dbug)
             printf("WrdBrkVal Method 7; 3 * KeyUpBuckts.Intrvl:%d = %d\n", KeyUpBuckts[MaxCntKyUpBcktPtr].Intrvl, this->WrdBrkVal);

@@ -422,6 +422,7 @@ void Update_textarea(lv_obj_t *TxtArea, char bufChar)
 	bool updateCharCnt = false;
 	if (SendTxtArea == TxtArea)
 		updateCharCnt = true;
+	
 	// if(traceFlg) printf("update_text2(char bufChar) %c\n", bufChar);
 	// if (TxtArea == SendTxtArea)
 	// {
@@ -2363,6 +2364,10 @@ void LVGLMsgBox::dispMsg2(int RxSig)
 				Pgbuf[0] = curChar;
 				// sprintf(LogBuf,"LVGLMsgBox::dispMsg2  update_text2(); Start\n");
 				//  post  this character at the end of text shown in the decoded text space on the waveshare display
+				if (curChar == 0x20)
+					LastChrSpace = true; // count spaces in decoded text area
+				else
+					LastChrSpace = false;	
 				Update_textarea(DecdTxtArea, curChar);
 				refresh = true;
 			// printf("10, ");

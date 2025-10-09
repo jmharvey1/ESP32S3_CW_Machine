@@ -121,6 +121,12 @@ esp_event_loop_args_t event_task_args = {
 /*20250920 DcodeCW.cpp - commented out redundant xSemaphoreGive(DeCodeVal_mutex);*/
 /*20250921 LVGLMsgBox.cpp - More tweeks to display refresh process*/
 /*20250923 LVGLMsgBox.cpp - Updated Main Screen Buttons */
+/*20250924 LVGLMsgBox.cpp - reworked Update_textarea() when 'capping the ta buffer to take in account character width & word breaks*/
+/*20250925 LVGLMsgBox.cpp - added 'F10' shortcut to toggle between Day/Night mode*/
+/*20250926 LVGLMsgBox.cpp - added 'F11' shortcut to toggle between Main & Settings screen*/
+/*20250930 LVGLMsgBox.cpp - reworked 'Help' screen to improve readability*/
+/*20251008 DcodeCW.cpp - Revised code to only insert a 'space' character when the single character word is made up of two or less Morse symbols*/
+
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -366,7 +372,7 @@ static void Cw_Machine_ADC_init(adc_channel_t *channel, uint8_t channel_num, adc
   {
     uint8_t unit = ADC_UNIT_1;
     uint8_t ch = channel[i] & 0x7;
-    adc_pattern[i].atten = ADC_ATTEN_DB_12; // ADC_ATTEN_DB_0;
+    adc_pattern[i].atten = ADC_ATTEN_DB_12; // ADC_ATTEN_DB_0; // 
     adc_pattern[i].channel = ch;
     adc_pattern[i].unit = unit;
     adc_pattern[i].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
@@ -920,7 +926,7 @@ void ToneFreqTask(void *param)
             CalGtxlParamFlg = true;
             if (xSemaphoreTake(IIR_Coef_mutx, pdMS_TO_TICKS(3)) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
             {
-              Calc_IIR_BPFltrCoef((float)AvgToneFreq, SAMPLING_RATE, 8.0); //3.7071
+              Calc_IIR_BPFltrCoef((float)AvgToneFreq, SAMPLING_RATE, 5.0); //3.7071
               xSemaphoreGive(IIR_Coef_mutx);
             }
           }
@@ -1154,7 +1160,7 @@ void AdvParserTask(void *param)
     int FmtchPtr; // now only used for debugging
     /*start Scan/compare last word displayed w/ advpaser's version*/
     int NuMsgLen = advparser.GetMsgLen();
-    int LtrPtr = advparser.LtrPtr;
+    int LtrPtr = advparser.LtrPtr; // length of last word displayed
     if (NuMsgLen > LtrPtr || NuMsgLen < LtrPtr) // easy test
     { // if the advparser test string is longer, then delete the last word printed
       same = false;
@@ -1184,12 +1190,17 @@ void AdvParserTask(void *param)
     char spacemarker = 'Y';
     uint8_t LstChr = lvglmsgbx.GetLastChar();
     uint8_t OldLstChr;
+    char *LastChrSpaceStr[2] = {"False", "True"};
     if(!same)
     {
-      deletCnt++; //increment by just because the the DcodeCW chkChrCmplt() appended a space before launching the AdvParserTask
+      
       /*need to block display update task during this 'if()' code */
       if (xSemaphoreTake(DsplUpDt_AdvPrsrTsk_mutx, portMAX_DELAY) == pdTRUE) // pdMS_TO_TICKS()//portMAX_DELAY
       {
+        
+        //if(lvglmsgbx.LastChrSpace) deletCnt++; //increment, because the DcodeCW chkChrCmplt() just appended a space before launching the AdvParserTask
+        deletCnt++; //increment, because the DcodeCW chkChrCmplt() just appended a space before launching the AdvParserTask
+
         curOwner = 1;
         bool abort = false;
 #ifdef DeBgQueue
@@ -1277,6 +1288,7 @@ void AdvParserTask(void *param)
              Due to RTOS Variances in process sequencing/timing, there can be 3 different states in the Decoded text area
              ringbuffer the following 'if' code addresses each of the 3 cases
             */
+            // printf("**** '%s'->'%s'; deletCnt:%d; LtrPtr:%d; NuMsgLen:%d; LstChr:'%c'; LastChrSpace: %s \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, (char)LstChr, LastChrSpaceStr[(int)lvglmsgbx.LastChrSpace]);
             if (bufcharcnt >0 && ringbuf[0] != ' ')
               sprintf(advparser.Msgbuf, "%s%s %s", DelStr, tmpbuf, ringbuf); // AdvParser running behind schedule
             else if (bufcharcnt >0 && ringbuf[0] == ' ')
@@ -1284,8 +1296,10 @@ void AdvParserTask(void *param)
             else
               sprintf(advparser.Msgbuf, "%s%s ", DelStr, tmpbuf); // normal/expected case
             /*for test/debug, show/print the before & after results*/
-            // printf("old txt:%s;  new txt:%s\n\tdelete cnt: %d; advparser.LtrPtr %d; new txt length: %d; RingBufTst=%c; bufcharcnt: %d; ringbuf: %c%s%c; Space Corrected = %c(%d/%c%c%C) \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, ptr, RingBufTst, bufcharcnt, '"', ringbuf, '"', spacemarker, LstChr, '"', LstChr, '"');
+            // printf("old txt:%s;  new txt:%s\n\tdelete cnt: %d; advparser.LtrPtr %d; new txt length: %d; bufcharcnt: %d; ringbuf: %c%s%c; Space Corrected = %c(%d/%c%c%C) \n", advparser.LtrHoldr, tmpbuf, deletCnt, LtrPtr, ptr, bufcharcnt, '"', ringbuf, '"', spacemarker, LstChr, '"', LstChr, '"');
           }
+          
+        
         }
         if (!abort)
         {
@@ -1317,7 +1331,7 @@ void AdvParserTask(void *param)
         if (DbgWrdBrkFtcr) printf("main.cpp AdvParserTask update wordBrk+: %d; wrdbrkFtcr: %5.3f; OldwrdbrkFtcr: %5.3f; oldwordBrk: %d\n", (uint16_t)wordBrk, wrdbrkFtcr, _wrdbrkFtcr, _wordBrk);
       } 
       // printf("old txt:%s;  new txt:%s; delete cnt: %d; advparser.LtrPtr: %d ; new txt length: %d; Space Corrected = %c/%d \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, spacemarker, LstChr);
-    } // else printf("old txt: %s\n", advparser.LtrHoldr);
+    } //else printf("^^^^ '%s'->'%s'; deletCnt:%d; LtrPtr:%d; NuMsgLen:%d; LstChr:'%c'; LastChrSpace: %s \n", advparser.LtrHoldr, advparser.Msgbuf, deletCnt, LtrPtr, NuMsgLen, (char)LstChr, LastChrSpaceStr[(int)lvglmsgbx.LastChrSpace]);
 #ifdef AutoCorrect
     else printf("old txt:'%s'\n", advparser.LtrHoldr);
 #endif

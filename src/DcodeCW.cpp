@@ -43,6 +43,8 @@
  * 			added 'DbgAvgDit'; added 'DBugLtrBrkTiming'; plus other minor changes to setting/updating 'WrdBrkFtcr'
  * 20250310 reworked ResetLstWrdDataSets(), & KeyEvntTask() to improve >35WPM decoding and wordbreak management
  * 20250920 commented out redundant xSemaphoreGive(DeCodeVal_mutex);
+ * 20251001 Added code to insert a 'space' character when a letter break is detected and the last character decoded was a single character word
+ * 20251008 Revised code to only insert a 'space' character when the single character word is made up of two or less Morse symbols
  *    */
 
 // #include <SetUpCwDecoder.h>
@@ -56,7 +58,7 @@
 #define LOW false // JMH ADD for Waveshare Version
 #define HIGH true // JMH ADD for Waveshare Version
 //#define DBugLtrBrkTiming // (now managed in globals.h)uncomment to see how letter break timing is developed & synchronized w/ advParser
-bool DbgWrdBrkFtcr = false; //true;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
+bool DbgWrdBrkFtcr = true; //true;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
 bool DbgAvgDit = false;
 bool DbgPeriod = false;
 bool OneChrWrd = false;//added 20250318
@@ -1931,7 +1933,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 		ValidWrdBrk = true;
 		/*20250318 Test for a 1 character word
 		if found, inc wrdbrkFtcr*/
-		if(LtrPtr ==1)
+		if(LtrPtr ==1 && LtrHoldr[0] != 'E' && LtrHoldr[0] != 'A' && LtrHoldr[0] != 'I' && LtrHoldr[0] != 'U') //&& LtrHoldr[0] != 'S' && LtrHoldr[0] != 'T')
 		{
 			OneChrWrd = true; // ADDED 20250318
 			wrdbrkFtcr +=0.1;
@@ -1943,6 +1945,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 			}
 
 		} else OneChrWrd = false;
+		if(LtrPtr ==1 && (LtrHoldr[0] != 'A' || LtrHoldr[0] != 'I' || LtrHoldr[0] != 'U')) OneChrWrd = true;
 	}
 		
 	// this is here mainly as a diagnostic error report
@@ -2075,7 +2078,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 					advparser.Dbug = true;
 				}
 				/*Sync advparser.wrdbrkFtcr to current wrdbrkFtcr*/
-				advparser.wrdbrkFtcr = wrdbrkFtcr;//20250216 decided to de-link the two
+				advparser.wrdbrkFtcr = 1.1 * wrdbrkFtcr;//20250216 decided to de-link the two
 				//printf("wrdbrkFtcr: %4.1f\n", wrdbrkFtcr);
 				/*Perpare advparser, by 1st copying current decoder symbol sets into local advparser arrays*/
 				int IndxPtr = 0;
@@ -2289,12 +2292,13 @@ bool chkChrCmplt(unsigned long TimeStmp)
 #ifdef DeBgQueue
 			printf("ResetLstWrdDataSets complete\n");
 #endif			
-			// DeCd_KeyDwnPtr = DeCd_KeyUpPtr = 0; // resetbuffer pntrs
-			// float dummy;
-			// while(xQueueReceive(ToneSN_que2, (void *)& dummy, pdMS_TO_TICKS(3)) == pdTRUE)
-			// {
-			// 	// printf("ToneSN_que2 flush 4\n");
-			// }
+			//printf("Pstate? %d\n", Pstate);
+			/*2025108 Added the following for 1 character words that have a Morse symbol count of two or less
+			to ensure that the word gets followed by a 'space' character on the display*/
+			char space[2];
+			space[0] = ' ';
+			space[1] = 0;
+			ptrmsgbx->dispDeCdrTxt(space, TFT_GREENYELLOW);
 		}
 		if (DeCd_KeyDwnPtr != 0 && LtrPtr == 0)
 		{
@@ -2484,6 +2488,8 @@ bool chkChrCmplt(unsigned long TimeStmp)
 // #endif
 			if (Pstate == 2)
 			{
+				//printf("\n - Insert Letterbreak Space -\n");
+				/* Not convinced the following actually appends a 'space' character to the display*/
 				if (!RunAdvPrsr)
 				{
 					int i = 0;

@@ -834,6 +834,8 @@ private:
         {"BETNR", "BETTER", 5, 0}, //781
         {"WATB", "WATTS", 4, 0}, //782
         {"CQDE", "CQ DE ", 4, 0}, //783
+        {"DTTT", "DO", 4, 0}, //784
+        {"TRKT", "TRY", 4, 0}, //785
         
     };
     
@@ -843,6 +845,7 @@ private:
     bool StrchdDah; //used mainly to steer which rules to apply within the Bug1 rule set (when long dahs are detected certain simple rules are bypassed)
     int BugKey;//controls wich parsing rules are used 0 = paddle; 1 = bug; 2 = cootie
     int MaxCntKyUpBcktPtr;
+    int WrdBrkRule;
 
     uint8_t ExitPath[IntrvlBufSize];
     uint8_t ExitPtr; 

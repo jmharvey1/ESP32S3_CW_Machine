@@ -299,7 +299,7 @@ public:
 	inline uint8_t Get_KyBrdBat_level(void) { return KyBrdBatLvl; }
 	inline void Str_KyBrdBat_level(uint8_t Lvl) { KyBrdBatLvl = Lvl; }
 	inline int Get_RingbufPntr1(void) { return RingbufPntr1; }
-	// void DelLastNtry(void);
+	bool LastChrSpace = false;
 };
 #ifdef __cplusplus
 }
