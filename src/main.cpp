@@ -126,7 +126,7 @@ esp_event_loop_args_t event_task_args = {
 /*20250926 LVGLMsgBox.cpp - added 'F11' shortcut to toggle between Main & Settings screen*/
 /*20250930 LVGLMsgBox.cpp - reworked 'Help' screen to improve readability*/
 /*20251008 DcodeCW.cpp - Revised code to only insert a 'space' character when the single character word is made up of two or less Morse symbols*/
-
+/*20251010 AdvParser.cpp - reworked BldKyUpBktTbl(void) to improve letter break detection for keyboard/paddle sent code*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

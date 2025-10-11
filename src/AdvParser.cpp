@@ -57,8 +57,9 @@
  * 20250210 added S/N checks to use only 'valid' time interval
  * 20250217 Tweak to BldKyUpBktTbl()/Letter Break code
  * 20250223 BldKyUpBktTbl(void) changed letterbreak rule tests to include intervals of 0.65 the current dah interval
- * 20250225 reworked 'wrdbrkFtcr' compesation code & reanbled updates from the Adavance post paser back to the real time decoder
- * */
+ * 20251010 reworked BldKyUpBktTbl(void) to improve letter break detection for keyboard/paddle sent code
+ *
+ *  */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
 #include "AdvParser.h"
@@ -172,11 +173,33 @@ void AdvParser::InitDah_SplitPt(void)
 
 void AdvParser::FindBtmPtr(void)
 {
-    uint8_t MaxDitPtr = 0;
-    int MaxDitCnt = 0;
-    BtmPtr = 0;
+    uint8_t MaxDitPtr = BtmPtr = 0;
+    int MaxDitCnt = KeyDwnBuckts[BtmPtr].Cnt;
+    int origKeyDwnBucktPtr = KeyDwnBucktPtr;
+    /*test and make sure we're not looking at an unusually small interval value in the 1st bucket*/
+    /*Are there more than 2 keydwn buckets?*/
+    if( KeyDwnBucktPtr < 2) return; // nothing to do
+    /*figure out if the top keydown bucket represents a valid dah*/
+    if(KeyDwnBuckts[KeyDwnBucktPtr-1].Cnt> KeyDwnBuckts[KeyDwnBucktPtr].Cnt && KeyDwnBuckts[KeyDwnBucktPtr-1].Intrvl > 2 * KeyDwnBuckts[KeyDwnBucktPtr-2].Intrvl)
+    {    
+        KeyDwnBucktPtr--; //ignore the top bucket, it appears to be an outlier
+        //printf("FindBtmPtr: Skipping top bucket, appears to be an outlier\n");
+    }
+        /*figure out if the bottom keydown bucket represents a valid dit*/
+
+    if (((KeyDwnBuckts[BtmPtr + 1].Intrvl < ((float)KeyDwnBuckts[KeyDwnBucktPtr].Intrvl) /2.4)) && (KeyDwnBuckts[BtmPtr+1].Cnt >= KeyDwnBuckts[BtmPtr].Cnt))
+    {
+        if(KeyDwnBuckts[BtmPtr + 1].Cnt > MaxDitCnt)
+        {
+            MaxDitPtr = BtmPtr+1;
+            MaxDitCnt = KeyDwnBuckts[BtmPtr+1].Cnt;
+        }
+        BtmPtr++;
+        //printf("FindBtmPtr: Skipping bottom bucket, appears to be an outlier\n");
+        //KeyDwn:  23; Cnt:1	 KeyDwn:  80; Cnt:4	 KeyDwn: 244; Cnt:3	3
+    }
     float ratio = (float)KeyDwnBuckts[BtmPtr + 1].Intrvl / (float)KeyDwnBuckts[BtmPtr].Intrvl;
-    while (((KeyDwnBuckts[BtmPtr].Intrvl < 1200 / 35) || ratio < 1.4) && BtmPtr < KeyDwnBucktPtr)
+    while (( ratio < 1.5) && (BtmPtr < KeyDwnBucktPtr) && (KeyDwnBuckts[BtmPtr+1].Cnt >= KeyDwnBuckts[BtmPtr].Cnt))
     {
         if (KeyDwnBuckts[BtmPtr].Cnt >= MaxDitCnt)
         {
@@ -184,15 +207,13 @@ void AdvParser::FindBtmPtr(void)
             MaxDitCnt = KeyDwnBuckts[BtmPtr].Cnt;
         }
         BtmPtr++;
+        //printf("FindBtmPtr: BtmPtr: %d; MaxDitPtr: %d; KeyDwnBucktPtr: %d; KeyDwnBuckts[BtmPtr].Intrvl: %d; KeyDwnBuckts[MaxDitPtr].Intrvl: %d; KeyDwnBuckts[BtmPtr+1].Intrvl: %d; ratio: %4.2f\n", BtmPtr, MaxDitPtr, KeyDwnBucktPtr, KeyDwnBuckts[BtmPtr].Intrvl, KeyDwnBuckts[MaxDitPtr].Intrvl, KeyDwnBuckts[BtmPtr + 1].Intrvl, ratio);
         ratio = (float)KeyDwnBuckts[BtmPtr + 1].Intrvl / (float)KeyDwnBuckts[BtmPtr].Intrvl;
-        /*test and make sure we're not looking at an unusually small interval value in the 1st bucket*/
-        if(ratio >= 1.4 && BtmPtr == 0 && KeyDwnBuckts[BtmPtr+1].Intrvl < (KeyDwnBuckts[KeyDwnBucktPtr-1].Intrvl)/3)
-        {
-            BtmPtr++;
-            ratio = (float)KeyDwnBuckts[BtmPtr + 1].Intrvl / (float)KeyDwnBuckts[BtmPtr].Intrvl;
-        }
     }
-    if(BtmPtr > 0) BtmPtr--;
+    if (BtmPtr > 0 && (KeyDwnBuckts[BtmPtr - 1].Cnt > KeyDwnBuckts[BtmPtr].Cnt))
+        BtmPtr--;
+    KeyDwnBucktPtr = origKeyDwnBucktPtr; //restore the original value
+    //printf("FindBtmPtr: BtmPtr: %d; MaxDitPtr: %d; KeyDwnBucktPtr: %d; KeyDwnBuckts[BtmPtr].Intrvl: %d; KeyDwnBuckts[MaxDitPtr].Intrvl: %d; KeyDwnBuckts[BtmPtr+1].Intrvl: %d; ratio: %4.2f\n", BtmPtr, MaxDitPtr, KeyDwnBucktPtr, KeyDwnBuckts[BtmPtr].Intrvl, KeyDwnBuckts[MaxDitPtr].Intrvl, KeyDwnBuckts[BtmPtr + 1].Intrvl, ratio);        
 };
 bool AdvParser::GlitchChk(void)
 {
@@ -345,14 +366,14 @@ void AdvParser::BldKyUpBktTbl(void)
         {
             TmpSlope = CurLtrBrkSlope;
             if ((this->SortdUpIntrvls[i + 1] - this->SortdUpIntrvls[i]) <= 9)
-            {
-                CurLtrBrkSlope = 1.0; // ignore entries that differ less than the sample period (8ms)
+            { // ignore entries that differ less than the sample period (8ms)
+                CurLtrBrkSlope = 1.0;
                 if(bstltrbrkptr == i) bstltrbrkptr = i+1; //20250217 Added this line, to ensure pointer follows small changes
                 chk = 1;
             }    
-            else if ((this->SortdUpIntrvls[i + 1]) <= MinltrBrkVal)
-            {
-                CurLtrBrkSlope = 1.0; // ignore entries that are less than the 70% of a dah
+            else if ((this->SortdUpIntrvls[i + 1]) <= MinltrBrkVal) 
+            {// we're looking for a letter break for code between 12 &35 WPM, so skip intervals that don't make sense
+            CurLtrBrkSlope = 1.0; // ignore entries that are less than the 70% of a dah
                 bstltrbrkptr = i;
                 chk = 2;
             }
@@ -400,7 +421,7 @@ void AdvParser::BldKyUpBktTbl(void)
         bool match = false;
         // printf("this->SortdUpIntrvls[%d]=%d; (4 + (1.2 * KeyUpBuckts[%d].Intrvl) = %d\n", i, this->SortdUpIntrvls[i], KeyUpBucktPtr, (uint16_t)(4 + (1.2 * KeyUpBuckts[KeyUpBucktPtr].Intrvl)));
         if ((float)this->SortdUpIntrvls[i] <= (float)(4 + (1.2 * KeyUpBuckts[KeyUpBucktPtr].Intrvl)))
-        {
+        {// this interval fits in the current bucket
             KeyUpBuckts[KeyUpBucktPtr].Cnt++;
             match = true;
         }
@@ -429,21 +450,48 @@ void AdvParser::BldKyUpBktTbl(void)
     if (KeyUpBucktPtr >= 1)
     {
         char method = ' ';
-        if (OldSlope != 1)
+        
+        if(BugKey == 0)
+        { // paddle/keyboard
+            char choice = ' ';
+            MaxLtrBrkSlope = 0;
+            method = 'P'; // paddle/keyboard
+            for (int i = this->MaxKeyUpBckt; i < KeyUpBucktPtr - 1; i++)
+            {
+                CurLtrBrkSlope = ((float)((float)KeyUpBuckts[i + 1].Intrvl / (float)KeyUpBuckts[i].Intrvl));
+                // if (CurLtrBrkSlope > 1.4)
+                // {
+                //     this->LtrBrkVal = KeyUpBuckts[i + 1].Intrvl;
+                //     break;
+                // }
+                if (CurLtrBrkSlope >= MaxLtrBrkSlope)
+                {
+                    MaxLtrBrkSlope = CurLtrBrkSlope;
+                    bstltrbrkptr = i+1;
+                    choice = 'D';
+                }
+                if(KeyUpBuckts[i + 1].Intrvl >= this->AvgDahVal) break;
+            }
+            this->LtrBrkVal = KeyUpBuckts[bstltrbrkptr].Intrvl;
+            if (Dbug)
+                printf("bstltrbrkptr:%d; KeyUpBuckts[bstltrbrkptr].Intrvl: %d; KeyUpBucktPtr: %d; MaxKeyUpBckt: %d\n", bstltrbrkptr, KeyUpBuckts[bstltrbrkptr].Intrvl, KeyUpBucktPtr, this->MaxKeyUpBckt);
+        }
+        else if (OldSlope > 1)
         {
 
-            this->LtrBrkVal = this->SortdUpIntrvls[LtrBrkPtr+1];
-            //this->LtrBrkVal = this->SortdUpIntrvls[LtrBrkPtr] + (uint16_t)((float)(this->SortdUpIntrvls[LtrBrkPtr+1] - this->SortdUpIntrvls[LtrBrkPtr]) / 2.0);
+            this->LtrBrkVal = this->SortdUpIntrvls[LtrBrkPtr + 1];
+            // this->LtrBrkVal = this->SortdUpIntrvls[LtrBrkPtr] + (uint16_t)((float)(this->SortdUpIntrvls[LtrBrkPtr+1] - this->SortdUpIntrvls[LtrBrkPtr]) / 2.0);
             method = 'Q';
         }
         else
-        { // this is for paddle/keyboard where the sender is using large spacing between letter
+        { // didn't find an obvious letter break point using slope test
+
             method = 'X';
-            this->LtrBrkVal = this->SortdUpIntrvls[LtrBrkPtr] + (uint16_t)((float)(this->SortdUpIntrvls[LtrBrkPtr+1] - this->SortdUpIntrvls[LtrBrkPtr]) / 2.0);
+            this->LtrBrkVal = this->SortdUpIntrvls[LtrBrkPtr] + (uint16_t)((float)(this->SortdUpIntrvls[LtrBrkPtr + 1] - this->SortdUpIntrvls[LtrBrkPtr]) / 2.0);
         }
 
         if (Dbug)
-            printf("quick letterbreak find Method %c- this->LtrBrkVal: %d; LtrBrkPtr: %d; OldSlope: %4.2f; SortdUpIntrvls[LtrBrkPtr+1]:%d; SortdUpIntrvls[LtrBrkPtr]:%d \n\n", method, this->LtrBrkVal, LtrBrkPtr, OldSlope, SortdUpIntrvls[LtrBrkPtr+1], SortdUpIntrvls[LtrBrkPtr]);
+            printf("quick letterbreak find Method %c; BugKey: %d; this->LtrBrkVal: %d; LtrBrkPtr: %d; OldSlope: %4.2f; SortdUpIntrvls[LtrBrkPtr+1]:%d; SortdUpIntrvls[LtrBrkPtr]:%d \n\n", method, BugKey, this->LtrBrkVal, LtrBrkPtr, OldSlope, SortdUpIntrvls[LtrBrkPtr+1], SortdUpIntrvls[LtrBrkPtr]);
     }
 };
 /*Build the Key down Bucket table*/

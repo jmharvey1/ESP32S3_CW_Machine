@@ -53,12 +53,11 @@
 #include "Goertzel.h"
 #include "globals.h"
 
-// #define DeBgQueue // moved to globals.h
 #define MaxIntrvlCnt 24
 #define LOW false // JMH ADD for Waveshare Version
 #define HIGH true // JMH ADD for Waveshare Version
 //#define DBugLtrBrkTiming // (now managed in globals.h)uncomment to see how letter break timing is developed & synchronized w/ advParser
-bool DbgWrdBrkFtcr = true; //true;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
+bool DbgWrdBrkFtcr = false; //true;//true; //when 'true', reports "WrdBrkFtcr" to usb serial port/monitor
 bool DbgAvgDit = false;
 bool DbgPeriod = false;
 bool OneChrWrd = false;//added 20250318
