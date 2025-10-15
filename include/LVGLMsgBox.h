@@ -25,7 +25,6 @@ extern "C" {
 /*Added the following for Waveshare & lvgl support*/
 #include <lv_conf.h>
 #include "lvgl.h"
-
 #define TODAY __DATE__
 
 /*Waveshare 800x480 display & touch specific parameters*/

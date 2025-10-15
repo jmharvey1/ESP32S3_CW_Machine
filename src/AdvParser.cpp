@@ -58,7 +58,7 @@
  * 20250217 Tweak to BldKyUpBktTbl()/Letter Break code
  * 20250223 BldKyUpBktTbl(void) changed letterbreak rule tests to include intervals of 0.65 the current dah interval
  * 20251010 reworked BldKyUpBktTbl(void) to improve letter break detection for keyboard/paddle sent code
- *
+ * 20251014 added another check to BldKyUpBktTbl(void) to better detect which bucket has the most keyup times by setting minimum interval value to 27ms
  *  */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -326,6 +326,32 @@ void AdvParser::FindTopPtr(void)
 };
 /*Build the Key Up Bucket table.
  Plus scan for letter break interval*/
+/**
+ * @brief Builds the Key Up Bucket table and determines letter break values for Morse code decoding
+ * 
+ * This method processes intervals between key-up events to:
+ * 1. Group similar intervals into "buckets" for pattern analysis
+ * 2. Determine the optimal letter break point using slope analysis
+ * 3. Calculate the letter break value based on the input device (paddle/bug/keyboard)
+ * 
+ * The algorithm:
+ * - Creates buckets of similar interval values (within 20% variation)
+ * - Uses slope analysis to find significant changes in interval patterns
+ * - Handles different input devices (BugKey vs paddle/keyboard) differently
+ * - Adjusts letter break detection based on code speed (12-35 WPM range)
+ * 
+ * Key parameters used:
+ * - MinltrBrkVal: Minimum letter break value (65% of average dah value)
+ * - stopchkval: Maximum check value (170% of average dah value)
+ * - Slope thresholds: Uses 1.4 and 1.75 as significant change indicators
+ * 
+ * @note Debug output is available when Dbug flag is set
+ * @note Maximum of 15 buckets can be created (0-14 index)
+ * 
+ * @see AvgDahVal
+ * @see SortdUpIntrvls
+ * @see KeyUpBuckts
+ */
 void AdvParser::BldKyUpBktTbl(void)
 {
     /*Build the Key Up Bucket table*/
@@ -425,8 +451,9 @@ void AdvParser::BldKyUpBktTbl(void)
             KeyUpBuckts[KeyUpBucktPtr].Cnt++;
             match = true;
         }
-        /*while building the keyup groups/buckets, figure out which group/bucket best represents the avrgdedspace time*/
-        if (KeyUpBuckts[KeyUpBucktPtr].Cnt >= MaxKeyUpCnt && (KeyUpBuckts[KeyUpBucktPtr].Intrvl < 1.5 * KeyUpBuckts[this->MaxKeyUpBckt].Intrvl)) // skip if interval change is too great
+        /*while building the keyup groups/buckets, figure out which group/bucket best represents the avrgdedspace time
+        by finding the bucket with the most most keyup times*/
+        if (KeyUpBuckts[KeyUpBucktPtr].Cnt >= MaxKeyUpCnt && ((KeyUpBuckts[KeyUpBucktPtr].Intrvl < 1.5 * KeyUpBuckts[this->MaxKeyUpBckt].Intrvl)||(KeyUpBuckts[this->MaxKeyUpBckt].Intrvl<27))) //20251014 added skip if interval is too small; skip if interval change is too great
         {
             MaxKeyUpCnt = KeyUpBuckts[KeyUpBucktPtr].Cnt;
             this->MaxKeyUpBckt = KeyUpBucktPtr;
@@ -445,14 +472,14 @@ void AdvParser::BldKyUpBktTbl(void)
     } // end build keyup buckets code
     //printf("KeyUpBucktPtr:%d; KeyUpBuckts[KeyUpBucktPtr].Cnt = %d\n", KeyUpBucktPtr, KeyUpBuckts[KeyUpBucktPtr].Cnt);
     ///////////////////////////////////////////////////////////////////
-    /*Now using the slope result found above Do quick letterbreak find*/
+    /*Now using the slope result found above, Do quick letterbreak find*/
     LtrBrkPtr = bstltrbrkptr; // this value just got set in the above 'BldKyUpBktTbl()' function/method
     if (KeyUpBucktPtr >= 1)
     {
         char method = ' ';
         
         if(BugKey == 0)
-        { // paddle/keyboard
+        { // paddle/keyboard (Note: the current value of BugKey is set later in the process, so we're actually using last dATASET's value)
             char choice = ' ';
             MaxLtrBrkSlope = 0;
             method = 'P'; // paddle/keyboard
