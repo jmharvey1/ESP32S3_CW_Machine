@@ -30,6 +30,7 @@
 /*20250303 Reworked scaling values & running averages for threshold & AvgNois values & and removed inactivity check implemented 20250226
 * 		   And made 'send' timing changes to keystate & keyevent queues*/
 /*20250304 changed Avgnoise logic to ignore 'keydown' state change, Allowing threshold level to ride colser to the noisefloor*/
+/*20251025 moved to more streamlined method of calculating Goertzel algorithm*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -54,7 +55,7 @@ uint8_t LstLightLvl = 0;
 uint8_t OLDstate = 1;
 bool Ready = true;
 bool toneDetect = false;
-bool SlwFlg = false;
+bool SlwFlg = false;//'slow' mode (i.e., 4ms sample interval with 8ms dataset) no longer being used 20251025
 bool TmpSlwFlg = false;
 bool NoisFlg = false; // In ESP32 world NoisFlg is not used & is always false
 bool AutoTune = true; // false; //true;
@@ -62,7 +63,7 @@ bool Scaning = false;
 //20250304 not used any longer. Was part of a scheme to detect inactivity & Boost threshold val
 // bool noiseflg = false;
 int ModeVal = 0;
-int N = 0; // Block size sample 6 cycles of a 750Hz tone; ~8ms interval
+int N = Goertzel_SAMPLE_CNT; // Block size sample 6 cycles of a 750Hz tone; ~8ms interval
 int NL = Goertzel_SAMPLE_CNT / 2;
 int NC = 0;
 int NH = 0;
@@ -107,6 +108,23 @@ float TARGET_FREQUENCYL;		  // = feqlratio*TARGET_FREQUENCYC;//734.0; //Hz
 float TARGET_FREQUENCYH;		  // = feqhratio*TARGET_FREQUENCYC;//766.0; //Hz
 float SAMPLING_RATE = 83333;	  // see 'main.cpp' #include "soc/soc_caps.h"
 // float SAMPLING_RATE =79600;
+//new goertzel variables
+////////////////////////////////////////
+//int N = 64;
+float TwoPi = 2.0f * 3.14159f; 
+float k = ((N * TARGET_FREQUENCYC) / SAMPLING_RATE);
+float Alpha = TwoPi *k/N;
+float Beta = TwoPi *k*(N-1)/N;
+float Two_cos_Alpha = 2*cos(Alpha);
+//Precompute network coefficients
+float a = cos(Beta);
+float b = -sin(Beta);
+float c = sin(Alpha)*sin(Beta) -cos(Alpha)*cos(Beta);
+float d = sin(TwoPi * k);
+float w1 = 0;
+float w2 = 0;
+float magnitude = 0;
+////////////////////////////////////////
 float Q1;
 float Q2;
 float Q1H;
@@ -234,38 +252,47 @@ void ResetGoertzel(void)
 
 /* Call this once, to precompute the constants. */
 void InitGoertzel(void)
-{
-	int CYCLE_CNT; //, k;// 6.0
-	float omega;
-	float CyRadians;
-	// if(NuSmplRt !=0) SAMPLING_RATE = (float)NuSmplRt;
-	ResetGoertzel(); // make sure you're working with the current set of frequeincies needed for this set of parameters
-	/* For the lowest frequency of interest, Find the Maximum Number of whole Cycles we can look at  */
-	if (SlwFlg)
-		CYCLE_CNT = (int)((((float)(2 * Goertzel_SAMPLE_CNT)) * TARGET_FREQUENCYL) / SAMPLING_RATE);
-	else
-		CYCLE_CNT = (int)((((float)(Goertzel_SAMPLE_CNT)) * TARGET_FREQUENCYL) / SAMPLING_RATE);
-	// floatnumSamples = (float) (Goertzel_SAMPLE_CNT);
-	// k = (int) (0.5 + ((floatnumSamples * TARGET_FREQUENCYL) / (float)SAMPLING_RATE));
-	CyRadians = (2.0 * M_PI * CYCLE_CNT);
-	// omega = (2.0 * PI * k) / floatnumSamples;
-	NL = (int)(0.5 + ((SAMPLING_RATE / TARGET_FREQUENCYL) * (float)(CYCLE_CNT)));
-	omega = CyRadians / (float)NL;
-	coeffL = 2 * cos(omega);
+{ // new Goertzel code 20251025
+	k = ((N * TARGET_FREQUENCYC) / SAMPLING_RATE);
+    Alpha = TwoPi *k/N;
+    Beta = TwoPi *k*(N-1)/N;
+	Two_cos_Alpha = 2*cos(Alpha);
+//Precompute network coefficients
+	a = cos(Beta);
+	b = -sin(Beta);
+    c = sin(Alpha)*sin(Beta) -cos(Alpha)*cos(Beta);
+    d = sin(TwoPi * k);
+	// int CYCLE_CNT; //, k;// 6.0
+	// float omega;
+	// float CyRadians;
+	// // if(NuSmplRt !=0) SAMPLING_RATE = (float)NuSmplRt;
+	// ResetGoertzel(); // make sure you're working with the current set of frequeincies needed for this set of parameters
+	// /* For the lowest frequency of interest, Find the Maximum Number of whole Cycles we can look at  */
+	// if (SlwFlg)
+	// 	CYCLE_CNT = (int)((((float)(2 * Goertzel_SAMPLE_CNT)) * TARGET_FREQUENCYL) / SAMPLING_RATE);
+	// else
+	// 	CYCLE_CNT = (int)((((float)(Goertzel_SAMPLE_CNT)) * TARGET_FREQUENCYL) / SAMPLING_RATE);
+	// // floatnumSamples = (float) (Goertzel_SAMPLE_CNT);
+	// // k = (int) (0.5 + ((floatnumSamples * TARGET_FREQUENCYL) / (float)SAMPLING_RATE));
+	// CyRadians = (2.0 * M_PI * CYCLE_CNT);
+	// // omega = (2.0 * PI * k) / floatnumSamples;
+	// NL = (int)(0.5 + ((SAMPLING_RATE / TARGET_FREQUENCYL) * (float)(CYCLE_CNT)));
+	// omega = CyRadians / (float)NL;
+	// coeffL = 2 * cos(omega);
 
-	NC = (int)(0.5 + ((SAMPLING_RATE / TARGET_FREQUENCYC) * (float)(CYCLE_CNT)));
-	// k = (int) (0.5 + ((floatnumSamples * TARGET_FREQUENCYC) / (float)SAMPLING_RATE));
-	// CyRadians = (2.0 * PI * CYCLE_CNT);
-	// omega = (2.0 * PI * k) / floatnumSamples;
-	omega = CyRadians / (float)NC;
-	coeffC = 2 * cos(omega);
+	// NC = (int)(0.5 + ((SAMPLING_RATE / TARGET_FREQUENCYC) * (float)(CYCLE_CNT)));
+	// // k = (int) (0.5 + ((floatnumSamples * TARGET_FREQUENCYC) / (float)SAMPLING_RATE));
+	// // CyRadians = (2.0 * PI * CYCLE_CNT);
+	// // omega = (2.0 * PI * k) / floatnumSamples;
+	// omega = CyRadians / (float)NC;
+	// coeffC = 2 * cos(omega);
 
-	NH = (int)(0.5 + ((SAMPLING_RATE / TARGET_FREQUENCYH) * (float)(CYCLE_CNT)));
-	// k = (int) (0.5 + ((floatnumSamples * TARGET_FREQUENCYH) / (float)SAMPLING_RATE));
-	// CyRadians = (2.0 * PI * CYCLE_CNT);
-	// omega = (2.0 * PI * k) / floatnumSamples;
-	omega = CyRadians / (float)NH;
-	coeffH = 2 * cos(omega);
+	// NH = (int)(0.5 + ((SAMPLING_RATE / TARGET_FREQUENCYH) * (float)(CYCLE_CNT)));
+	// // k = (int) (0.5 + ((floatnumSamples * TARGET_FREQUENCYH) / (float)SAMPLING_RATE));
+	// // CyRadians = (2.0 * PI * CYCLE_CNT);
+	// // omega = (2.0 * PI * k) / floatnumSamples;
+	// omega = CyRadians / (float)NH;
+	// coeffH = 2 * cos(omega);
 
 	/* uncomment for Debug/Diagnostic testing*/
 	// char buf[50];
@@ -278,40 +305,51 @@ void InitGoertzel(void)
 * this builds the goertzel coefficients for the next magnitude calculation
 */
 void ProcessSample(int sample, int Scnt)
-{
-	char Smpl[10];
-	if (Scnt >= Goertzel_SAMPLE_CNT)
-		GData[Scnt - Goertzel_SAMPLE_CNT] = sample;
-	// if(Scnt ==0 ) prntFlg = true; //just used for debugging
-	if (Scnt > NL)
-	{
-		// just used for debugging
-		//  if(prntFlg){
-		//  	prntFlg = false;
-		//  	sprintf( Smpl,"%d\n", Scnt);
-		//  	printf( Smpl);
-		//  }
-		return; // don't look or care about anything beyond the lowest number of samples needed for this frequency set
+{ // new Goertzel code 20251025
+	float w0 = sample + Two_cos_Alpha * w1 - w2;
+	// Delay line data shifting
+	w2 = w1;
+	w1 = w0;
+	if (Scnt == N - 1)
+	{ // given current sampling rate & target frequency this should be every ~4.7ms
+		float real = w1 * a + w2 * c;
+		float imag = (w1 * b + w2 * d);
+		magnitude = sqrtf(real * real + imag * imag) / 25.0f; // normalize
+		w1 = w2 = 0.0f;
 	}
-	float Q0;
-	float FltSampl = (float)sample;
+	// char Smpl[10];
+	// if (Scnt >= Goertzel_SAMPLE_CNT)
+	// 	GData[Scnt - Goertzel_SAMPLE_CNT] = sample;
+	// // if(Scnt ==0 ) prntFlg = true; //just used for debugging
+	// if (Scnt > NL)
+	// {
+	// 	// just used for debugging
+	// 	//  if(prntFlg){
+	// 	//  	prntFlg = false;
+	// 	//  	sprintf( Smpl,"%d\n", Scnt);
+	// 	//  	printf( Smpl);
+	// 	//  }
+	// 	return; // don't look or care about anything beyond the lowest number of samples needed for this frequency set
+	// }
+	// float Q0;
+	// float FltSampl = (float)sample;
 
-	Q0 = (coeffL * Q1) - Q2 + FltSampl;
-	Q2 = Q1;
-	Q1 = Q0;
-	if (Scnt > NC)
-	{
-		return;
-	}
-	Q0 = (coeffC * Q1C) - Q2C + FltSampl;
-	Q2C = Q1C;
-	Q1C = Q0;
+	// Q0 = (coeffL * Q1) - Q2 + FltSampl;
+	// Q2 = Q1;
+	// Q1 = Q0;
+	// if (Scnt > NC)
+	// {
+	// 	return;
+	// }
+	// Q0 = (coeffC * Q1C) - Q2C + FltSampl;
+	// Q2C = Q1C;
+	// Q1C = Q0;
 
-	if (Scnt > NH)
-		return;
-	Q0 = (coeffH * Q1H) - Q2H + FltSampl;
-	Q2H = Q1H;
-	Q1H = Q0;
+	// if (Scnt > NH)
+	// 	return;
+	// Q0 = (coeffH * Q1H) - Q2H + FltSampl;
+	// Q2H = Q1H;
+	// Q1H = Q0;
 }
 
 /* Optimized Goertzel */
@@ -320,16 +358,9 @@ float GetMagnitudeSquared(float q1, float q2, float Coeff, int SmplCnt)
 {
 	float result;
 	float SclFctr = (float)SmplCnt / 2.0;
-	if (SlwFlg)
+	if (SlwFlg)//'slow' mode (i.e., 4ms sample interval with 8ms dataset) no longer being used 20251025
 		SclFctr = 2 * SclFctr;
-	// float CyRadians = (2.0 * M_PI * CYCLE_CNT);
-	// float omega = CyRadians / (float)floatN;
-	// float cosine = cos(omega);
 	result = ((q1 * q1) + (q2 * q2) - (q1 * q2 * Coeff)) / SclFctr;
-	// float real = (q1 - q2 * cosine);
-	// float imag = (q2 * sine);
-	// result = (real * real) + (imag * imag);
-	// PhazAng = 360 * ((atan(real / imag)) / (2 * M_PI));
 	return result;
 }
 /*Main entry point. Calc CURRENT Goertezl sample set*/
@@ -337,23 +368,17 @@ void ComputeMags(unsigned long now)
 {
 	/*Cast the 'now' timestamp to 'TmpEvntTime' to be used/referenced in the Chk4KeyDwn() routine*/
 	TmpEvntTime = now;
-	// magL = magC;
-	// magC = Grtzl_Gain * 4.0*sqrt(GetMagnitudeSquared(Q1C, Q2C, coeffC, NC));
-	// magH = Grtzl_Gain * 4.0*sqrt(GetMagnitudeSquared(Q1H, Q2H, coeffH, NH));
-	// magL = Grtzl_Gain * 4.0*sqrt(GetMagnitudeSquared(Q1, Q2, coeffL, NL));
-	magC = Grtzl_Gain * 10.0 * sqrt(GetMagnitudeSquared(Q1C, Q2C, coeffC, NC));
-	//magH = Grtzl_Gain * 10.0 * sqrt(GetMagnitudeSquared(Q1H, Q2H, coeffH, NH));
-	//magL = Grtzl_Gain * 10.0 * sqrt(GetMagnitudeSquared(Q1, Q2, coeffL, NL));
+	//magC = Grtzl_Gain * 10.0 * sqrt(GetMagnitudeSquared(Q1C, Q2C, coeffC, NC));
+	magC = Grtzl_Gain * 10.0 * magnitude; //Using new Goertzel code
 	/*Added the following to preload the current sample set to be combined with next incoming data set*/
-	if (SlwFlg)
-	{
-		// printf( "KK");
-		ResetGoertzel();
-		for (int i = 0; i < Goertzel_SAMPLE_CNT; i++)
-		{
-			ProcessSample(GData[i], i);
-		}
-	}
+	// if (SlwFlg)
+	// {
+	// 	ResetGoertzel();
+	// 	for (int i = 0; i < Goertzel_SAMPLE_CNT; i++)
+	// 	{
+	// 		ProcessSample(GData[i], i);
+	// 	}
+	// }
 	/*End of preload process */
 	//CurLvl = (magC + magL + magH) / 3;
 	CurLvl = magC;
@@ -557,7 +582,7 @@ void ComputeMags(unsigned long now)
 		}
 
 		AdjSqlch = AvgNoise;
-		if (SlwFlg)
+		if (SlwFlg)//'slow' mode (i.e., 4ms sample interval with 8ms dataset) no longer being used 20251025
 			AdjSqlch = 1.20 * AdjSqlch;
 	}
 	else
@@ -653,8 +678,6 @@ void Chk4KeyDwn(float NowLvl)
 		}
 		if (!toneDetect && !Scaning) // if (((NoiseFlr > AdjSqlch)  ) && !toneDetect && !Scaning)
 		{
-			// if(((CurLvl  > 2*AdjSqlch)||(NoiseFlr > AdjSqlch))) toneDetect = true;
-			// if((CurLvl > AdjSqlch) && SlwFlg) toneDetect = true; //used to dectect key down state while using 8ms sample interval
 			if (((NoiseFlr > 2 * AdjSqlch) || (NoiseFlr > AdjSqlch)))
 				toneDetect = true;
 			if ((NoiseFlr > AdjSqlch) && SlwFlg)
@@ -961,10 +984,6 @@ void Chk4KeyDwn(float NowLvl)
 	}
 	if (Sentstate)
 	{ // 1 = Keyup, or "no tone"; Sentstate 0 = Keydown
-		// if (chkChrCmplt(TmpEvntTime) && SlwFlg != TmpSlwFlg)
-		// { // key is up
-		// 	SlwFlg = TmpSlwFlg;
-		// }
 		if (CalGtxlParamFlg)
 		{
 			CalGtxlParamFlg = false;

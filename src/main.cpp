@@ -128,6 +128,7 @@ esp_event_loop_args_t event_task_args = {
 /*20251008 DcodeCW.cpp - Revised code to only insert a 'space' character when the single character word is made up of two or less Morse symbols*/
 /*20251010 AdvParser.cpp - reworked BldKyUpBktTbl(void) to improve letter break detection for keyboard/paddle sent code*/
 /*20251010 AdvParser.cpp - another small change improve letter break dection*/
+/*20251025 Goertzel.cpp - moved to more streamlined method of calculating Goertzel algorithm*/
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"
@@ -686,13 +687,13 @@ void GoertzelHandler(void *param)
       ret = adc_continuous_read(adc_handle, result, Goertzel_SAMPLE_CNT * SOC_ADC_DIGI_RESULT_BYTES, &ret_num, 0);
       if (ret == ESP_OK)
       {
-        if (SlwFlg)
+        if (SlwFlg) // if in 'slow' mode (i.e., 4ms sample interval with 8ms dataset) no longer being used 20251025
           FrstPass = false; // 20231231 added to support new 4ms sample interval, W/ 8ms dataset
         if (FrstPass)
         {
           ResetGoertzel();
         }
-        if (SlwFlg && !FrstPass)
+        if (SlwFlg && !FrstPass) //'slow' mode (i.e., 4ms sample interval with 8ms dataset) no longer being used 20251025
           offset = Goertzel_SAMPLE_CNT;
         else
           offset = 0;
@@ -737,12 +738,7 @@ void GoertzelHandler(void *param)
         {
 #endif          
           /*logic to manage the number of data samples to take before going on to compute goertzel magnitudes*/
-          // if(SlwFlg && FrstPass){
-          //   FrstPass = false;
-          // } else if(SlwFlg){
-          //   FrstPass = true;
-          // }
-          if (SlwFlg && FrstPass)
+          if (SlwFlg && FrstPass)//'slow' mode (i.e., 4ms sample interval with 8ms dataset) no longer being used 20251025
           {
             FrstPass = false;
           }
@@ -917,7 +913,7 @@ void ToneFreqTask(void *param)
       {
         _DemodFreq = (int)((float)40 * (float)SAMPLING_RATE) / (float)_SmplCNt;
         freq_int = _DemodFreq;// used in the scope view as current tone frequency
-        if (_DemodFreq > 450)
+        if (_DemodFreq >= 450)
         {
           // printf("_DemodFreq: %d;\tAvgToneFreq: %d\tTARGET_FREQUENCYC: %d;\tCurSendrFreq: %d\n", _DemodFreq, (uint16_t)AvgToneFreq, (uint16_t)TARGET_FREQUENCYC, (int)CurSendrFreq);
           /*20250211 reworked Sender changed & tone Frequency filter code*/
@@ -1603,7 +1599,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     DFault.AutoTune = AutoTune;
     DFault.TRGT_FREQ = (int)TARGET_FREQUENCYC;
     DFault.Grtzl_Gain = Grtzl_Gain;
-    DFault.SlwFlg = SlwFlg;
+    DFault.SlwFlg = SlwFlg;//'slow' mode (i.e., 4ms sample interval with 8ms dataset) no longer being used 20251025
     DFault.NoisFlg = NoisFlg;
     
     sprintf(Title, "\n        No stored USER params Found\n   Using FACTORY values until params are\n   'Saved' via the Settings Screen\n");
@@ -1638,7 +1634,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     DFault.NoisFlg = (bool)strdAT;
     /*pass the decoder se vTaskDelay(5000 / portTICK_PERIOD_MS);tting(s) back to their global counterpart(s) */
     AutoTune = DFault.AutoTune;
-    SlwFlg = DFault.SlwFlg;
+    SlwFlg = DFault.SlwFlg;//'slow' mode (i.e., 4ms sample interval with 8ms dataset) no longer being used 20251025
     NoisFlg = DFault.NoisFlg;
     NiteMode = DFault.NiteMode;
     ModeCnt = DFault.ModeCnt;

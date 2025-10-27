@@ -1745,6 +1745,11 @@ void AdvParser::SetSpltPt(Buckt_t arr[], int n)
                 if (Dbug)
                     printf("Try again start:%d; stop:%d\n", start, stop);
             }
+            if (((SortdPtr - 1) > 15) && (this->SortdDwnIntrvls[bstSpltPtptr] > 0.6 * this->SortdDwnIntrvls[(SortdPtr - 1)]))
+            { // we have a large data set, and the split point is looks to be too high
+                stop--;
+                if(this->Dbug) printf("Suspect Split Point;Decrementing stop pt to %d\n", stop);
+            }
         }
         this->NuSpltVal = this->SortdDwnIntrvls[bstSpltPtptr] + ((this->SortdDwnIntrvls[bstSpltPtptr + 1] - this->SortdDwnIntrvls[bstSpltPtptr]) / 2);
         this->DitDahSplitVal = this->NuSpltVal;
