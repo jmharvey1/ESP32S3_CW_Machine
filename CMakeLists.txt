@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16.0)
-message("Configuring project ESP32S3_CW_Machine")
+message("Configuring Project ESP32S3_CW_Machine")
 message("Using IDF_PATH: $ENV{IDF_PATH}")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(ESP32S3_CW_Machine)

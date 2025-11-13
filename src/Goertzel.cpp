@@ -31,6 +31,7 @@
 * 		   And made 'send' timing changes to keystate & keyevent queues*/
 /*20250304 changed Avgnoise logic to ignore 'keydown' state change, Allowing threshold level to ride colser to the noisefloor*/
 /*20251025 moved to more streamlined method of calculating Goertzel algorithm*/
+/*20251113 simplified threshold tone detection code*/
 #include <stdio.h>
 #include <math.h>
 #include "Goertzel.h"
@@ -482,15 +483,13 @@ void ComputeMags(unsigned long now)
 	if(NowLvl>curpk) curpk = NowLvl;	
 	if((ToneThresHold <  curpk) && (NowLvl>curNois)) //20250228 added '(ToneThresHold <  NoiseFlr)' as a precheck that we're not about to detect a keydown envent in the 'Chk4KeyDwn()' section/function
 	{
-		//ToneThresHold = ((5*ToneThresHold) + (curpk))/6;
-		ToneThresHold = ((9*ToneThresHold) + (curpk))/10;
-		//NuToneThresHold = ((9*NuToneThresHold) + (curpk))/10;
-
+		// ToneThresHold = ((9*ToneThresHold) + (curpk))/10;
+		
 	} 
 	else
 	{
-		ToneThresHold = ((45*ToneThresHold) + (0.9*ToneThresHold))/46;
-		//NuToneThresHold = ((45*NuToneThresHold) + (0.9*NuToneThresHold))/46;	
+		//ToneThresHold = ((45*ToneThresHold) + (0.9*ToneThresHold))/46;
+		ToneThresHold = ((29*ToneThresHold) + (0.9*ToneThresHold))/30;
 	} 
 	
 	/*now to aviod false key dtection, set minimum noise value*/
@@ -527,7 +526,6 @@ void ComputeMags(unsigned long now)
 	/* This sets the squelch point with/when only white noise is applied*/
 	if (!toneDetect)
 	{
-		//AvgNoise = ((99 * AvgNoise) + (1.4 * SigPk)) / 100;
 		AvgNoise = ((99 * AvgNoise) + (1.4 * SigPk)) / 100;//20250303
 	}
 	else
@@ -593,7 +591,7 @@ void ComputeMags(unsigned long now)
 	}
 
 	/*This 'if' stops the Blue plot line from going below the Grey line*/
-	if (ToneThresHold < AvgNoise) ToneThresHold = AvgNoise; // 20231022 added this to lessen the chance that noise might induce a false keydown at the 1st of a letter/character
+	if (ToneThresHold < 1.2*AvgNoise) ToneThresHold = 1.2*AvgNoise; // 20231022 added this to lessen the chance that noise might induce a false keydown at the 1st of a letter/character
 	
 	//if (NuToneThresHold < AvgNoise) NuToneThresHold = AvgNoise;
 	
@@ -657,8 +655,8 @@ void Chk4KeyDwn(float NowLvl)
 			if ((OLDNoiseFlr < NoiseFlr) && (OLDNoiseFlr < AvgNoise))
 			{
 				float NuNoise = 0.5 * (NoiseFlr - OLDNoiseFlr) + OLDNoiseFlr;
-				if (NuNoise < NoiseFlr)
-					AvgNoise = (5 * AvgNoise + NuNoise) / 6;
+				// if (NuNoise < NoiseFlr)
+				// 	AvgNoise = (5 * AvgNoise + NuNoise) / 6;
 			}
 			toneDetect = true;
 			if (!GudTone)
@@ -700,7 +698,8 @@ void Chk4KeyDwn(float NowLvl)
 		if (KeyDwnCnt > 4)
 		{
 			KeyDwnCnt--;
-			ToneThresHold = AvgNoise;
+			//ToneThresHold = ((9*ToneThresHold) + (1.25*AvgNoise))/10;
+			ToneThresHold = ((9*ToneThresHold) + ((NoiseFlr-AvgNoise)/2.5)+AvgNoise)/10;
 		}
 		else
 			ToneThresHold = NoisBuf[OldestSmpl];
@@ -721,10 +720,9 @@ void Chk4KeyDwn(float NowLvl)
 		tmpcurnoise = ((CurLvl - NFlrBase) / 2) + NFlrBase;
 		if (state != OLDstate)
 		{ //this resets the 'AvgNoise' value right at the moment keydown has just been detected
-			//AvgNoise = tmpcurnoise; //20250219 changed from, AvgNoise = tmpcurnoise
-			if (state != 0) AvgNoise = tmpcurnoise; //20250304 changed from,above logic to get avgnoise & threshold to track closer to noise floor during keydown interval
-			else if(avgDit < 1200 / 35) AvgNoise = 1.25* tmpcurnoise;
-			else AvgNoise = 0.7 * tmpcurnoise;
+			// if (state != 0) AvgNoise = tmpcurnoise; //20250304 changed from,above logic to get avgnoise & threshold to track closer to noise floor during keydown interval
+			// else if(avgDit < 1200 / 35) AvgNoise = 1.25* tmpcurnoise;
+			// else AvgNoise = 0.7 * tmpcurnoise;
 			OLDstate = state;
 		}
 
@@ -756,7 +754,7 @@ void Chk4KeyDwn(float NowLvl)
 		if ((state != OLDstate))
 		{ /* Just transistion from keydown to keyup */
 			float tmpcurnoise = ((AvgNoise - NFlrBase) / 2) + NFlrBase;
-			AvgNoise = tmpcurnoise;
+			//AvgNoise = tmpcurnoise;
 			OLDstate = state;
 			SndS_N = true;
 		}

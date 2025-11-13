@@ -324,7 +324,7 @@ void KeyEvntTask(void *param)
 					Sentstate = Kstate;
 					//printf("\nKstate: %d\tEvntTime: %d\n", Kstate, (int)EvntTime);
 					interval = (uint16_t)(EvntTime - OldEvntTime);
-					if (interval > 750 && Kstate == 1) printf("\n!!ERROR!! Kstate: %d\tEvntTime: %d\tOldEvntTime: %d\tinterval: %d\n", Kstate, (int)EvntTime, (int)OldEvntTime, interval);
+					//if (interval > 750 && Kstate == 1) printf("\n!!ERROR!! Kstate: %d\tEvntTime: %d\tOldEvntTime: %d\tinterval: %d\n", Kstate, (int)EvntTime, (int)OldEvntTime, interval);
 
 					// OldOldTime = OldEvntTime;
 					OldEvntTime = EvntTime;

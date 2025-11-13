@@ -129,6 +129,8 @@ esp_event_loop_args_t event_task_args = {
 /*20251010 AdvParser.cpp - reworked BldKyUpBktTbl(void) to improve letter break detection for keyboard/paddle sent code*/
 /*20251010 AdvParser.cpp - another small change improve letter break dection*/
 /*20251025 Goertzel.cpp - moved to more streamlined method of calculating Goertzel algorithm*/
+/*20251113 Goertzel.cpp - Simplified threshold tone detection code */
+
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
 #include "globals.h"

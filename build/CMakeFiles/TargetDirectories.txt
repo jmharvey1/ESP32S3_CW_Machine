@@ -1,0 +1,2 @@
+/home/jim/Documents/PlatformIO/Projects/ESP32S3_CW_Machine/build/CMakeFiles/edit_cache.dir
+/home/jim/Documents/PlatformIO/Projects/ESP32S3_CW_Machine/build/CMakeFiles/rebuild_cache.dir
