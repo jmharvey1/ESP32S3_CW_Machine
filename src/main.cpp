@@ -130,6 +130,7 @@ esp_event_loop_args_t event_task_args = {
 /*20251010 AdvParser.cpp - another small change improve letter break dection*/
 /*20251025 Goertzel.cpp - moved to more streamlined method of calculating Goertzel algorithm*/
 /*20251113 Goertzel.cpp - Simplified threshold tone detection code */
+/*20251213 Revised paltformio.ini to be complaint with espidf (v5.5.0)*/
 
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support
