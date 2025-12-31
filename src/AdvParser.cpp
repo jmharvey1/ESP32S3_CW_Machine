@@ -59,6 +59,7 @@
  * 20250223 BldKyUpBktTbl(void) changed letterbreak rule tests to include intervals of 0.65 the current dah interval
  * 20251010 reworked BldKyUpBktTbl(void) to improve letter break detection for keyboard/paddle sent code
  * 20251014 added another check to BldKyUpBktTbl(void) to better detect which bucket has the most keyup times by setting minimum interval value to 27ms
+ * 20251230 added check to skip very small keyup intervals in BldKyUpBktTbl(void) method 'P'addle letter break detection    
  *  */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -386,20 +387,21 @@ void AdvParser::BldKyUpBktTbl(void)
     uint16_t stopchkval = (int)(1.7 * this->AvgDahVal);
     uint16_t MinltrBrkVal = (int)(0.65 * this->AvgDahVal); // changed from .7 to .65 20250223
     for (int i = 0; i <= SortdPtr - 1; i++)
-    {   
+    {
         int chk = 0;
-        if (i < SortdPtr-1)
+        if (i < SortdPtr - 1)
         {
             TmpSlope = CurLtrBrkSlope;
             if ((this->SortdUpIntrvls[i + 1] - this->SortdUpIntrvls[i]) <= 9)
             { // ignore entries that differ less than the sample period (8ms)
                 CurLtrBrkSlope = 1.0;
-                if(bstltrbrkptr == i) bstltrbrkptr = i+1; //20250217 Added this line, to ensure pointer follows small changes
+                if (bstltrbrkptr == i)
+                    bstltrbrkptr = i + 1; // 20250217 Added this line, to ensure pointer follows small changes
                 chk = 1;
-            }    
-            else if ((this->SortdUpIntrvls[i + 1]) <= MinltrBrkVal) 
-            {// we're looking for a letter break for code between 12 &35 WPM, so skip intervals that don't make sense
-            CurLtrBrkSlope = 1.0; // ignore entries that are less than the 70% of a dah
+            }
+            else if ((this->SortdUpIntrvls[i + 1]) <= MinltrBrkVal)
+            {                         // we're looking for a letter break for code between 12 &35 WPM, so skip intervals that don't make sense
+                CurLtrBrkSlope = 1.0; // ignore entries that are less than the 70% of a dah
                 bstltrbrkptr = i;
                 chk = 2;
             }
@@ -424,7 +426,7 @@ void AdvParser::BldKyUpBktTbl(void)
                     bstltrbrkptr = i;
                     choice = 'B';
                 }
-                else if (CurLtrBrkSlope >= 1.4 && i == bstltrbrkptr+1 && DoSlopeChk)
+                else if (CurLtrBrkSlope >= 1.4 && i == bstltrbrkptr + 1 && DoSlopeChk)
                 {
                     CurLtrBrkSlope = 1.0;
                     bstltrbrkptr = i;
@@ -433,7 +435,7 @@ void AdvParser::BldKyUpBktTbl(void)
                 if (MaxLtrBrkSlope >= 1.75 && bstltrbrkptr >= 2)
                     stop = i;
                 if (Dbug)
-                    printf("i:%d; %d/%d = %5.1f; bstltrbrkptr: %d rule: %d%c \n", i, this->SortdUpIntrvls[i + 1], this->SortdUpIntrvls[i], CurLtrBrkSlope, bstltrbrkptr, chk, choice);    
+                    printf("i:%d; %d/%d = %5.1f; bstltrbrkptr: %d rule: %d%c \n", i, this->SortdUpIntrvls[i + 1], this->SortdUpIntrvls[i], CurLtrBrkSlope, bstltrbrkptr, chk, choice);
             }
             else if (Dbug && i >= UprHlf && this->SortdUpIntrvls[i] > 35)
                 printf(" i:%d; %d/%d = %5.1f\n", i, this->SortdUpIntrvls[i + 1], this->SortdUpIntrvls[i], CurLtrBrkSlope);
@@ -447,13 +449,13 @@ void AdvParser::BldKyUpBktTbl(void)
         bool match = false;
         // printf("this->SortdUpIntrvls[%d]=%d; (4 + (1.2 * KeyUpBuckts[%d].Intrvl) = %d\n", i, this->SortdUpIntrvls[i], KeyUpBucktPtr, (uint16_t)(4 + (1.2 * KeyUpBuckts[KeyUpBucktPtr].Intrvl)));
         if ((float)this->SortdUpIntrvls[i] <= (float)(4 + (1.2 * KeyUpBuckts[KeyUpBucktPtr].Intrvl)))
-        {// this interval fits in the current bucket
+        { // this interval fits in the current bucket
             KeyUpBuckts[KeyUpBucktPtr].Cnt++;
             match = true;
         }
         /*while building the keyup groups/buckets, figure out which group/bucket best represents the avrgdedspace time
         by finding the bucket with the most most keyup times*/
-        if (KeyUpBuckts[KeyUpBucktPtr].Cnt >= MaxKeyUpCnt && ((KeyUpBuckts[KeyUpBucktPtr].Intrvl < 1.5 * KeyUpBuckts[this->MaxKeyUpBckt].Intrvl)||(KeyUpBuckts[this->MaxKeyUpBckt].Intrvl<27))) //20251014 added skip if interval is too small; skip if interval change is too great
+        if (KeyUpBuckts[KeyUpBucktPtr].Cnt >= MaxKeyUpCnt && ((KeyUpBuckts[KeyUpBucktPtr].Intrvl < 1.5 * KeyUpBuckts[this->MaxKeyUpBckt].Intrvl) || (KeyUpBuckts[this->MaxKeyUpBckt].Intrvl < 27))) // 20251014 added skip if interval is too small; skip if interval change is too great
         {
             MaxKeyUpCnt = KeyUpBuckts[KeyUpBucktPtr].Cnt;
             this->MaxKeyUpBckt = KeyUpBucktPtr;
@@ -467,24 +469,30 @@ void AdvParser::BldKyUpBktTbl(void)
                 break;
             }
             KeyUpBuckts[KeyUpBucktPtr].Intrvl = this->SortdUpIntrvls[i];
-             KeyUpBuckts[KeyUpBucktPtr].Cnt = 1;
+            KeyUpBuckts[KeyUpBucktPtr].Cnt = 1;
         }
     } // end build keyup buckets code
-    //printf("KeyUpBucktPtr:%d; KeyUpBuckts[KeyUpBucktPtr].Cnt = %d\n", KeyUpBucktPtr, KeyUpBuckts[KeyUpBucktPtr].Cnt);
+    // printf("KeyUpBucktPtr:%d; KeyUpBuckts[KeyUpBucktPtr].Cnt = %d\n", KeyUpBucktPtr, KeyUpBuckts[KeyUpBucktPtr].Cnt);
     ///////////////////////////////////////////////////////////////////
     /*Now using the slope result found above, Do quick letterbreak find*/
     LtrBrkPtr = bstltrbrkptr; // this value just got set in the above 'BldKyUpBktTbl()' function/method
     if (KeyUpBucktPtr >= 1)
     {
         char method = ' ';
-        
-        if(BugKey == 0)
+
+        if (BugKey == 0)
         { // paddle/keyboard (Note: the current value of BugKey is set later in the process, so we're actually using last dATASET's value)
             char choice = ' ';
             MaxLtrBrkSlope = 0;
+            bstltrbrkptr = 0;
             method = 'P'; // paddle/keyboard
-            for (int i = this->MaxKeyUpBckt; i < KeyUpBucktPtr - 1; i++)
+            for (int i = this->MaxKeyUpBckt; i < KeyUpBucktPtr; i++)
             {
+                if (KeyUpBuckts[i].Intrvl < 60) // 20251230 skip intervals that are too small to be valid
+                    continue;
+                if (KeyUpBuckts[i].Intrvl > stopchkval)
+                    break;
+
                 CurLtrBrkSlope = ((float)((float)KeyUpBuckts[i + 1].Intrvl / (float)KeyUpBuckts[i].Intrvl));
                 // if (CurLtrBrkSlope > 1.4)
                 // {
@@ -494,10 +502,11 @@ void AdvParser::BldKyUpBktTbl(void)
                 if (CurLtrBrkSlope >= MaxLtrBrkSlope)
                 {
                     MaxLtrBrkSlope = CurLtrBrkSlope;
-                    bstltrbrkptr = i+1;
+                    bstltrbrkptr = i + 1;
                     choice = 'D';
                 }
-                if(KeyUpBuckts[i + 1].Intrvl >= this->AvgDahVal) break;
+                if (KeyUpBuckts[i + 1].Intrvl >= this->AvgDahVal)
+                    break;
             }
             this->LtrBrkVal = KeyUpBuckts[bstltrbrkptr].Intrvl;
             if (Dbug)
@@ -518,7 +527,7 @@ void AdvParser::BldKyUpBktTbl(void)
         }
 
         if (Dbug)
-            printf("quick letterbreak find Method %c; BugKey: %d; this->LtrBrkVal: %d; LtrBrkPtr: %d; OldSlope: %4.2f; SortdUpIntrvls[LtrBrkPtr+1]:%d; SortdUpIntrvls[LtrBrkPtr]:%d \n\n", method, BugKey, this->LtrBrkVal, LtrBrkPtr, OldSlope, SortdUpIntrvls[LtrBrkPtr+1], SortdUpIntrvls[LtrBrkPtr]);
+            printf("quick letterbreak find Method %c; BugKey: %d; this->LtrBrkVal: %d; LtrBrkPtr: %d; OldSlope: %4.2f; SortdUpIntrvls[LtrBrkPtr+1]:%d; SortdUpIntrvls[LtrBrkPtr]:%d \n\n", method, BugKey, this->LtrBrkVal, LtrBrkPtr, OldSlope, SortdUpIntrvls[LtrBrkPtr + 1], SortdUpIntrvls[LtrBrkPtr]);
     }
 };
 /*Build the Key down Bucket table*/

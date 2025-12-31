@@ -2082,6 +2082,7 @@ bool chkChrCmplt(unsigned long TimeStmp)
 				/*Perpare advparser, by 1st copying current decoder symbol sets into local advparser arrays*/
 				int IndxPtr = 0;
 #if USE_TST_DATA
+				printf("Using Test Data Set\n");
 				DeCd_KeyUpPtr = DeCd_KeyDwnPtr = testSize;
 				for (int i = 0; i < DeCd_KeyDwnPtr; i++)
 				{
