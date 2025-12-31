@@ -132,6 +132,7 @@ esp_event_loop_args_t event_task_args = {
 /*20251113 Goertzel.cpp - Simplified threshold tone detection code */
 /*20251213 Revised paltformio.ini to be complaint with espidf (v5.5.0)*/
 /*20251230 AdvParser.cpp - added check to skip very small keyup intervals in BldKyUpBktTbl(void) method 'P'addle letter break detection    */
+/*20251231 AdvParser.cpp - changed stopchkval multiplier from 1.7 to 1.8 in BldKyUpBktTbl(void) method*/
 
 #define USE_KYBrd 1
 #include "sdkconfig.h" //added for timer support

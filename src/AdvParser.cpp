@@ -60,7 +60,8 @@
  * 20251010 reworked BldKyUpBktTbl(void) to improve letter break detection for keyboard/paddle sent code
  * 20251014 added another check to BldKyUpBktTbl(void) to better detect which bucket has the most keyup times by setting minimum interval value to 27ms
  * 20251230 added check to skip very small keyup intervals in BldKyUpBktTbl(void) method 'P'addle letter break detection    
- *  */
+ * 20251231 changed stopchkval multiplier from 1.7 to 1.8 in BldKyUpBktTbl(void) method
+ *   */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
 #include "AdvParser.h"
@@ -384,7 +385,7 @@ void AdvParser::BldKyUpBktTbl(void)
         stop--;
     // for (int i = 1; i < KeyUpPtr; i++)
     bool DoSlopeChk = true;
-    uint16_t stopchkval = (int)(1.7 * this->AvgDahVal);
+    uint16_t stopchkval = (int)(1.8 * this->AvgDahVal);//20251231 changed from 1.7 to 1.8
     uint16_t MinltrBrkVal = (int)(0.65 * this->AvgDahVal); // changed from .7 to .65 20250223
     for (int i = 0; i <= SortdPtr - 1; i++)
     {
@@ -461,7 +462,7 @@ void AdvParser::BldKyUpBktTbl(void)
             this->MaxKeyUpBckt = KeyUpBucktPtr;
         }
         if (!match)
-        {
+        { // need to start a new KeyUp bucket (group)
             KeyUpBucktPtr++;
             if (KeyUpBucktPtr >= 15)
             {
@@ -485,28 +486,33 @@ void AdvParser::BldKyUpBktTbl(void)
             char choice = ' ';
             MaxLtrBrkSlope = 0;
             bstltrbrkptr = 0;
-            method = 'P'; // paddle/keyboard
-            for (int i = this->MaxKeyUpBckt; i < KeyUpBucktPtr; i++)
+            
+            //if(KeyUpBucktPtr == 1 && KeyUpBuckts[1].Intrvl < stopchkval) // 20251014 added check for very small interval in 1st bucket
+            if(KeyUpBucktPtr == 1)
             {
-                if (KeyUpBuckts[i].Intrvl < 60) // 20251230 skip intervals that are too small to be valid
-                    continue;
-                if (KeyUpBuckts[i].Intrvl > stopchkval)
-                    break;
-
-                CurLtrBrkSlope = ((float)((float)KeyUpBuckts[i + 1].Intrvl / (float)KeyUpBuckts[i].Intrvl));
-                // if (CurLtrBrkSlope > 1.4)
-                // {
-                //     this->LtrBrkVal = KeyUpBuckts[i + 1].Intrvl;
-                //     break;
-                // }
-                if (CurLtrBrkSlope >= MaxLtrBrkSlope)
+                bstltrbrkptr = 1;
+                method = 'Q';
+            }
+            else
+            {
+                method = 'P'; // paddle/keyboard
+                for (int i = this->MaxKeyUpBckt; i < KeyUpBucktPtr; i++)
                 {
-                    MaxLtrBrkSlope = CurLtrBrkSlope;
-                    bstltrbrkptr = i + 1;
-                    choice = 'D';
+                    if (KeyUpBuckts[i].Intrvl < 60) // 20251230 skip intervals that are too small to be valid
+                        continue;
+                    if (KeyUpBuckts[i].Intrvl > stopchkval)
+                        break;
+
+                    CurLtrBrkSlope = ((float)((float)KeyUpBuckts[i + 1].Intrvl / (float)KeyUpBuckts[i].Intrvl));
+                    if (CurLtrBrkSlope >= MaxLtrBrkSlope)
+                    {
+                        MaxLtrBrkSlope = CurLtrBrkSlope;
+                        bstltrbrkptr = i + 1;
+                        choice = 'D';
+                    }
+                    if (KeyUpBuckts[i + 1].Intrvl >= this->AvgDahVal)
+                        break;
                 }
-                if (KeyUpBuckts[i + 1].Intrvl >= this->AvgDahVal)
-                    break;
             }
             this->LtrBrkVal = KeyUpBuckts[bstltrbrkptr].Intrvl;
             if (Dbug)
