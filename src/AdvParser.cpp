@@ -496,14 +496,22 @@ void AdvParser::BldKyUpBktTbl(void)
             else
             {
                 method = 'P'; // paddle/keyboard
+                while(KeyUpBuckts[this->MaxKeyUpBckt].Intrvl < 60)
+                {
+                 this->MaxKeyUpBckt++; // skip any invalid small intervals
+                 bstltrbrkptr = this->MaxKeyUpBckt;
+                 if(this->MaxKeyUpBckt >= KeyUpBucktPtr) break;   
+                }
                 for (int i = this->MaxKeyUpBckt; i < KeyUpBucktPtr; i++)
                 {
-                    if (KeyUpBuckts[i].Intrvl < 60) // 20251230 skip intervals that are too small to be valid
-                        continue;
+                    // if (KeyUpBuckts[i].Intrvl < 60) // 20251230 skip intervals that are too small to be valid
+                    //     continue;
                     if (KeyUpBuckts[i].Intrvl > stopchkval)
                         break;
 
                     CurLtrBrkSlope = ((float)((float)KeyUpBuckts[i + 1].Intrvl / (float)KeyUpBuckts[i].Intrvl));
+                    if (Dbug)
+                        printf("Paddle/Keyboard Letter Break i:%d; %d/%d = %5.1f; bstltrbrkptr: %d \n", i, KeyUpBuckts[i + 1].Intrvl, KeyUpBuckts[i].Intrvl, CurLtrBrkSlope, bstltrbrkptr);
                     if (CurLtrBrkSlope >= MaxLtrBrkSlope)
                     {
                         MaxLtrBrkSlope = CurLtrBrkSlope;
@@ -516,7 +524,7 @@ void AdvParser::BldKyUpBktTbl(void)
             }
             this->LtrBrkVal = KeyUpBuckts[bstltrbrkptr].Intrvl;
             if (Dbug)
-                printf("bstltrbrkptr:%d; KeyUpBuckts[bstltrbrkptr].Intrvl: %d; KeyUpBucktPtr: %d; MaxKeyUpBckt: %d\n", bstltrbrkptr, KeyUpBuckts[bstltrbrkptr].Intrvl, KeyUpBucktPtr, this->MaxKeyUpBckt);
+                printf("bstltrbrkptr:%d; KeyUpBuckts[bstltrbrkptr].Intrvl: %d; KeyUpBucktPtr: %d; MaxKeyUpBckt: %d; stopchkval: %d\n", bstltrbrkptr, KeyUpBuckts[bstltrbrkptr].Intrvl, KeyUpBucktPtr, this->MaxKeyUpBckt, stopchkval);
         }
         else if (OldSlope > 1)
         {

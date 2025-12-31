@@ -26,7 +26,7 @@ extern "C" {
 #include <lv_conf.h>
 #include "lvgl.h"
 
-#define TODAY __DATE__
+#define TODAY "Dec 31 2025"//__DATE__
 
 /*Waveshare 800x480 display & touch specific parameters*/
 #define LV_TICK_PERIOD_MS (100) //JMH chnaged this from 2 to 100; In this application, this timer does nothing usueful

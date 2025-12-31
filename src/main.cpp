@@ -171,7 +171,6 @@ esp_event_loop_args_t event_task_args = {
 #define ADC_LL_CLKM_DIV_B_DEFAULT         1
 #define ADC_LL_CLKM_DIV_A_DEFAULT         0
 #define ADC_LL_DEFAULT_CONV_LIMIT_EN  6    0
-//#define TODAY __DATE__
 
 #define TFT_GREY 0x5AEB // New colour
 
