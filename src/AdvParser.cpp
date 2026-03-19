@@ -61,6 +61,7 @@
  * 20251014 added another check to BldKyUpBktTbl(void) to better detect which bucket has the most keyup times by setting minimum interval value to 27ms
  * 20251230 added check to skip very small keyup intervals in BldKyUpBktTbl(void) method 'P'addle letter break detection    
  * 20251231 changed stopchkval multiplier from 1.7 to 1.8 in BldKyUpBktTbl(void) method
+ * 20260108 minor rule change to decode 'WWA' correctly in AdvSrch4Match() method
  *   */
 // #include "freertos/task.h"
 // #include "freertos/semphr.h"
@@ -4979,6 +4980,10 @@ void AdvParser::FixClassicErrors(void)
                             Test = false;
                         }
                         else if (this->Msgbuf[NdxPtr + SrchLen] == 'A' && this->Msgbuf[NdxPtr + SrchLen + 1] == 'L') // wWALk
+                        {
+                            Test = false;
+                        }
+                        else if(this->StrLength == 3 && this->Msgbuf[NdxPtr + SrchLen] == 'A') // WWA only 3 letters
                         {
                             Test = false;
                         }

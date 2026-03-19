@@ -1465,6 +1465,7 @@ void app_main()
 											                   // ESP_LOG_INFO,       /*!< Information messages which describe normal flow of events */
 											                   // ESP_LOG_DEBUG,      /*!< Extra information which is not necessary for normal use (values, pointers, sizes, etc). */
 											                   // ESP_LOG_VERBOSE     /*!< Bigger chunks of debugging information, or frequent messages which can potentially flood the output. */
+  //vTaskDelay(4000);
   // Configure CW send IO pin aka 'KEY'
   gpio_config_t io_conf;
   io_conf.intr_type = GPIO_INTR_DISABLE;
@@ -1487,6 +1488,8 @@ void app_main()
   IIR_Coef_mutx = xSemaphoreCreateMutex();
   DsplUpDt_AdvPrsrTsk_mutx =  xSemaphoreCreateMutex();
   ADCread_disp_refr_timer_mutx = xSemaphoreCreateMutex();
+  unsigned long SplashScrnStartTime = pdTICKS_TO_MS(xTaskGetTickCount());
+  /*Initialize IIR filter coeficients for CW tone bandpass filter*/  
   Calc_IIR_BPFltrCoef(750.0, SAMPLING_RATE, 3.7071);
   /*create DisplayUpDate Task*/
   xTaskCreatePinnedToCore(DisplayUpDt, "DisplayUpDate Task", 8192, NULL, 3, &DsplUpDtTaskHandle, 0);
@@ -1581,7 +1584,7 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
   }
   ESP_ERROR_CHECK(ret);
   
-  /*Initialize display and load splash screen*/
+  /*Initialize display */
   lvglmsgbx.InitDsplay();
   // sprintf(Title, " ESP32s3 CW Machine (%s)\n", RevDate); // sprintf(Title, "CPU CORE: %d\n", (int)xPortGetCoreID());
   // lvglmsgbx.dispDeCdrTxt(Title, TFT_SKYBLUE);
@@ -1710,8 +1713,8 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
   // lv_img_cache_invalidate_src(NULL);//Supposedly this removes the splash screen image from memory 
   /* main CW keyboard loop*/
   bool SplashScrnActv = true;
-  uint16_t SplashScrnLpCntr = 0;
-  uint16_t MaxSplashSrnCnt = (uint16_t)(100*SplashHangTime);
+  bool KillSplashScrn = false;
+  //unsigned long SplashScrnStartTime = pdTICKS_TO_MS(xTaskGetTickCount());
   while (true)
   {
 #if 1 // 0 = scan codes retrieval, 1 = augmented ASCII retrieval
@@ -1721,8 +1724,8 @@ intr_matrix_set(xPortGetCoreID(), XCHAL_TIMER1_INTERRUPT, 26);// ESP32S3 added t
     //printf("main loop\n");
     if(SplashScrnActv)
     {
-      SplashScrnLpCntr++;
-      if(SplashScrnLpCntr>MaxSplashSrnCnt)// reconfigure to kill flashScreen on reaching MaxSplashSrnCnt
+      unsigned long CurrentTime = pdTICKS_TO_MS(xTaskGetTickCount());
+      if((CurrentTime - SplashScrnStartTime) > (5000)) // kill splash screen after 5 seconds
       {
         SplashScrnActv = false;
         KillSplashScrn = true;

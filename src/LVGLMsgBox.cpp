@@ -27,6 +27,7 @@
 /*20250918 Changes related to calling '_lv_disp_refr_timer(NULL)' in an attempt to fix scrolling problems*/
 /*20250921 Added event_cb's to send & decode textareas to support display refresh process*/
 /*20250923 Updated Main Screen Buttons */
+/*20260319 Added ESPHome code to support I2C initialization & display touch methods*/
 #include <stdio.h>
 #include <math.h>
 #include "sdkconfig.h"
@@ -52,6 +53,29 @@
 /*end Waveshare & lvgl includes*/
 #include "driver/i2c_master.h"				//added for waveshare touch support
 #include "touch/base/esp_lcd_touch_gt911.h" //added for waveshare touch support
+/*20260319 JMH new ESPHome code to support I2C touch methods*/
+#include "ch422g.h"
+#include "i2c_bus_esp_idf.h"
+#include "esp_log.h"
+#include "esp_err.h"
+
+/*20260319 JMH new ESPHome code to support I2C touch methods*/
+/*Added the following for (input device) touch support*/
+// I2C Configuration
+#define I2C_MASTER_SCL_IO    GPIO_NUM_9  //GPIO_NUM_15  // Replace with your SCL pin
+#define I2C_MASTER_SDA_IO    GPIO_NUM_8   //GPIO_NUM_16  // Replace with your SDA pin
+#define I2C_MASTER_NUM       I2C_NUM_0    // I2C port 0
+//#define I2C_MASTER_FREQ_HZ   400000       // 400kHz
+#define GT911_I2C_ADDR       0x5D         // Default I2C address, might be 0x14
+// CH422G Configuration - added for GT911 hardware reset via CH422G 20251217 JMH(KW4KD)
+#define I2C_MASTER_FREQ_HZ          100000        // I2C master clock frequency
+#define CH422G_I2C_ADDR             0x20          // Check CH422G datasheet for correct I2C address
+
+// CH422G register addresses (consult CH422G datasheet for exact values)
+#define CH422G_REG_EXIO_DIR         0x04          // Example direction register address
+#define CH422G_REG_EXIO_OUT         0x05          // Example output register address
+#define CH422G_EXIO2_PIN_MASK       (1 << 2)      // Mask for EXIO2 pin (assuming it's the 3rd bit)
+esp_lcd_touch_handle_t out_touch = NULL;
 
 CWSNDENGN *cwsnd;
 
@@ -68,7 +92,9 @@ SemaphoreHandle_t RingBuf_semaphore = NULL;
 // static TaskHandle_t vgl_port_task_hndl = NULL;
 i2c_master_bus_handle_t i2c_master_bus_handle = nullptr; // added here for waveshare touch support
 i2c_master_dev_handle_t Touch_dev_handle = NULL;		 // added here for waveshare touch support
-
+i2c_master_dev_handle_t CH442G_dev_handle = NULL;  //20260319 JMH new ESPHome code to support I2C touch methods
+esp_lcd_panel_io_handle_t tp_io_handle = NULL;  //20260319 JMH new ESPHome code to support I2C touch methods
+static esp_lcd_touch_handle_t tp = NULL; //20260319 JMH new ESPHome code to support I2C touch methods
 /*GUI Variables*/
 lv_obj_t *win3; // help screen
 lv_obj_t *win2;
@@ -169,6 +195,36 @@ void Bld_LVGL_GUI(void);
 void Sync_Dflt_Settings(void);
 void SaveUsrVals(void);
 void _FlipDayNiteMode(void);
+/*20260319 JMH new ESPHome code to support I2C touch methods*/
+CH422GComponent ch422g;
+IDFI2CBus i2cbus;
+esp_lcd_touch_config_t lcd_touch_config = {
+	.x_max = MSGBX_LCD_H_RES,
+	.y_max = MSGBX_LCD_V_RES,
+	.rst_gpio_num = (gpio_num_t)-1,
+	.int_gpio_num = GPIO_NUM_4,//(gpio_num_t)-1,
+	.levels = {
+		.reset = 0,		// 0: low level, 1: high level
+		.interrupt = 0, // 0: low level, 1: high level
+	},
+	.flags = {
+		.swap_xy = false,
+		.mirror_x = false,
+		.mirror_y = false,
+	},
+	.process_coordinates = NULL,
+	.interrupt_callback = NULL,
+	.user_data = NULL,
+};
+
+/**
+ * @brief Write a byte to a CH422G register
+ */
+esp_err_t ch422g_write_reg(uint8_t reg_addr, uint8_t data) {
+     uint8_t write_buf[2] = {reg_addr, data};
+     uint8_t read_buf[2] = {0x00, 0x00};
+       return i2c_master_transmit_receive(CH442G_dev_handle, write_buf, sizeof(write_buf), read_buf, sizeof(read_buf), -1); 
+}
 
  /* Decoded text area Event handler; 
  * main purpose is to notify Dispmsg2() that user is touching the decoded text area
@@ -272,7 +328,7 @@ static void SplashScrn_evnt_CB(lv_event_t *e)
 	//printf("SplashScrn_evnt_CB; event code:%d\n", code);
 	switch (code)
 	{
-	case LV_EVENT_PRESSING:
+	case LV_EVENT_PRESSING://LV_EVENT_CLICKED://LV_EVENT_PRESSED://LV_EVENT_CLICKED://LV_EVENT_PRESSING:
 	{
 		KillSplashScrn = true;
 	}
@@ -292,6 +348,7 @@ static void Settings_Scrn_evnt_cb(lv_event_t *e)
 	{
 		Sync_Dflt_Settings();
 		Bld_LVGL_GUI();
+		lv_scr_load(scr_1);
 	}
 	break;
 
@@ -1440,7 +1497,7 @@ void Bld_LVGL_GUI(void)
 	lv_label_set_text(ClrTxt_btn_label, "Clear");
 	// lv_obj_align_to(ClrTxt_btn_label, ClrTxt_btn, LV_ALIGN_CENTER, 10, 2);
 	lv_obj_align_to(ClrTxt_btn_label, ClrTxt_btn, LV_ALIGN_CENTER, 0, 0);
-	lv_scr_load(scr_1);
+	//lv_scr_load(scr_1);
 	
 	if (scr_2 != NULL)
 	{
@@ -1450,25 +1507,25 @@ void Bld_LVGL_GUI(void)
 	}
 }
 
-/*JMH ADD*/
-esp_lcd_touch_config_t lcd_touch_config = {
-	.x_max = MSGBX_LCD_H_RES,
-	.y_max = MSGBX_LCD_V_RES,
-	.rst_gpio_num = (gpio_num_t)-1,
-	.int_gpio_num = (gpio_num_t)-1,
-	.levels = {
-		.reset = 0,		// 0: low level, 1: high level
-		.interrupt = 0, // 0: low level, 1: high level
-	},
-	.flags = {
-		.swap_xy = false,
-		.mirror_x = false,
-		.mirror_y = false,
-	},
-	.process_coordinates = NULL,
-	.interrupt_callback = NULL,
-	.user_data = NULL,
-};
+/*20260319 JMH commented out & replaced by new ESPHOME definition*/
+// esp_lcd_touch_config_t lcd_touch_config = {
+// 	.x_max = MSGBX_LCD_H_RES,
+// 	.y_max = MSGBX_LCD_V_RES,
+// 	.rst_gpio_num = (gpio_num_t)-1,
+// 	.int_gpio_num = (gpio_num_t)-1,
+// 	.levels = {
+// 		.reset = 0,		// 0: low level, 1: high level
+// 		.interrupt = 0, // 0: low level, 1: high level
+// 	},
+// 	.flags = {
+// 		.swap_xy = false,
+// 		.mirror_x = false,
+// 		.mirror_y = false,
+// 	},
+// 	.process_coordinates = NULL,
+// 	.interrupt_callback = NULL,
+// 	.user_data = NULL,
+// };
 /*lvgl_tick_timer Call back routine*/
 static void lvgl_tick(void *arg)
 {
@@ -1613,30 +1670,101 @@ void _FlipDayNiteMode(void)
 static esp_err_t i2c_master_init(void)
 {
 	static const char *TAG = "i2c_master_init";
-	i2c_master_bus_config_t i2c_mst_config = {
-		.i2c_port = I2C_NUM_0,
-		.sda_io_num = (gpio_num_t)I2C_MASTER_SDA_IO,
-		.scl_io_num = (gpio_num_t)I2C_MASTER_SCL_IO,
-		.clk_source = I2C_CLK_SRC_DEFAULT,
-		.glitch_ignore_cnt = 7,
-		.intr_priority = 0,
-		.trans_queue_depth = 64,
-		.flags = {
-			.enable_internal_pullup = true,
-		},
-	};
-	ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_mst_config, &i2c_master_bus_handle));
+	// i2c_master_bus_config_t i2c_mst_config = {
+	// 	.i2c_port = I2C_NUM_0,
+	// 	.sda_io_num = (gpio_num_t)I2C_MASTER_SDA_IO,
+	// 	.scl_io_num = (gpio_num_t)I2C_MASTER_SCL_IO,
+	// 	.clk_source = I2C_CLK_SRC_DEFAULT,
+	// 	.glitch_ignore_cnt = 7,
+	// 	.intr_priority = 0,
+	// 	.trans_queue_depth = 64,
+	// 	.flags = {
+	// 		.enable_internal_pullup = true,
+	// 	},
+	// };
+	// ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_mst_config, &i2c_master_bus_handle));
 
-	i2c_device_config_t lcd_touch_panel_io_config = {
-		.dev_addr_length = I2C_ADDR_BIT_LEN_7,
-		.device_address = (0x5D), // GT911 chip address
-		.scl_speed_hz = 100000, // had been 400000 but found some display touch would not work w/ the faster data clock
-	};
-	/*JMH ADD*/
-	ESP_LOGD(TAG, "Create I2C BUS");
-	/*OR maybe this way, based on ESPRESSIF ESPIDF Programming Guide*/
-	ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_master_bus_handle, &lcd_touch_panel_io_config, &Touch_dev_handle));
+	// i2c_device_config_t lcd_touch_panel_io_config = {
+	// 	.dev_addr_length = I2C_ADDR_BIT_LEN_7,
+	// 	.device_address = (0x5D), // GT911 chip address
+	// 	.scl_speed_hz = 100000, // had been 400000 but found some display touch would not work w/ the faster data clock
+	// };
+	// /*JMH ADD*/
+	// ESP_LOGD(TAG, "Create I2C BUS");
+	// /*OR maybe this way, based on ESPRESSIF ESPIDF Programming Guide*/
+	// ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_master_bus_handle, &lcd_touch_panel_io_config, &Touch_dev_handle));
+	esp_log_level_set("*", ESP_LOG_VERBOSE);
 
+    /* now setup ch422g by 1st initializing i2c bus */
+    i2cbus.set_sda_pin(I2C_MASTER_SDA_IO);
+    i2cbus.set_scl_pin(I2C_MASTER_SCL_IO);
+    i2cbus.set_frequency(I2C_MASTER_FREQ_HZ);
+    i2cbus.set_scl_pullup_enabled(true);
+    i2cbus.set_sda_pullup_enabled(true);
+    i2cbus.set_timeout(1000 ); //1000 / portTICK_PERIOD_MS
+    i2cbus.set_scan(false); // JMH ADD 20251221
+    i2cbus.setup();//given that set_scan is true, this will also scan for devices on the i2c bus
+    i2cbus.dump_config();
+    i2cbus.get_bus_handle(&i2c_master_bus_handle); // will use this later to setup link gt911 touch device
+    
+    /* now setup ch422g */
+    ch422g.set_i2c_bus(&i2cbus);
+    ch422g.set_i2c_address(CH422G_I2C_ADDR); // JMH ADD 20251221
+    ch422g.pin_mode(2, FLAG_OUTPUT);
+    printf("ch422g pin Config - start\n");
+    /*EXIO pin hi/lo config ms 1111110 ls*/
+    /*starting with ls pin EXIO0 */
+    ch422g.digital_write((uint8_t)0, false); //EXIO0
+    printf("ch422g pin Config - EXIO0 LOW\n\n");
+    ch422g.digital_write(1, true); //EXIO1
+    printf("ch422g pin Config - EXIO1 HIGH\n\n");
+    ch422g.digital_write(2, true); //EXIO2
+    printf("ch422g pin Config - EXIO2 HIGH\n\n");
+    ch422g.digital_write(3, true); //EXIO3
+    printf("ch422g pin Config - EXIO3 HIGH\n\n");
+    ch422g.digital_write(4, true); //EXIO4
+    printf("ch422g pin Config - EXIO4 HIGH\n\n");
+    //ch422g.digital_write(5, true); //EXIO5
+    //printf("ch422g pin Config - EXIO5 HIGH\n\n");
+    ch422g.digital_write(6, true); //EXIO6
+    printf("ch422g pin Config - EXIO6 HIGH\n\n");
+    printf("ch422g.setup() - start\n");
+    ch422g.setup(); // JMH ADD 20251220
+    printf("ch422g.setup() - Complete\n");
+
+    ch422g.digital_write(1, false); //EXIO1
+    printf("ch422g pin Config - EXIO1 LOW\n\n");
+    vTaskDelay(pdMS_TO_TICKS(100));
+    ch422g.digital_write(1, true); //EXIO1
+    vTaskDelay(pdMS_TO_TICKS(200));
+    printf("ch422g pin Config - EXIO1 HIGH\n\n");
+	ESP_LOGI(TAG, "Create I2C Master BUS - DONE");
+
+	vTaskDelay(pdMS_TO_TICKS(100));
+
+
+    /* instantuate touch object */
+    // ESP_LOGI(TAG, "Initialize GT911 I2C touch sensor");
+    //esp_lcd_panel_io_i2c_config_t tp_io_config = ESP_LCD_TOUCH_IO_I2C_GT911_CONFIG(); // defined in esp_lcd_touch_gt911.h
+    /*note the following, actually calls 'esp_lcd_new_panel_io_i2c_v2'.
+     As part of this call,'i2c_master_bus_add_device(tool_bus_handle, &i2c_dev_conf, &dev_handle)' gets done.
+     see esp_lcd_panel_io_i2c_v2.c for more detail*/
+    // if (esp_lcd_new_panel_io_i2c_v2(i2c_master_bus_handle, &tp_io_config, &tp_io_handle) != ESP_OK)
+    // {
+    //         //ESP_LOGE(TAG, "create GT911 touch interface FAILED");
+    //         while(1)
+    //         {
+    //             printf("touch controller GT911 setup FAILED\n");
+    //             vTaskDelay(pdMS_TO_TICKS(100));
+    //         }
+    // }
+    // else
+    // {
+    //         ESP_LOGI(TAG, "touch interface handle %p", tp_io_handle);
+    // }
+    // ESP_LOGI(TAG, "Initialize/configure GT911 touch controller");
+    // /*if the following works it will return/report 'TouchPad_ID' & 'TouchPad_Config_Version'*/
+    // ESP_ERROR_CHECK(esp_lcd_touch_new_i2c_gt911(tp_io_handle, &lcd_touch_config, &tp));//this is now handled in 'gt911_init()'
 	return ESP_OK;
 }
 
@@ -1782,7 +1910,7 @@ void LVGLMsgBox::InitDsplay(void)
 
 	ESP_LOGI(TAG, "Initialize GT911 I2C touch sensor");
 	esp_lcd_touch_handle_t tp = NULL;
-	esp_lcd_panel_io_handle_t tp_io_handle = NULL;
+	//esp_lcd_panel_io_handle_t tp_io_handle = NULL;//20260319 JMH commented out to support new ESPHOME approach of using 'i2cbus' object to setup i2c bus and link gt911 touch device
 	esp_lcd_panel_io_i2c_config_t tp_io_config = ESP_LCD_TOUCH_IO_I2C_GT911_CONFIG(); // defined in esp_lcd_touch_gt911.h
 
 	/* instantuate touch object */
@@ -1873,6 +2001,7 @@ void LVGLMsgBox::InitDsplay(void)
 	ESP_LOGI(TAG, "indev_drv.read_timer %p  read_cb: %p", indev_drv.read_timer, indev_drv.read_cb);
 	ESP_LOGI(TAG, "Bld LVGL GUI");
 	Bld_LVGL_GUI();
+
 	// LV_IMG_DECLARE(SlpashScreen01);
     // lv_obj_t * img1 = lv_img_create(lv_scr_act());
     // lv_img_set_src(img1, &SlpashScreen01);
@@ -3175,6 +3304,7 @@ void LVGLMsgBox::ReStrtMainScrn(void)
 		}
 	}
 	Bld_LVGL_GUI();
+	lv_scr_load(scr_1);
 	_lv_disp_refr_timer(NULL);
 	xSemaphoreGive(lvgl_semaphore);
 	MutexLckId = 0;
